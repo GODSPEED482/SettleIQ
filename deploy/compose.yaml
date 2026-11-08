@@ -1,0 +1,172 @@
+# Production stack on the EC2 host. docker-compose.yml at the repo root is the local stack.
+#
+# Fixed project name: every release directory must drive the SAME containers/volumes.
+#
+# Values from .env are interpolated per service rather than passed with env_file, so each
+# secret reaches only the services that need it. The agent must never join `backend`.
+# Only `proxy` publishes ports; worker and agent-tools stay private (AC-AUTHZ-17, spec 8.2).
+name: settleiq
+
+x-app: &app
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-python: &python
+  <<: *app
+  user: "10001:10001"
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB}
+  ENVIRONMENT: production
+
+services:
+  proxy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /data/caddy:/data # certs survive redeploys -> no Let's Encrypt rate-limit lockout
+    depends_on:
+      - api
+      - web
+    networks: [edge]
+
+  web:
+    <<: *app
+    image: ${REGISTRY}/settleiq-web:${TAG}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    networks: [edge]
+
+  api:
+    <<: *python
+    image: ${REGISTRY}/settleiq-api:${TAG}
+    # Caddy is the only peer that can reach this port, so its forwarded headers are trusted.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    environment: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    networks: [edge, backend]
+
+  worker:
+    <<: *python
+    image: ${REGISTRY}/settleiq-api:${TAG}
+    command: ["uvicorn", "app.worker_api:app", "--host", "0.0.0.0", "--port", "8001"]
+    environment: *backend-env
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8001), 2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    networks: [backend]
+
+  # The agent services are stubs until task 5.7. Enable them with COMPOSE_PROFILES=agent in SSM.
+  agent-tools:
+    <<: *python
+    profiles: [agent]
+    image: ${REGISTRY}/settleiq-api:${TAG}
+    command: ["uvicorn", "app.agent_tools_api:app", "--host", "0.0.0.0", "--port", "8002"]
+    environment:
+      <<: *backend-env
+      AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8002), 2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    networks: [backend, agent]
+
+  dispatcher:
+    <<: *python
+    profiles: [agent]
+    image: ${REGISTRY}/settleiq-api:${TAG}
+    command: ["python", "-m", "app.investigation.dispatcher"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://settleiq_dispatcher:${DISPATCHER_DB_PASSWORD:-}@db:5432/${POSTGRES_DB}
+      ENVIRONMENT: production
+      AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET:-}
+      AGENT_URL: http://agent:8100
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend, agent]
+
+  agent:
+    <<: *python
+    profiles: [agent]
+    image: ${REGISTRY}/settleiq-agent:${TAG}
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      AGENT_TOOLS_URL: http://agent-tools:8002
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8100), 2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    networks: [agent]
+
+  migrate:
+    <<: *python
+    image: ${REGISTRY}/settleiq-api:${TAG}
+    command: ["sh", "-c", "alembic upgrade head && python -m app.authz.seed"]
+    restart: "no"
+    profiles: ["tools"] # only runs via `docker compose run --rm migrate`
+    environment:
+      <<: *backend-env
+      MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - /data/postgres:/var/lib/postgresql/data # on the separate EBS volume
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+networks:
+  edge:
+  backend:
+  agent:
