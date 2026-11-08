@@ -61,6 +61,8 @@ class TenantContext:
 
 # TODO(G1 1.9 Swapnaneel): wire the auth library here. Read email_verified from current state, so
 # stale token claims cannot preserve access (AC-IAM-07, spec 11.2).
+# TODO(G1 1.9 Swapnaneel): keep agent tool calls off the session path. They use the delegated
+# token in investigation/tokens.py, which public routes must never accept.
 def authenticate(request: Request) -> Principal:
     """Authentication seam, implemented by task 1.9.
 

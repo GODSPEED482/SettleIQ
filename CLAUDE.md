@@ -108,6 +108,7 @@ Gate 1 work is marked where it happens, as `TODO(G1 <task> <owner>): ...`. `<tas
 git grep "TODO(G1 "              # all of Gate 1
 git grep "TODO(G1 .* Rahul)"     # one person
 git grep "TODO(G1 1.5 "          # one task
+git grep "TODO(G1 .*agent"       # what the agent service (tasks 5.7, 5.8) needs from Gate 1
 ```
 
 Delete a TODO in the same change that completes it. The checklist below stays the record of what is done. Keep permission-set names out of frontend TODOs: the role-name ban matches quoted names in comments too. Later gates can follow the same format (`TODO(G2 ...)`).

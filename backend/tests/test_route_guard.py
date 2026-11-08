@@ -223,6 +223,7 @@ def test_missing_permission_is_403(route):
 
 # TODO(G1 1.13 Suprava): this uses a fake gateway and accepts only 200 or 501, so it needs
 # adjusting once 1.4, 1.5 and 1.7 handlers touch the database.
+# TODO(G1 1.13 Suprava): the agent investigate route returns 202 once task 5.7 lands; allow it.
 @pytest.mark.parametrize("route", PERMISSION_ROUTES, ids=label)
 def test_held_permission_passes_the_gate(route):
     response = call(client_for(FakeGateway([full_grant(route)])), route)

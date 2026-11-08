@@ -16,6 +16,7 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
+# TODO(G1 1.2 Rishav): the role split gains settleiq_dispatcher for the agent job queue (task 5.7).
 APP_ROLE = "settleiq_app"
 TENANT_PREDICATE = "NULLIF(current_setting('app.tenant_id', true), '')::uuid"
 

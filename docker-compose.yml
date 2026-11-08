@@ -7,6 +7,7 @@
 # start with `--profile agent`. The agent must never join `backend` or use *backend-env.
 
 # TODO(G1 1.1 Rishav): run `docker compose up --build` end to end; this has never been run.
+# TODO(G1 1.1 Rishav): also try `--profile agent`; the dispatcher stub exits until task 5.7.
 # TODO(G1 1.7 Rahul): mount the raw-evidence volume on api and worker (plan: local volume).
 # TODO(G1 1.9 Swapnaneel): pass the SMTP relay settings through this block.
 x-backend-env: &backend-env
