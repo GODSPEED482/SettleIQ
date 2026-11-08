@@ -1,4 +1,6 @@
-# TODO(G1 1.1 Rishav): add the BUDGET_ALERT_EMAIL repository secret; plan fails without it.
+# TODO(G1 1.1 Rishav): owner review of this workflow; it signs in and applies cleanly on prod.
+# TODO(G1 1.1 Rishav): gate this on CI and narrow the AdministratorAccess role; it applies on merge with no test run.
+# TODO(G1 1.1 Rishav): delete the unused TF_VAR_github_repo below; editing this file starts an app deploy, so do it in a change that deploys anyway.
 name: infra
 
 # Runs only for a push to prod that touches infra/. Pull requests get keyless fmt and validate

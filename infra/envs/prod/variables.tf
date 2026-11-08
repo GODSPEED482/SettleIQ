@@ -14,7 +14,7 @@ variable "az" {
   description = "Instance and data volume must share an AZ; pinning it keeps a replaced instance next to its volume"
 }
 
-# TODO(G1 1.1 Rishav): confirm the AWS account's plan and credits, then run the section 10 preflight in docs/DEPLOYMENT.md.
+# TODO(G1 1.1 Rishav): confirm the AWS account's plan and credits in the Billing console.
 variable "instance_type" {
   type        = string
   default     = "t3.small"
@@ -49,6 +49,7 @@ variable "budget_alert_email" {
   }
 }
 
+# TODO(G1 1.1 Rishav): a new image needs its ECR repo applied before the deploy that pushes it; deploy and infra run in parallel.
 variable "services" {
   type        = list(string)
   default     = ["api", "web", "agent"] # one ECR repo per image the pipeline builds

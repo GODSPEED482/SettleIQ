@@ -2,7 +2,7 @@
 	email {$ACME_EMAIL}
 }
 
-# TODO(G1 1.1 Rishav): confirm the DNS host and add the A record to the Elastic IP.
+# TODO(G1 1.1 Rishav): confirm app.settleiq.dpdns.org opens from other networks; one ISP still returned NXDOMAIN after the record was added.
 # One origin for UI + API: no CORS, cookies just work. Worker and agent-tools have no route here.
 app.settleiq.dpdns.org {
 	encode zstd gzip

@@ -1,4 +1,7 @@
-# TODO(G1 1.1 Rishav): do the first deploy (docs/DEPLOYMENT.md section 10); this has never run.
+# TODO(G1 1.1 Rishav): owner review of this workflow; the first deploy (44e817f) succeeded.
+# TODO(G1 1.1 Rishav): require a PR and passing checks on prod; the ruleset only blocks force-push and deletion, and a direct push deploys.
+# TODO(G1 1.1 Rishav): roll back when the smoke test fails; deploy.sh has already marked the release live by then.
+# TODO(G1 1.1 Rishav): pin third-party actions to commit SHAs; these jobs can assume the AWS roles.
 # TODO(G1 OPEN-REL-01 Rishav): decide if the attestation signer runs here; POL-14 needs image digests.
 name: deploy
 

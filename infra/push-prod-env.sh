@@ -3,6 +3,8 @@
 # deploy.sh reads on the host, and sets the BUDGET_ALERT_EMAIL secret that infra.yml reads.
 # Run from the repo root with your own AWS and gh logins: bash infra/push-prod-env.sh
 # Prints names only. Nothing is sent unless every check passes.
+# TODO(G1 1.1 Rishav): warn on names in .env.production missing from the lists below; they are skipped silently.
+# TODO(G1 1.9 Swapnaneel): add the SMTP relay and auth settings to the lists below.
 set -euo pipefail
 export MSYS_NO_PATHCONV=1 # stops Git Bash rewriting /settleiq/... into a Windows path
 

@@ -1,4 +1,3 @@
-# TODO(G1 1.1 Rishav): build this image once; it has never been built.
 FROM python:3.12-slim
 
 RUN pip install --no-cache-dir uv
