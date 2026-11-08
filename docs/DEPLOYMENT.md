@@ -1,6 +1,6 @@
 # SettleIQ - Deployment plan
 
-Status: the AWS resources, production values and GitHub variables are in place, and nothing has been deployed yet. See [section 10](#10-first-deploy-runbook) for what remains.
+Status: the AWS resources, production values, GitHub variables and DNS are in place, and nothing has been deployed yet. See [section 10](#10-first-deploy-runbook) for what remains.
 
 ## 1. Summary
 
@@ -178,19 +178,17 @@ A single host restarts containers in place, so expect a few seconds of downtime 
 
 ## 10. First-deploy runbook
 
-Do steps 1 and 2 **before** merging this to `prod`. On Windows, use Git Bash and run `export MSYS_NO_PATHCONV=1` first, or `/settleiq/...` arguments get rewritten into Windows paths.
+Do step 1 **before** merging this to `prod`. On Windows, use Git Bash and run `export MSYS_NO_PATHCONV=1` first, or `/settleiq/...` arguments get rewritten into Windows paths.
 
 ```bash
-# 1. DNS: in Cloudflare, A record app -> public_ip output of infra/envs/prod, proxy status DNS only
-
-# 2. Check CPU credits, about an hour after first boot. Merge when the latest value is above about 20,
+# 1. Check CPU credits, about an hour after first boot. Merge when the latest value is above about 20,
 #    or the health wait in deploy.sh may time out on a throttled host.
 aws cloudwatch get-metric-statistics --region ap-south-1 --namespace AWS/EC2 --metric-name CPUCreditBalance \
   --dimensions Name=InstanceId,Value=<instance_id> --statistics Average --period 300 \
   --start-time "$(date -u -d '-30 minutes' +%FT%TZ)" --end-time "$(date -u +%FT%TZ)"
 #    Then merge to prod. deploy.yml runs; open https://app.settleiq.dpdns.org
 
-# 3. Shell on the box when needed (no SSH)
+# 2. Shell on the box when needed (no SSH)
 aws ssm start-session --target <instance_id>
 ```
 
@@ -201,7 +199,7 @@ Once live, the PayPal webhook target is the public `/api/webhooks/...` route in 
 - [ ] Merge freeze on `prod` before task 6.3; any later image change voids the attestation
 - [ ] Last deploy at least an hour before the slot
 - [ ] Certificate issued and `/healthz` green on the public URL
-- [ ] CPU credit balance checked (command in section 10, step 2) and memory measured with the demo's profiles on
+- [ ] CPU credit balance checked (command in section 10, step 1) and memory measured with the demo's profiles on
 - [ ] Billing credits and Free plan end date checked in the Billing console
 - [ ] Manual backup: `docker exec settleiq-db-1 sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > /data/pre-demo.sql.gz`
 - [ ] Note the last-good SHA for `deploy.sh <sha> --rollback`
