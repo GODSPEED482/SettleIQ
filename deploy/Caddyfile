@@ -3,7 +3,7 @@
 }
 
 # One origin for UI + API: no CORS, cookies just work. Worker and agent-tools have no route here.
-settleiq.swapnaneelray.me {
+app.settleiq.dpdns.org {
 	encode zstd gzip
 
 	@api path /api/* /healthz

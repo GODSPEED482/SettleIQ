@@ -56,7 +56,7 @@ variable "services" {
 
 variable "app_domain" {
   type    = string
-  default = "settleiq.swapnaneelray.me"
+  default = "app.settleiq.dpdns.org"
 }
 
 variable "route53_zone_id" {

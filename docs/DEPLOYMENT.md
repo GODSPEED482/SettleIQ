@@ -173,7 +173,7 @@ A single host restarts containers in place, so expect a few seconds of downtime 
 ## 9. Observability
 
 - Container logs use `json-file` with rotation (10 MB, 3 files). Read them with `docker compose logs` through `aws ssm start-session`.
-- Add an external uptime check on `https://settleiq.swapnaneelray.me/healthz`. It proves the API process is up, but does not ping the database.
+- Add an external uptime check on `https://app.settleiq.dpdns.org/healthz`. It proves the API process is up, but does not ping the database.
 - Sponsor tooling: the tech-stack doc puts Elastic Cloud in the traces and logs seat. It would add to `docker compose logs` once the app emits OpenTelemetry; it is not wired here.
 
 ## 10. First-deploy runbook
@@ -181,14 +181,14 @@ A single host restarts containers in place, so expect a few seconds of downtime 
 Do steps 1 and 2 **before** merging this to `prod`. On Windows, use Git Bash and run `export MSYS_NO_PATHCONV=1` first, or `/settleiq/...` arguments get rewritten into Windows paths.
 
 ```bash
-# 1. DNS: A record settleiq.swapnaneelray.me -> public_ip output of infra/envs/prod (skip if route53_zone_id is set)
+# 1. DNS: in Cloudflare, A record app -> public_ip output of infra/envs/prod, proxy status DNS only
 
 # 2. Check CPU credits, about an hour after first boot. Merge when the latest value is above about 20,
 #    or the health wait in deploy.sh may time out on a throttled host.
 aws cloudwatch get-metric-statistics --region ap-south-1 --namespace AWS/EC2 --metric-name CPUCreditBalance \
   --dimensions Name=InstanceId,Value=<instance_id> --statistics Average --period 300 \
   --start-time "$(date -u -d '-30 minutes' +%FT%TZ)" --end-time "$(date -u +%FT%TZ)"
-#    Then merge to prod. deploy.yml runs; open https://settleiq.swapnaneelray.me
+#    Then merge to prod. deploy.yml runs; open https://app.settleiq.dpdns.org
 
 # 3. Shell on the box when needed (no SSH)
 aws ssm start-session --target <instance_id>
