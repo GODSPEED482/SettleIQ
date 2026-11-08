@@ -73,11 +73,11 @@ resource "aws_ecr_lifecycle_policy" "svc" {
   policy = jsonencode({
     rules = [{
       rulePriority = 1
-      description  = "keep last 15 images"
+      description  = "keep last 5 images, matching the 5 rollback releases kept on the host"
       selection = {
         tagStatus   = "any"
         countType   = "imageCountMoreThan"
-        countNumber = 15
+        countNumber = 5
       }
       action = { type = "expire" }
     }]
@@ -215,6 +215,10 @@ resource "aws_instance" "app" {
   vpc_security_group_ids = [aws_security_group.app.id]
   iam_instance_profile   = aws_iam_instance_profile.host.name
 
+  credit_specification {
+    cpu_credits = var.cpu_credits
+  }
+
   metadata_options {
     http_tokens                 = "required" # IMDSv2 only
     http_put_response_hop_limit = 1          # containers cannot reach instance credentials
@@ -262,6 +266,38 @@ resource "aws_route53_record" "app" {
   type    = "A"
   ttl     = 300
   records = [aws_eip.app.public_ip]
+}
+
+# ---------- spend alert ----------
+resource "aws_budgets_budget" "monthly" {
+  name         = "${local.name}-monthly"
+  budget_type  = "COST"
+  limit_amount = tostring(var.monthly_budget_usd)
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  # Credits would net the spend to $0 and the alert would never fire. Tax is excluded so the
+  # limit stays comparable to the list prices in docs/DEPLOYMENT.md.
+  cost_types {
+    include_credit = false
+    include_tax    = false
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.budget_alert_email]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = [var.budget_alert_email]
+  }
 }
 
 # ---------- deploy role for GitHub Actions ----------
