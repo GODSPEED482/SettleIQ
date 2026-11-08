@@ -73,6 +73,7 @@ variable "github_repo" {
 variable "secret_names" {
   type = list(string)
   default = [
+    "ENVIRONMENT",
     "POSTGRES_DB",
     "POSTGRES_USER",
     "POSTGRES_PASSWORD",
@@ -82,5 +83,5 @@ variable "secret_names" {
     "AGENT_TOKEN_SECRET",
     "LLM_API_KEY",
   ]
-  description = "Runtime env var names. Terraform creates placeholders only; real values are set with `aws ssm put-parameter --overwrite`"
+  description = "Runtime env var names. Terraform creates placeholders only; infra/push-prod-env.sh sets the real values from .env.production"
 }

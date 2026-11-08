@@ -22,7 +22,7 @@ x-python: &python
 
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB}
-  ENVIRONMENT: production
+  ENVIRONMENT: ${ENVIRONMENT}
 
 services:
   proxy:
@@ -112,7 +112,7 @@ services:
     command: ["python", "-m", "app.investigation.dispatcher"]
     environment:
       DATABASE_URL: postgresql+psycopg://settleiq_dispatcher:${DISPATCHER_DB_PASSWORD:-}@db:5432/${POSTGRES_DB}
-      ENVIRONMENT: production
+      ENVIRONMENT: ${ENVIRONMENT}
       AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET:-}
       AGENT_URL: http://agent:8100
     depends_on:

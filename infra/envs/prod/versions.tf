@@ -8,7 +8,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "settleiq-tfstate-ACCOUNT_ID" # from bootstrap output tfstate_bucket
+    bucket       = "settleiq-tfstate-762098338837" # from bootstrap output tfstate_bucket
     key          = "prod/terraform.tfstate"
     region       = "ap-south-1"
     use_lockfile = true

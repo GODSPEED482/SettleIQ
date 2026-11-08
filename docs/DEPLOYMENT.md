@@ -1,6 +1,6 @@
 # SettleIQ - Deployment plan
 
-Status: nothing here has been applied to AWS yet. See [section 10](#10-first-deploy-runbook) for the first deploy.
+Status: the AWS resources, production values and GitHub variables are in place, and nothing has been deployed yet. See [section 10](#10-first-deploy-runbook) for what remains.
 
 ## 1. Summary
 
@@ -112,10 +112,15 @@ Image tags are immutable, so "Re-run all jobs" on a finished deploy fails at the
 
 ## 6. Config and secrets
 
-`deploy.sh` renders `.env` on the host from Parameter Store, and refuses to deploy if a required value is still `CHANGE_ME`.
+Production values live in `.env.production` at the repo root, which git ignores. Local development uses `.env`, and CI uses throwaway values in `ci.yml`. `.env.example` lists the names only.
+
+`bash infra/push-prod-env.sh` copies `.env.production` to Parameter Store. It prints names only, and sends nothing if a required value is empty or if any value matches `.env`. Run it again after changing the file. `deploy.sh` then renders `.env` on the host from Parameter Store, and refuses to deploy if a required value is still `CHANGE_ME`.
+
+Migration output stays in `migrate.log` in the release directory on the host, because a failed migration can print `APP_DB_PASSWORD` and this repository's Actions logs are public.
 
 | Name | Secret | Set where | Used by |
 | --- | --- | --- | --- |
+| `ENVIRONMENT` | no | SSM | backend services |
 | `POSTGRES_DB`, `POSTGRES_USER` | no | SSM | db, migrate, connection strings |
 | `POSTGRES_PASSWORD` | yes | SSM | db, migrate |
 | `APP_DB_PASSWORD` | yes | SSM | migrate (creates the role), api, worker, agent-tools |
@@ -124,7 +129,7 @@ Image tags are immutable, so "Re-run all jobs" on a finished deploy fails at the
 | `AGENT_TOKEN_SECRET` | yes | SSM | dispatcher, agent-tools (agent profile) |
 | `LLM_API_KEY` | yes | SSM | agent only (agent profile) |
 | `COMPOSE_PROFILES` | no | SSM, optional | set to `agent` after task 5.7 |
-| `ENVIRONMENT` | no | fixed in `compose.yaml` | backend services |
+| `BUDGET_ALERT_EMAIL` | yes, because logs are public | GitHub secret | `infra.yml`, Terraform budget alert |
 
 Rules for values:
 
@@ -173,53 +178,19 @@ A single host restarts containers in place, so expect a few seconds of downtime 
 
 ## 10. First-deploy runbook
 
-Do steps 0 to 4 **before** merging this to `prod`. Until then, the first deploy run fails at AWS sign-in.
+Do steps 1 and 2 **before** merging this to `prod`. On Windows, use Git Bash and run `export MSYS_NO_PATHCONV=1` first, or `/settleiq/...` arguments get rewritten into Windows paths.
 
 ```bash
-# Preflight on a free-tier account: t3.small must be listed, and the second command must print an AMI ID
-aws ec2 describe-instance-types --region ap-south-1 --filters Name=free-tier-eligible,Values=true \
-  --query "InstanceTypes[*].InstanceType" --output text
-AMI=$(aws ssm get-parameter --region ap-south-1 \
-  --name /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id \
-  --query Parameter.Value --output text)
-aws ec2 describe-images --region ap-south-1 --image-ids "$AMI" --filters Name=free-tier-eligible,Values=true \
-  --query 'Images[].ImageId' --output text
+# 1. DNS: A record settleiq.swapnaneelray.me -> public_ip output of infra/envs/prod (skip if route53_zone_id is set)
 
-# 0. One time, with your own AWS credentials
-cd infra/bootstrap && terraform init && terraform apply -var github_repo=GODSPEED482/SettleIQ
-#    add -var create_oidc_provider=false if the account already has the GitHub OIDC provider
-#    put the tfstate_bucket output into infra/envs/prod/versions.tf and commit it
-
-# 1. First infra apply (locally once; afterwards infra.yml does it)
-cd ../envs/prod && terraform init && terraform apply -var github_repo=GODSPEED482/SettleIQ -var budget_alert_email=<your-email>
-
-# 2. DNS: A record settleiq.swapnaneelray.me -> public_ip output (skip if route53_zone_id is set)
-
-# 3. Real values
-put() { aws ssm put-parameter --region ap-south-1 --name "/settleiq/prod/$1" --type SecureString --overwrite --value "$2"; }
-put POSTGRES_DB settleiq
-put POSTGRES_USER settleiq_owner
-put POSTGRES_PASSWORD "$(openssl rand -hex 32)"
-put APP_DB_PASSWORD "$(openssl rand -hex 32)"
-put ACME_EMAIL <your-email>
-
-# 4. GitHub repository variables (none are sensitive)
-gh variable set AWS_DEPLOY_ROLE_ARN --body "$(terraform output -raw deploy_role_arn)"
-gh variable set AWS_INFRA_ROLE_ARN  --body "<bootstrap infra_role_arn output>"
-gh variable set INSTANCE_ID         --body "$(terraform output -raw instance_id)"
-gh variable set RELEASE_BUCKET      --body "$(terraform output -raw release_bucket)"
-gh variable set APP_DOMAIN          --body settleiq.swapnaneelray.me
-#    A secret rather than a variable: repository logs are public, and only secrets are masked
-gh secret set BUDGET_ALERT_EMAIL    --body <your-email>
-
-# 5. Check CPU credits, about an hour after first boot. Merge when the latest value is above about 20,
+# 2. Check CPU credits, about an hour after first boot. Merge when the latest value is above about 20,
 #    or the health wait in deploy.sh may time out on a throttled host.
 aws cloudwatch get-metric-statistics --region ap-south-1 --namespace AWS/EC2 --metric-name CPUCreditBalance \
   --dimensions Name=InstanceId,Value=<instance_id> --statistics Average --period 300 \
   --start-time "$(date -u -d '-30 minutes' +%FT%TZ)" --end-time "$(date -u +%FT%TZ)"
 #    Then merge to prod. deploy.yml runs; open https://settleiq.swapnaneelray.me
 
-# 6. Shell on the box when needed (no SSH)
+# 3. Shell on the box when needed (no SSH)
 aws ssm start-session --target <instance_id>
 ```
 
@@ -230,7 +201,7 @@ Once live, the PayPal webhook target is the public `/api/webhooks/...` route in 
 - [ ] Merge freeze on `prod` before task 6.3; any later image change voids the attestation
 - [ ] Last deploy at least an hour before the slot
 - [ ] Certificate issued and `/healthz` green on the public URL
-- [ ] CPU credit balance checked (command in section 10, step 5) and memory measured with the demo's profiles on
+- [ ] CPU credit balance checked (command in section 10, step 2) and memory measured with the demo's profiles on
 - [ ] Billing credits and Free plan end date checked in the Billing console
 - [ ] Manual backup: `docker exec settleiq-db-1 sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > /data/pre-demo.sql.gz`
 - [ ] Note the last-good SHA for `deploy.sh <sha> --rollback`
