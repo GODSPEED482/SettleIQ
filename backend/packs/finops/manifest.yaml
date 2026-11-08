@@ -1,5 +1,6 @@
 # Financial Operations pack manifest (spec 4.5). Contents fill in during G2 and G3.
 
+# TODO(G1 1.8 Swapnaneel): confirm this manifest against the frozen schema.
 namespace: finops
 version: 0.1.0
 compatible_platform_versions: ">=0.1.0,<1.0.0"

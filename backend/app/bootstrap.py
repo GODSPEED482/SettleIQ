@@ -10,6 +10,7 @@ from app.errors import install_error_handlers
 from app.investigation.tools import build_tool_registry
 
 
+# TODO(G1 1.3 Rishav): owner review of the startup validation.
 def validate_platform(app: FastAPI) -> None:
     """Fail startup on any undeclared route, invalid manifest or prohibited agent tool."""
     catalogue = get_catalogue()

@@ -15,6 +15,7 @@ type PermissionsState = {
 const PermissionsContext = createContext<PermissionsState | null>(null);
 
 export function PermissionsProvider({ children }: { children: ReactNode }) {
+  // TODO(G1 1.11 Suprava): set this from the tenant picker and clear it on sign-out.
   // Set by the sign-in and tenant-selection flow (tasks 1.9 and 1.11).
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<EffectivePermission[]>([]);
@@ -37,6 +38,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         setStatus("ready");
       })
       .catch(() => {
+        // TODO(G1 1.11 Suprava): tell 401 (sign in again) apart from 404 (no such tenant).
         if (current) setStatus("unavailable");
       });
     return () => {

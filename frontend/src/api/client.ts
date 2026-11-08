@@ -11,6 +11,8 @@ export class ApiError extends Error {
   }
 }
 
+// TODO(G1 OPEN-14 Suprava): settle the auth transport with the 1.9 owner, then send it from here.
+// TODO(G1 1.11 Suprava): response.json() throws on an empty 204; handle no-content responses.
 export async function apiFetch<T>(
   path: string,
   options: RequestInit & { tenantId?: string } = {},

@@ -8,6 +8,7 @@
 # Optional fifth element: flags. `reserved` = owner-reserved or service-only, never
 # tenant-grantable. Platform keys are never tenant-grantable either.
 
+# TODO(G1 1.3 Rishav): review sensitivity and narrowable scopes per key; spec 3.3 leaves them open.
 release: "1.5"
 
 tenant:

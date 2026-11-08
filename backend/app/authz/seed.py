@@ -16,6 +16,7 @@ def _set_id(key: str, version: int) -> str:
     return str(uuid5(NAMESPACE_URL, f"settleiq:permission-set:{key}:{version}"))
 
 
+# TODO(G1 exit Rishav): all four teammates join through real invitations; nothing is seeded.
 def seed(conn: Connection) -> None:
     catalogue = get_catalogue()
     for spec in catalogue:
@@ -55,6 +56,8 @@ def seed(conn: Connection) -> None:
             },
         )
 
+    # TODO(G1 1.3 Rishav): version is fixed at 1 and re-seeding rewrites items in place; decide
+    # how a changed set gets a new version (spec 3.3 calls sets versioned).
     version = 1
     for permission_set in load_permission_sets(catalogue):
         set_id = _set_id(permission_set.key, version)

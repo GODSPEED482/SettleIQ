@@ -8,6 +8,11 @@ import { Workspace } from "./pages/Workspace";
 import { can } from "./permissions/can";
 import { usePermissions } from "./permissions/PermissionsContext";
 
+// TODO(G1 1.11 Suprava): add sign-up, sign-in, email-verification and tenant-creation routes.
+// TODO(G1 1.11 Suprava): add a tenant picker. Nothing calls setTenantId yet, so all nav is locked.
+// TODO(G1 1.11 Suprava): locked links still navigate; show an unavailable state on those pages.
+// TODO(G1 1.11 Suprava): the footer's "Signed in" reflects permission loading, not a session.
+// TODO(G1 1.12 Suprava): add the invitation-acceptance screen (POST /invitations/{token}/accept).
 export function App() {
   const { permissions, status } = usePermissions();
   const [apiUp, setApiUp] = useState<boolean | null>(null);

@@ -1,6 +1,7 @@
 # SaaS Subscription Lifecycle reference pack (spec 14.4). Proves extensibility only;
 # it is not a production SaaS operations product. Filled in by task 6.1.
 
+# TODO(G1 1.8 Swapnaneel): confirm this manifest against the frozen schema.
 namespace: saas
 version: 0.1.0
 compatible_platform_versions: ">=0.1.0,<1.0.0"

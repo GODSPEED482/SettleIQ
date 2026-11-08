@@ -62,6 +62,7 @@ def clear_overrides():
     app.dependency_overrides.clear()
 
 
+# TODO(G1 1.10 Suprava): add any new path parameter from the 1.10 routes to the list below.
 def url(route: dict, tenant: UUID = TENANT) -> str:
     path = route["path"].replace("{tenant_id}", str(tenant))
     for name in ("token", "invitation_id", "user_id", "source_id", "case_id", "decision_id",
@@ -184,6 +185,7 @@ def test_critical_route_declarations(method, path, access, permission):
     assert (match[0]["access"], match[0]["permission"]) == (access, permission)
 
 
+# TODO(G1 1.10 Suprava): add sign-in here once it joins the contract as a PUBLIC route.
 def test_public_routes_are_only_the_expected_ones():
     assert {r["path"] for r in ROUTES if r["access"] == "PUBLIC"} == {
         "/healthz",
@@ -219,6 +221,8 @@ def test_missing_permission_is_403(route):
     }
 
 
+# TODO(G1 1.13 Suprava): this uses a fake gateway and accepts only 200 or 501, so it needs
+# adjusting once 1.4, 1.5 and 1.7 handlers touch the database.
 @pytest.mark.parametrize("route", PERMISSION_ROUTES, ids=label)
 def test_held_permission_passes_the_gate(route):
     response = call(client_for(FakeGateway([full_grant(route)])), route)

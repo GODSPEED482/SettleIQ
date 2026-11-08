@@ -10,6 +10,9 @@ from uuid import UUID
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
+# TODO(G1 OPEN-04 Rahul): settle envelope evolution, then freeze this under task 1.6.
+# TODO(G1 1.7 Rahul): persist to source_records; raw evidence is stored and hashed first, and
+# raw_evidence_id and payload_hash come from that store.
 class SourceRecordEnvelope(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

@@ -33,6 +33,7 @@ from app.errors import email_not_verified, missing_permission, not_found, unauth
 
 logger = logging.getLogger("settleiq.authz")
 
+# TODO(G1 OPEN-14 Suprava): ratify X-Tenant-Id as the selector for routes with no tenant path.
 TENANT_HEADER = "X-Tenant-Id"
 _ACCESS_ATTR = "__settleiq_access__"
 FRAMEWORK_ROUTES = {"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
@@ -58,6 +59,8 @@ class TenantContext:
     access: EffectiveAccess
 
 
+# TODO(G1 1.9 Swapnaneel): wire the auth library here. Read email_verified from current state, so
+# stale token claims cannot preserve access (AC-IAM-07, spec 11.2).
 def authenticate(request: Request) -> Principal:
     """Authentication seam, implemented by task 1.9.
 
@@ -174,6 +177,7 @@ def _api_routes(routes: Iterable[Any]) -> Iterator[APIRoute]:
             raise RouteDeclarationError(f"route type is not guardable: {route!r}")
 
 
+# TODO(G1 1.3 Rishav): owner review of the deny-by-default guard and route validation.
 def validate_routes(app: FastAPI, catalogue: Catalogue) -> None:
     """Fail startup if any route is undeclared, ambiguous or names an unknown key."""
     for route in _api_routes(app.routes):

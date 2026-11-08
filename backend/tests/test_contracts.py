@@ -20,6 +20,7 @@ from app.sources.envelope import SourceRecordEnvelope
 from packs.finops.money import Money, MoneyError
 
 
+# TODO(G1 1.6 Rahul): re-check these tests against the frozen connector manifest and envelope.
 def keys_of(manifest: ConnectorManifest) -> set[str]:
     return {capability.key for capability in manifest.capabilities}
 
@@ -67,6 +68,7 @@ def test_unsupported_capability_must_be_stated():
         ConnectorManifest(**data)
 
 
+# TODO(G1 1.8 Swapnaneel): re-check these tests against the frozen domain-pack manifest.
 def pack_data(**overrides) -> dict:
     return load_domain_packs()["saas"].model_dump() | overrides
 

@@ -1,7 +1,10 @@
+# TODO(G1 1.1 Rishav): push once and confirm both jobs pass; this workflow has never run.
+# TODO(G1 OPEN-REL-01 Rishav): decide the trusted CI identity and signing-key custody.
 name: CI
 
 on:
   push:
+    # TODO(G1 1.1 Rishav): the repo's default branch is prod, so this never fires; change it.
     branches: [main]
   pull_request:
 

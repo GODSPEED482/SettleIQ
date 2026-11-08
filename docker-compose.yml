@@ -3,6 +3,9 @@
 # The worker has no published port and shares no network with `web`: the private
 # route in app/worker_api.py must be unreachable from browsers (AC-AUTHZ-17).
 
+# TODO(G1 1.1 Rishav): run `docker compose up --build` end to end; this has never been run.
+# TODO(G1 1.7 Rahul): mount the raw-evidence volume on api and worker (plan: local volume).
+# TODO(G1 1.9 Swapnaneel): pass the SMTP relay settings through this block.
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD:?copy .env.example to .env}@db:5432/${POSTGRES_DB:?copy .env.example to .env}
   ENVIRONMENT: ${ENVIRONMENT:-development}

@@ -7,6 +7,9 @@ from app.errors import not_implemented
 
 router = APIRouter(prefix="/api", tags=["semantics"])
 
+# TODO(G1 1.10 Suprava): add mapping and authority reads (spec 12.2 omits them), guarded by the
+# existing mapping.read and authority.read keys.
+
 
 @router.get("/domain-packs")
 def list_domain_packs(ctx: TenantContext = require("domain_pack.read")) -> None:

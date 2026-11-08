@@ -87,6 +87,18 @@ These bind code not yet written. The spec sections hold the detail.
 - **Plan decisions:** PB-001 follows the conditional update in §4.4.1 rather than "replay the event". PB-002 live refund, break-glass, probabilistic matching and Redis/pgvector are not built in this slice. On Day 3 the order is freeze the build, create Tenant A, then attest; any later code change voids the attestation. If the safety suite is not green by Day 3 hour 7, no attestation is issued and the demo stops at step 10 in SHADOW.
 - **Draft contracts:** the error envelope, `X-Tenant-Id`, the connector and pack manifests, the envelope and permission metadata are unratified defaults (listed in `README.md`).
 
+## In-code TODOs
+
+Gate 1 work is marked where it happens, as `TODO(G1 <task> <owner>): ...`. `<task>` is a plan task number (`1.9`), an OPEN item (`OPEN-14`) or `exit`; `<owner>` is the first name from the checklist below. "Owner review" TODOs mark starter code that its owner has yet to review.
+
+```
+git grep "TODO(G1 "              # all of Gate 1
+git grep "TODO(G1 .* Rahul)"     # one person
+git grep "TODO(G1 1.5 "          # one task
+```
+
+Delete a TODO in the same change that completes it. The checklist below stays the record of what is done. Keep permission-set names out of frontend TODOs: the role-name ban matches quoted names in comments too. Later gates can follow the same format (`TODO(G2 ...)`).
+
 ## Team checklist
 
 Source: the delivery plan. Every task is unticked until its owner has reviewed it. Tick a box in the same change that completes the task, and only when automated evidence exists; a manual happy-path run does not count (§22.3). "Starter:" notes record what already exists in the FastAPI code and may need redoing if the stack changes. Hours are the plan's budget; each person has 24.

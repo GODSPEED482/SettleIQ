@@ -16,11 +16,14 @@ def connector_capabilities(ctx: TenantContext = require("connector.read")) -> li
     return [capability.model_dump() for capability in load_capability_registry().values()]
 
 
+# TODO(G1 1.7 Rahul): read the source registry through tenant_tx.
 @router.get("/sources")
 def list_sources(ctx: TenantContext = require("source.read")) -> None:
     raise not_implemented("1.7")
 
 
+# TODO(G1 1.7 Rahul): store capabilities declared by the manifest, with no source-model change for
+# non-payment connectors (AC-OPEN-01). Config holds opaque secret references only (spec 11.3).
 @router.post("/sources")
 def create_source(ctx: TenantContext = require("source.create")) -> None:
     raise not_implemented("1.7")

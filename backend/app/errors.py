@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
+# TODO(G1 OPEN-14 Suprava): ratify this envelope, or change it here and in api/client.ts.
 class ApiError(Exception):
     def __init__(self, status: int, code: str, message: str, **details: Any) -> None:
         super().__init__(message)

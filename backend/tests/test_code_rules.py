@@ -13,6 +13,7 @@ REPO = BACKEND.parent
 PYTHON_ROOTS = [BACKEND / "app", BACKEND / "packs"]
 FRONTEND_SRC = REPO / "frontend" / "src"
 
+# TODO(G1 1.3 Rishav): owner review of the role-name ban and its scan roots.
 SET_NAMES = {s.key for s in load_permission_sets(get_catalogue())}
 ROLE_IDENTIFIER = re.compile(r"(^|_)(is_admin|is_owner|has_role|require_role|check_role)($|_)")
 

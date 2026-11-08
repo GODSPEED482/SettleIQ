@@ -14,6 +14,7 @@ PERMISSION_SETS_FILE = _HERE / "permission_sets.yaml"
 GRANT_AUTHORITY = "member.role.assign"
 HUMAN_ONLY = {"playbook.approve", "platform.support.approve"}
 WORKER_ONLY = {"playbook.execute", "connector.action.invoke"}
+# TODO(G1 OPEN-REL-01 Rishav): define the attestor identity and key custody for this permission.
 CI_ONLY = {"platform.release.attest"}
 
 

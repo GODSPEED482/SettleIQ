@@ -38,6 +38,7 @@ class PlaybookTemplate(_Strict):
     connector_action_capabilities: list[str] = []
 
 
+# TODO(G1 1.8 Swapnaneel): freeze these fields; OPEN-03 settles compatibility and conflict rules.
 class DomainPackManifest(_Strict):
     namespace: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     version: str = Field(pattern=SEMVER)

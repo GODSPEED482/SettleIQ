@@ -30,6 +30,9 @@ def enable_tenant_rls(table: str, column: str = "tenant_id") -> None:
     )
 
 
+# TODO(G1 1.2 Rishav): owner review of this migration, RLS and the role split.
+# TODO(G1 1.7 Rahul): add data_sources, source_objects, raw_evidence and source_records in a new
+# migration, using enable_tenant_rls and explicit GRANTs. raw_evidence gets SELECT, INSERT only.
 def upgrade() -> None:
     password = os.environ["APP_DB_PASSWORD"].replace("'", "''")
     op.execute(
@@ -42,6 +45,8 @@ def upgrade() -> None:
         """
     )
 
+    # TODO(G1 1.9 Swapnaneel): add credential storage and hashed, single-use, expiring
+    # verification tokens in a new migration, shaped by the auth library (spec 11.2).
     op.execute(
         """
         CREATE TABLE users (
@@ -222,6 +227,8 @@ def upgrade() -> None:
     )
     op.execute("CREATE INDEX member_grants_user_idx ON member_grants (tenant_id, user_id)")
 
+    # TODO(G1 1.5 Rishav): add delivery state in a new migration; there is no column for it,
+    # and AC-IAM-09 needs delivery failures visible and retryable.
     op.execute(
         """
         CREATE TABLE tenant_invitations (
@@ -256,6 +263,7 @@ def upgrade() -> None:
         """
     )
 
+    # TODO(G1 1.4 Rishav): owner review; ownership transfer writes its event here (spec 3.2).
     op.execute(
         """
         CREATE TABLE audit_logs (
