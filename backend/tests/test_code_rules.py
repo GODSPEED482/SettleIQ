@@ -10,7 +10,8 @@ from app.authz.catalogue import get_catalogue, load_permission_sets
 
 BACKEND = Path(__file__).parents[1]
 REPO = BACKEND.parent
-PYTHON_ROOTS = [BACKEND / "app", BACKEND / "packs"]
+AGENT_SRC = REPO / "agent" / "settleiq_agent"
+PYTHON_ROOTS = [BACKEND / "app", BACKEND / "packs", AGENT_SRC]
 FRONTEND_SRC = REPO / "frontend" / "src"
 
 # TODO(G1 1.3 Rishav): owner review of the role-name ban and its scan roots.
@@ -56,7 +57,7 @@ def test_scanner_detects_violations():
 @pytest.mark.parametrize("root", PYTHON_ROOTS, ids=lambda p: p.name)
 def test_no_set_names_in_python(root):
     problems = {
-        str(path.relative_to(BACKEND)): found
+        str(path.relative_to(REPO)): found
         for path in python_files(root)
         if (found := violations_in(path.read_text(encoding="utf-8")))
     }
@@ -71,15 +72,32 @@ def test_no_set_names_in_frontend():
     assert [str(f) for f in files if pattern.search(f.read_text(encoding="utf-8"))] == []
 
 
+def imported_modules(path: Path) -> list[str]:
+    modules = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            modules.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.append(node.module)
+    return modules
+
+
 def test_core_never_imports_a_domain_pack():
-    offenders = []
-    for path in python_files(BACKEND / "app"):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            modules = []
-            if isinstance(node, ast.Import):
-                modules = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                modules = [node.module]
-            if any(module == "packs" or module.startswith("packs.") for module in modules):
-                offenders.append(str(path.relative_to(BACKEND)))
+    offenders = [
+        str(path.relative_to(BACKEND))
+        for path in python_files(BACKEND / "app")
+        if any(module.split(".")[0] == "packs" for module in imported_modules(path))
+    ]
+    assert offenders == []
+
+
+def test_agent_never_imports_backend_or_database_code():
+    banned = {"app", "packs", "alembic", "sqlalchemy", "psycopg", "psycopg2", "asyncpg"}
+    files = python_files(AGENT_SRC)
+    assert files, "agent sources not found"
+    offenders = [
+        str(path.relative_to(REPO))
+        for path in files
+        if any(module.split(".")[0] in banned for module in imported_modules(path))
+    ]
     assert offenders == []

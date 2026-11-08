@@ -16,6 +16,7 @@ SettleIQ is a multi-tenant, ontology-driven business operations platform; Financ
 
 - The code here is the FastAPI starter, following spec §6.2: Python owns the API, authorization, migrations and domain packs.
 - The tech-stack doc specifies a Node/TypeScript API (Express 5, Kysely, pg-boss, Better Auth, pnpm + Turborepo) that owns everything authoritative, with Python limited to a credential-less agent service. It also specifies TanStack Router, shadcn/ui and AG Grid on the frontend, where the starter uses React Router and plain CSS.
+- On 2026-11-08 Swapnaneel chose to continue on FastAPI, and the agent stubs assume that. It stays open here until the team confirms it (first item in Rishav's checklist).
 
 Everything below describes the code as it exists today.
 
@@ -48,7 +49,15 @@ npm run typecheck
 npm run build
 ```
 
-Whole stack: `cp .env.example .env`, then `docker compose up --build`. The Compose file and `.github/workflows/ci.yml` have never been run; Docker was not available when they were written.
+Agent, from `agent/`. Needs Python 3.12 and `uv`:
+
+```
+uv sync
+uv run ruff check .
+uv run pytest
+```
+
+Whole stack: `cp .env.example .env`, then `docker compose up --build`. Add `--profile agent` for the agent services. The Compose file has never been run; Docker was not available when it was written.
 
 `db` tests need a migrated, seeded PostgreSQL 16 and these variables (values in `.env.example`): `DATABASE_URL` (runtime role), `MIGRATION_DATABASE_URL` (owner role), `APP_DB_PASSWORD`. Without a reachable database they are **skipped** locally, so check the skip count before trusting a green run. `REQUIRE_DB_TESTS=1` turns that into a failure, as in CI.
 
@@ -62,11 +71,15 @@ Whole stack: `cp .env.example .env`, then `docker compose up --build`. The Compo
 - Non-member, nonexistent tenant and malformed selector all return the same 404. `403 MISSING_PERMISSION` only appears after membership is established.
 - `authenticate` in `guard.py` deliberately always raises 401 until task 1.9. Do not add a dev bypass; tests use `dependency_overrides`.
 
-**Startup validation.** `app/bootstrap.py:finish_app` runs for both apps and refuses to start on an undeclared route, unknown permission key, invalid manifest or prohibited agent tool. FastAPI wraps included routers, so `_api_routes` walks `original_router`. Unknown route types fail startup on purpose, and include-level prefixes are refused because they would falsify the route map: put prefixes on the `APIRouter`.
+**Startup validation.** `app/bootstrap.py:finish_app` runs for every app and refuses to start on an undeclared route, unknown permission key, invalid manifest or prohibited agent tool. FastAPI wraps included routers, so `_api_routes` walks `original_router`. Unknown route types fail startup on purpose, and include-level prefixes are refused because they would falsify the route map: put prefixes on the `APIRouter`.
 
-**Two ASGI apps.** `app/main.py` is public. `app/worker_api.py` holds the private `/internal` route and runs as its own process with no published port. Never mount internal routes on the public app.
+**Three ASGI apps.** `app/main.py` is public. `app/worker_api.py` holds the private Worker route and `app/agent_tools_api.py` the private `/internal/agent-tools` routes; each runs as its own process with no published port. Never mount internal routes on the public app, and never put agent tools on the Worker app.
 
-**Authorization is data.** Permission metadata is loaded from `app/authz/permissions.yaml` into memory. Permission sets are seeded from `permission_sets.yaml` into PostgreSQL and read from there on every request; nothing is cached, so revocation applies on the next decision. Set names must not appear in code, and CI scans `app/`, `packs/` and `frontend/src`. The owner-derived set is found by `derivation = 'OWNER_POINTER'`, not by name. Agent and Worker principals, platform access and pack-registered permission keys do not resolve yet.
+**Agent service (§8).** `agent/` is a separate package with no backend code, database driver or database credentials. `POST /api/agent/investigate/{case_id}` writes a `RUNNING` row and a job in one transaction and returns 202. `app/investigation/dispatcher.py` claims the job with `FOR UPDATE SKIP LOCKED`, mints a token (`tokens.py`), calls the agent's `/run` and validates the output (`response.py`) before the single terminal write. The agent reads only through the tool API, whose routes are generated from the server-side registry. Tokens carry identity only, so POL-08 is resolved on every tool call. `test_investigation.py` and `test_code_rules.py` enforce this boundary.
+
+These are stubs (501 or `NotImplementedError`) until tasks 5.7 and 5.8, and the services only start with `--profile agent`. The migration is deliberately not stubbed: it needs `investigations`, `investigation_tool_calls`, a job table, the write-once terminal trigger and a `settleiq_dispatcher` role whose only cross-tenant access is claiming job rows. An empty placeholder would be recorded as applied, and its later contents would never run.
+
+**Authorization is data.** Permission metadata is loaded from `app/authz/permissions.yaml` into memory. Permission sets are seeded from `permission_sets.yaml` into PostgreSQL and read from there on every request; nothing is cached, so revocation applies on the next decision. Set names must not appear in code, and CI scans `app/`, `packs/`, `agent/settleiq_agent` and `frontend/src`. The owner-derived set is found by `derivation = 'OWNER_POINTER'`, not by name. Agent and Worker principals, platform access and pack-registered permission keys do not resolve yet.
 
 **Database.** Two roles matter: the owner runs migrations, and `settleiq_app` (created by migration 0001, `NOSUPERUSER NOBYPASSRLS`) serves requests. Superusers bypass RLS, so tests must run as `settleiq_app`. Migrations are hand-written SQL with no autogenerate. A new tenant-owned table needs the statements from `enable_tenant_rls` in `0001_foundation.py` and an explicit `GRANT` to `settleiq_app`. Append-only tables get only `SELECT, INSERT`. `test_every_tenant_owned_table_has_forced_rls` catches a miss.
 
@@ -155,8 +168,8 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [ ] 3.3 Finance engine: both reconciliation scopes, settlement calculation, decimal-safe money (2h). Starter: `Money` type built.
 - [ ] 3.4 Version-pinned `domain_runs`, case lifecycle (1h)
 - [ ] 4.6 PayPal field mappings and capture-completion authority (1h)
-- [ ] 5.7 AI orchestrator: 6 tools, POL-08 permission intersection, durable tool trace (3h). Starter: tool registry declared.
-- [ ] 5.8 Agent response schema and prohibited-tool registry check (1h). Starter: prohibited-tool check built.
+- [ ] 5.7 AI orchestrator: 6 tools, POL-08 permission intersection, durable tool trace (3h). Starter: tool registry declared; agent service, dispatcher, tokens and tool API stubbed; migration not started.
+- [ ] 5.8 Agent response schema and prohibited-tool registry check (1h). Starter: prohibited-tool check built; draft response schema, evidence check stubbed.
 - [ ] 5.9 PB-001 definition and the request-lifecycle state machine (1h)
 - [ ] 6.1 SaaS pack: manifest, one validator, renewal/invoice fixture (1.5h). Starter: manifest stub exists.
 - [ ] 6.7 Full team rehearsal (0.5h)

@@ -2,6 +2,9 @@
 #
 # The worker has no published port and shares no network with `web`: the private
 # route in app/worker_api.py must be unreachable from browsers (AC-AUTHZ-17).
+#
+# The agent, agent-tools and dispatcher services are stubs until task 5.7, so they only
+# start with `--profile agent`. The agent must never join `backend` or use *backend-env.
 
 # TODO(G1 1.1 Rishav): run `docker compose up --build` end to end; this has never been run.
 # TODO(G1 1.7 Rahul): mount the raw-evidence volume on api and worker (plan: local volume).
@@ -63,6 +66,40 @@ services:
         condition: service_completed_successfully
     networks: [backend]
 
+  agent-tools:
+    profiles: [agent]
+    build: ./backend
+    command: uvicorn app.agent_tools_api:app --host 0.0.0.0 --port 8002
+    environment:
+      <<: *backend-env
+      AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [backend, agent]
+
+  dispatcher:
+    profiles: [agent]
+    build: ./backend
+    command: python -m app.investigation.dispatcher
+    environment:
+      DATABASE_URL: postgresql+psycopg://settleiq_dispatcher:${DISPATCHER_DB_PASSWORD:-}@db:5432/${POSTGRES_DB}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET:-}
+      AGENT_URL: http://agent:8100
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [backend, agent]
+
+  agent:
+    profiles: [agent]
+    build: ./agent
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      AGENT_TOOLS_URL: http://agent-tools:8002
+    networks: [agent]
+
   web:
     build: ./frontend
     environment:
@@ -78,6 +115,7 @@ services:
 networks:
   edge:
   backend:
+  agent:
 
 volumes:
   db_data:
