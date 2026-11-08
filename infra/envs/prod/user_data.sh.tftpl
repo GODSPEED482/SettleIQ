@@ -1,0 +1,59 @@
+#!/bin/bash
+# First-boot bootstrap (rendered by Terraform templatefile; bash variables use the $VAR form).
+set -euxo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+# swap: small instances OOM while pulling/extracting images
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+# docker engine + compose plugin (official repo; Ubuntu's docker.io lacks the compose plugin)
+apt-get update -y
+apt-get install -y ca-certificates curl unzip jq
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" > /etc/apt/sources.list.d/docker.list
+apt-get update -y
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+systemctl enable --now docker
+
+# aws cli v2 (deploy.sh uses it for ECR login, S3 and SSM Parameter Store)
+if ! command -v aws >/dev/null; then
+  curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install
+fi
+
+# data volume: wait for the attachment, format only if blank, mount by label
+DEV=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${data_dev_id}
+for i in $(seq 1 60); do
+  [ -e "$DEV" ] && break
+  sleep 5
+done
+if ! blkid "$DEV"; then
+  mkfs.ext4 -L settleiq-data "$DEV"
+fi
+mkdir -p /data
+grep -q 'LABEL=settleiq-data' /etc/fstab || echo 'LABEL=settleiq-data /data ext4 defaults,nofail 0 2' >> /etc/fstab
+mount -a
+mkdir -p /data/postgres /data/caddy
+
+# host facts for deploy.sh
+mkdir -p /opt/settleiq/releases
+cat > /opt/settleiq/host.env <<EOF
+REGION=${region}
+REGISTRY=${registry}
+PARAM_PATH=${param_path}
+RELEASE_BUCKET=${release_bucket}
+EOF
+
+# nightly logical backup to S3 (cron needs % escaped)
+cat > /etc/cron.d/settleiq-backup <<EOF
+30 21 * * * root docker exec settleiq-db-1 sh -c 'pg_dump -U "\$POSTGRES_USER" "\$POSTGRES_DB"' | gzip | /usr/local/bin/aws s3 cp - s3://${release_bucket}/backups/\$(date +\%F).sql.gz --region ${region}
+EOF
+chmod 644 /etc/cron.d/settleiq-backup

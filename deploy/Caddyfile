@@ -1,0 +1,17 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# One origin for UI + API: no CORS, cookies just work. Worker and agent-tools have no route here.
+settleiq.swapnaneelray.me {
+	encode zstd gzip
+
+	@api path /api/* /healthz
+	handle @api {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:8080
+	}
+}
