@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # TODO(G1 1.1 Rishav): the repo's default branch is prod, so this never fires; change it.
+    branches: [prod]
   pull_request:
 
 jobs:
