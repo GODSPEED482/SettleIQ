@@ -1,3 +1,4 @@
+# TODO(G1 1.1 Rishav): run this once with your own AWS credentials; nothing has been applied yet.
 # One-time bootstrap: remote-state bucket + GitHub OIDC + the role the infra pipeline uses.
 # Run locally with your own AWS credentials: terraform init && terraform apply
 # Its own state stays local (commit nothing from .terraform/ or *.tfstate).

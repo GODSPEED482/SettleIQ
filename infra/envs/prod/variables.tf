@@ -46,6 +46,7 @@ variable "github_repo" {
   description = "owner/repo"
 }
 
+# TODO(G1 1.9 Swapnaneel): add the SMTP relay and auth secret names.
 variable "secret_names" {
   type = list(string)
   default = [

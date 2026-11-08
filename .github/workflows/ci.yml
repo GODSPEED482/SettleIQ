@@ -1,4 +1,4 @@
-# TODO(G1 1.1 Rishav): push once and confirm both jobs pass; this workflow has never run.
+# TODO(G1 1.1 Rishav): push once and confirm all jobs pass; this workflow has never run.
 # TODO(G1 OPEN-REL-01 Rishav): decide the trusted CI identity and signing-key custody.
 name: CI
 

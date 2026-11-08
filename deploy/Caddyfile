@@ -2,6 +2,7 @@
 	email {$ACME_EMAIL}
 }
 
+# TODO(G1 1.1 Rishav): confirm the DNS host and add the A record to the Elastic IP.
 # One origin for UI + API: no CORS, cookies just work. Worker and agent-tools have no route here.
 settleiq.swapnaneelray.me {
 	encode zstd gzip

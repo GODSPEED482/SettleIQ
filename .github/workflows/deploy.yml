@@ -1,3 +1,5 @@
+# TODO(G1 1.1 Rishav): do the first deploy (docs/DEPLOYMENT.md section 10); this has never run.
+# TODO(G1 OPEN-REL-01 Rishav): decide if the attestation signer runs here; POL-14 needs image digests.
 name: deploy
 
 # Runs only for a push to prod, which includes a merged PR. Keep it that way: do not add

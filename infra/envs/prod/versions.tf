@@ -7,6 +7,7 @@ terraform {
     }
   }
 
+  # TODO(G1 1.1 Rishav): replace ACCOUNT_ID with the bootstrap tfstate_bucket output.
   backend "s3" {
     bucket       = "settleiq-tfstate-ACCOUNT_ID" # from bootstrap output tfstate_bucket
     key          = "prod/terraform.tfstate"
