@@ -51,18 +51,37 @@ Isolation matches the local stack: `edge` holds proxy, web and api; `backend` ho
 
 | Resource | Why | Approx. monthly cost |
 | --- | --- | --- |
-| EC2 `t3.medium`, Ubuntu 24.04 | One box to debug | $33 ($0.0448/hr) |
-| EBS gp3: 20 GB root, 20 GB data | Data outlives the instance; `prevent_destroy` | about $4 (estimate) |
+| EC2 `t3.small`, Ubuntu 24.04, standard CPU credits | One box to debug; free-tier eligible | $16.35 ($0.0224/hr) |
+| EBS gp3: 20 GB root, 10 GB data | Data outlives the instance; `prevent_destroy` | $2.74 |
 | Elastic IP / public IPv4 | Stable DNS target | $3.65 |
-| ECR (3 repos, last 15 images) | Immutable SHA tags, so rollback is exact | under $1 |
-| S3 (state, releases 30 days, backups 14 days) | Remote state, deploy bundles, dumps | under $1 |
+| ECR (3 repos, last 5 images) | Immutable SHA tags, so rollback is exact | under $0.50 |
+| S3 (state, releases 30 days, backups 14 days) | Remote state, deploy bundles, dumps | under $0.50 |
 | SSM Parameter Store, standard | Secrets | free |
+| AWS Budgets alert at $25 a month | Warns before credits drain | free |
 
-Total is about **$41 a month, or $1.40 a day**. These are approximate; check the AWS pricing page before relying on them.
+Total is about **$23 a month, or $0.76 a day**, at Mumbai list prices checked on 2026-11-09, before any tax.
 
-Idle, the five core containers used about 170 MB in total in a local run, so `t3.medium` (4 GB plus 2 GB swap) has plenty of headroom. That is an idle figure, with no load and the agent profile off. The tech-stack doc suggests about 8 GB; to follow it, set `instance_type = "t3.large"`, which is an in-place stop and start.
+Idle, the five core containers used about 170 MB in total in a local run, so `t3.small` (2 GB plus 2 GB swap) should fit. That is an idle figure, with no load and the agent profile off, so measure it in rehearsal.
 
 State lives in S3 with native locking (`use_lockfile`), created by `infra/bootstrap`.
+
+### Free-tier accounts
+
+The stack is sized for AWS accounts created on or after 15 July 2025. These get $100 in credits, plus up to $100 more for completing activities, and EC2 usage draws down those credits. Accounts created before that date have passed their 12-month free tier and pay these prices directly.
+
+**A Free plan ends after six months or when the credits run out, whichever comes first. The account then closes, and AWS deletes its data after 90 days unless it is upgraded to the Paid plan.** Upgrading cannot be undone. Download the database dumps before that date if the data matters.
+
+| `instance_type` | RAM | Full stack per month | $100 lasts | Use |
+| --- | --- | --- | --- | --- |
+| `t3.micro` | 1 GB | about $15 | the full six months | Only to stretch credits; tight once the agent services run |
+| `t3.small` | 2 GB | about $23 | about 4.3 months | Default |
+| `m7i-flex.large` | 8 GB | about $80 | about 5 weeks | Only if rehearsal shows `t3.small` is too small; matches the tech-stack doc's suggested 8 GB |
+
+`t3.medium` and `t3.large` are not on the eligible list. Changing `instance_type` is an in-place stop and start. It does not change the images, so it does not void a POL-14 attestation.
+
+`t3.small` starts with no CPU credits (separate from billing credits) and earns 24 an hour. With `cpu_credits = "standard"` it slows to its baseline, 20% per vCPU, when they run out, instead of billing the excess. Check the balance before the first deploy and before the demo; section 10 has the command.
+
+To pause spending after the demo, run `aws ec2 stop-instances --region ap-south-1 --instance-ids <instance_id>`. Disk and IP still cost about $6.40 a month, and deploys fail while the host is stopped.
 
 ## 5. Pipelines
 
@@ -157,13 +176,22 @@ A single host restarts containers in place, so expect a few seconds of downtime 
 Do steps 0 to 4 **before** merging this to `prod`. Until then, the first deploy run fails at AWS sign-in.
 
 ```bash
+# Preflight on a free-tier account: t3.small must be listed, and the second command must print an AMI ID
+aws ec2 describe-instance-types --region ap-south-1 --filters Name=free-tier-eligible,Values=true \
+  --query "InstanceTypes[*].InstanceType" --output text
+AMI=$(aws ssm get-parameter --region ap-south-1 \
+  --name /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id \
+  --query Parameter.Value --output text)
+aws ec2 describe-images --region ap-south-1 --image-ids "$AMI" --filters Name=free-tier-eligible,Values=true \
+  --query 'Images[].ImageId' --output text
+
 # 0. One time, with your own AWS credentials
 cd infra/bootstrap && terraform init && terraform apply -var github_repo=GODSPEED482/SettleIQ
 #    add -var create_oidc_provider=false if the account already has the GitHub OIDC provider
 #    put the tfstate_bucket output into infra/envs/prod/versions.tf and commit it
 
 # 1. First infra apply (locally once; afterwards infra.yml does it)
-cd ../envs/prod && terraform init && terraform apply -var github_repo=GODSPEED482/SettleIQ
+cd ../envs/prod && terraform init && terraform apply -var github_repo=GODSPEED482/SettleIQ -var budget_alert_email=<your-email>
 
 # 2. DNS: A record settleiq.swapnaneelray.me -> public_ip output (skip if route53_zone_id is set)
 
@@ -181,8 +209,15 @@ gh variable set AWS_INFRA_ROLE_ARN  --body "<bootstrap infra_role_arn output>"
 gh variable set INSTANCE_ID         --body "$(terraform output -raw instance_id)"
 gh variable set RELEASE_BUCKET      --body "$(terraform output -raw release_bucket)"
 gh variable set APP_DOMAIN          --body settleiq.swapnaneelray.me
+#    A secret rather than a variable: repository logs are public, and only secrets are masked
+gh secret set BUDGET_ALERT_EMAIL    --body <your-email>
 
-# 5. Merge to prod. deploy.yml runs; then open https://settleiq.swapnaneelray.me
+# 5. Check CPU credits, about an hour after first boot. Merge when the latest value is above about 20,
+#    or the health wait in deploy.sh may time out on a throttled host.
+aws cloudwatch get-metric-statistics --region ap-south-1 --namespace AWS/EC2 --metric-name CPUCreditBalance \
+  --dimensions Name=InstanceId,Value=<instance_id> --statistics Average --period 300 \
+  --start-time "$(date -u -d '-30 minutes' +%FT%TZ)" --end-time "$(date -u +%FT%TZ)"
+#    Then merge to prod. deploy.yml runs; open https://settleiq.swapnaneelray.me
 
 # 6. Shell on the box when needed (no SSH)
 aws ssm start-session --target <instance_id>
@@ -195,6 +230,8 @@ Once live, the PayPal webhook target is the public `/api/webhooks/...` route in 
 - [ ] Merge freeze on `prod` before task 6.3; any later image change voids the attestation
 - [ ] Last deploy at least an hour before the slot
 - [ ] Certificate issued and `/healthz` green on the public URL
+- [ ] CPU credit balance checked (command in section 10, step 5) and memory measured with the demo's profiles on
+- [ ] Billing credits and Free plan end date checked in the Billing console
 - [ ] Manual backup: `docker exec settleiq-db-1 sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > /data/pre-demo.sql.gz`
 - [ ] Note the last-good SHA for `deploy.sh <sha> --rollback`
 - [ ] Demo data seeded through a script, not by hand (spec G1: no seeded demo identities)
