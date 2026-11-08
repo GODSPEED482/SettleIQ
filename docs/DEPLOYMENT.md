@@ -97,7 +97,7 @@ Any failing CI job blocks the deploy.
 
 1. The workflows trigger only on `push: branches: [prod]`. A merged PR is a push. There is no `workflow_dispatch` or `pull_request` trigger on anything that deploys.
 2. Every entry job has `if: github.ref == 'refs/heads/prod'`, in case a trigger is added later.
-3. Both AWS roles trust exactly `repo:GODSPEED482/SettleIQ:ref:refs/heads/prod`. A workflow edited on another branch cannot get AWS credentials at all. This is enforced by AWS, so it does not depend on any GitHub setting.
+3. Both AWS roles trust exactly `repo:GODSPEED482@138929751/SettleIQ@1450123530:ref:refs/heads/prod`, the immutable subject format this repository's tokens use. A workflow edited on another branch cannot get AWS credentials at all. This is enforced by AWS, so it does not depend on any GitHub setting.
 
 Two consequences:
 

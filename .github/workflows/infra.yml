@@ -18,7 +18,6 @@ concurrency:
 env:
   AWS_REGION: ap-south-1
   TF_IN_AUTOMATION: "1"
-  TF_VAR_github_repo: ${{ github.repository }}
   TF_VAR_budget_alert_email: ${{ secrets.BUDGET_ALERT_EMAIL }}
 
 defaults:
