@@ -116,4 +116,4 @@ jobs:
       - run: terraform -chdir=infra/bootstrap validate
       - run: terraform -chdir=infra/envs/prod init -backend=false -input=false
       - run: terraform -chdir=infra/envs/prod validate
-      - run: shellcheck deploy/deploy.sh
+      - run: shellcheck deploy/deploy.sh infra/push-prod-env.sh

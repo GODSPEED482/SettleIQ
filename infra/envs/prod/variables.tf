@@ -57,7 +57,7 @@ variable "services" {
 
 variable "app_domain" {
   type    = string
-  default = "settleiq.swapnaneelray.me"
+  default = "app.settleiq.dpdns.org"
 }
 
 variable "route53_zone_id" {
@@ -66,15 +66,17 @@ variable "route53_zone_id" {
   description = "Leave empty if DNS is not on Route 53; add the A record at your DNS host instead"
 }
 
-variable "github_repo" {
+variable "github_oidc_sub_prefix" {
   type        = string
-  description = "owner/repo"
+  default     = "repo:GODSPEED482@138929751/SettleIQ@1450123530"
+  description = "OIDC subject prefix from GET /repos/{owner}/{repo}/actions/oidc/customization/sub; this repository uses immutable owner and repo IDs"
 }
 
 # TODO(G1 1.9 Swapnaneel): add the SMTP relay and auth secret names.
 variable "secret_names" {
   type = list(string)
   default = [
+    "ENVIRONMENT",
     "POSTGRES_DB",
     "POSTGRES_USER",
     "POSTGRES_PASSWORD",
@@ -84,5 +86,5 @@ variable "secret_names" {
     "AGENT_TOKEN_SECRET",
     "LLM_API_KEY",
   ]
-  description = "Runtime env var names. Terraform creates placeholders only; real values are set with `aws ssm put-parameter --overwrite`"
+  description = "Runtime env var names. Terraform creates placeholders only; infra/push-prod-env.sh sets the real values from .env.production"
 }

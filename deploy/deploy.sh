@@ -15,7 +15,7 @@ source "$APP/host.env" # REGION, REGISTRY, PARAM_PATH, RELEASE_BUCKET
 PREV="$(cat "$APP/current" 2>/dev/null || true)"
 
 rollback() {
-  echo "!! deploy of $TAG failed"
+  echo "!! deploy of $TAG failed; if it was the migration, see $REL/migrate.log on the host"
   if [ -n "$PREV" ] && [ "$PREV" != "$TAG" ] && [ -d "$APP/releases/$PREV" ]; then
     echo "!! rolling back to $PREV"
     (cd "$APP/releases/$PREV" && docker compose up -d --remove-orphans --wait --wait-timeout 120) || true
@@ -38,7 +38,7 @@ aws ssm get-parameters-by-path --region "$REGION" --path "$PARAM_PATH" --with-de
 chmod 600 .env
 
 # Terraform seeds every parameter with CHANGE_ME; never start a database on that password.
-required="POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD APP_DB_PASSWORD ACME_EMAIL"
+required="ENVIRONMENT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD APP_DB_PASSWORD ACME_EMAIL"
 if grep -q '^COMPOSE_PROFILES=.*agent' .env; then
   required="$required DISPATCHER_DB_PASSWORD AGENT_TOKEN_SECRET LLM_API_KEY"
 fi
@@ -57,7 +57,10 @@ if [ "$MODE" = "--rollback" ]; then
   echo "==> rollback: skipping migrations"
 else
   echo "==> migrating (before traffic moves; must be backward compatible)"
-  docker compose run --rm migrate
+  # Kept on the host: a failed migration can print its SQL, which includes APP_DB_PASSWORD,
+  # and everything this script writes to stdout or stderr reaches the public Actions log.
+  install -m 600 /dev/null migrate.log
+  docker compose run --rm migrate >migrate.log 2>&1
 fi
 
 echo "==> rolling services"
