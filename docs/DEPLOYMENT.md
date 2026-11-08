@@ -1,6 +1,6 @@
 # SettleIQ - Deployment plan
 
-Status: the AWS resources, production values, GitHub variables and DNS are in place, and nothing has been deployed yet. See [section 10](#10-first-deploy-runbook) for what remains.
+Status: live at https://app.settleiq.dpdns.org. Every push to `prod` that changes application code deploys automatically.
 
 ## 1. Summary
 
@@ -79,7 +79,7 @@ The stack is sized for AWS accounts created on or after 15 July 2025. These get 
 
 `t3.medium` and `t3.large` are not on the eligible list. Changing `instance_type` is an in-place stop and start. It does not change the images, so it does not void a POL-14 attestation.
 
-`t3.small` starts with no CPU credits (separate from billing credits) and earns 24 an hour. With `cpu_credits = "standard"` it slows to its baseline, 20% per vCPU, when they run out, instead of billing the excess. Check the balance before the first deploy and before the demo; section 10 has the command.
+`t3.small` starts with no CPU credits (separate from billing credits) and earns 24 an hour. With `cpu_credits = "standard"` it slows to its baseline, 20% per vCPU, when they run out, instead of billing the excess. Check the balance before the demo; section 10 has the command.
 
 To pause spending after the demo, run `aws ec2 stop-instances --region ap-south-1 --instance-ids <instance_id>`. Disk and IP still cost about $6.40 a month, and deploys fail while the host is stopped.
 
@@ -97,7 +97,7 @@ Any failing CI job blocks the deploy.
 
 1. The workflows trigger only on `push: branches: [prod]`. A merged PR is a push. There is no `workflow_dispatch` or `pull_request` trigger on anything that deploys.
 2. Every entry job has `if: github.ref == 'refs/heads/prod'`, in case a trigger is added later.
-3. Both AWS roles trust exactly `repo:GODSPEED482/SettleIQ:ref:refs/heads/prod`. A workflow edited on another branch cannot get AWS credentials at all. This is enforced by AWS, so it does not depend on any GitHub setting.
+3. Both AWS roles trust exactly `repo:GODSPEED482@138929751/SettleIQ@1450123530:ref:refs/heads/prod`, the immutable subject format this repository's tokens use. A workflow edited on another branch cannot get AWS credentials at all. This is enforced by AWS, so it does not depend on any GitHub setting.
 
 Two consequences:
 
@@ -176,19 +176,17 @@ A single host restarts containers in place, so expect a few seconds of downtime 
 - Add an external uptime check on `https://app.settleiq.dpdns.org/healthz`. It proves the API process is up, but does not ping the database.
 - Sponsor tooling: the tech-stack doc puts Elastic Cloud in the traces and logs seat. It would add to `docker compose logs` once the app emits OpenTelemetry; it is not wired here.
 
-## 10. First-deploy runbook
+## 10. Host operations
 
-Do step 1 **before** merging this to `prod`. On Windows, use Git Bash and run `export MSYS_NO_PATHCONV=1` first, or `/settleiq/...` arguments get rewritten into Windows paths.
+On Windows, use Git Bash and run `export MSYS_NO_PATHCONV=1` first, or `/settleiq/...` arguments get rewritten into Windows paths.
 
 ```bash
-# 1. Check CPU credits, about an hour after first boot. Merge when the latest value is above about 20,
-#    or the health wait in deploy.sh may time out on a throttled host.
+# CPU credits. Below about 20, the health wait in deploy.sh may time out on a throttled host.
 aws cloudwatch get-metric-statistics --region ap-south-1 --namespace AWS/EC2 --metric-name CPUCreditBalance \
   --dimensions Name=InstanceId,Value=<instance_id> --statistics Average --period 300 \
   --start-time "$(date -u -d '-30 minutes' +%FT%TZ)" --end-time "$(date -u +%FT%TZ)"
-#    Then merge to prod. deploy.yml runs; open https://app.settleiq.dpdns.org
 
-# 2. Shell on the box when needed (no SSH)
+# Shell on the box (no SSH)
 aws ssm start-session --target <instance_id>
 ```
 
@@ -199,7 +197,7 @@ Once live, the PayPal webhook target is the public `/api/webhooks/...` route in 
 - [ ] Merge freeze on `prod` before task 6.3; any later image change voids the attestation
 - [ ] Last deploy at least an hour before the slot
 - [ ] Certificate issued and `/healthz` green on the public URL
-- [ ] CPU credit balance checked (command in section 10, step 1) and memory measured with the demo's profiles on
+- [ ] CPU credit balance checked (command in section 10) and memory measured with the demo's profiles on
 - [ ] Billing credits and Free plan end date checked in the Billing console
 - [ ] Manual backup: `docker exec settleiq-db-1 sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > /data/pre-demo.sql.gz`
 - [ ] Note the last-good SHA for `deploy.sh <sha> --rollback`

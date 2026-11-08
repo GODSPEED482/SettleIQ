@@ -17,9 +17,10 @@ variable "region" {
   default = "ap-south-1"
 }
 
-variable "github_repo" {
+variable "github_oidc_sub_prefix" {
   type        = string
-  description = "owner/repo of the SettleIQ repository"
+  default     = "repo:GODSPEED482@138929751/SettleIQ@1450123530"
+  description = "OIDC subject prefix from GET /repos/{owner}/{repo}/actions/oidc/customization/sub; this repository uses immutable owner and repo IDs"
 }
 
 variable "create_oidc_provider" {
@@ -106,7 +107,7 @@ data "aws_iam_policy_document" "infra_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:ref:refs/heads/prod"]
+      values   = ["${var.github_oidc_sub_prefix}:ref:refs/heads/prod"]
     }
   }
 }

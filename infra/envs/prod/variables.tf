@@ -65,9 +65,10 @@ variable "route53_zone_id" {
   description = "Leave empty if DNS is not on Route 53; add the A record at your DNS host instead"
 }
 
-variable "github_repo" {
+variable "github_oidc_sub_prefix" {
   type        = string
-  description = "owner/repo"
+  default     = "repo:GODSPEED482@138929751/SettleIQ@1450123530"
+  description = "OIDC subject prefix from GET /repos/{owner}/{repo}/actions/oidc/customization/sub; this repository uses immutable owner and repo IDs"
 }
 
 variable "secret_names" {
