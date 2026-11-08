@@ -42,6 +42,18 @@ jobs:
           name: route-map
           path: backend/route-map.json
 
+  agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run pytest
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
