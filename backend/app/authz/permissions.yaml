@@ -1,0 +1,100 @@
+# V1 permission catalogue (spec Appendix A, metadata per spec 3.3).
+#
+# Closed per release (AUTHZ-08): an unknown key fails startup. `resource` and `action`
+# are derived from the key; `namespace` is core; `release` comes from this file.
+# Sensitivity and narrowable scopes are DRAFT readings of 3.3; review under task 1.3.
+#
+# Shape:  key: [principals, narrowable_scopes, sensitivity, description]
+# Optional fifth element: flags. `reserved` = owner-reserved or service-only, never
+# tenant-grantable. Platform keys are never tenant-grantable either.
+
+release: "1.5"
+
+tenant:
+  tenant.read: [[human], [], normal, Read tenant profile]
+  tenant.update: [[human], [], normal, Update tenant profile]
+  tenant.delete: [[human], [], critical, Delete the tenant, reserved]
+  tenant.ownership.transfer: [[human], [], critical, Transfer tenant ownership, reserved]
+
+  member.read: [[human], [], sensitive, List members and effective grants]
+  member.invite: [[human], [], sensitive, Invite a member]
+  member.invitation.manage: [[human], [], sensitive, List resend or revoke invitations]
+  member.role.assign: [[human], [], sensitive, Change member grants]
+  member.remove: [[human], [], sensitive, Remove a member]
+  role.read: [[human], [], normal, Read the permission catalogue and sets]
+  role.manage: [[human], [], sensitive, Manage custom permission sets (P1)]
+  audit.read: [[human], [], sensitive, Read the audit trail]
+
+  connector.read: [[human], [], normal, Read connector capabilities]
+  source.read: [[human, agent], [source], normal, Read registered sources]
+  source.create: [[human], [], normal, Register a source]
+  source.update: [[human], [source], normal, Update a source]
+  source.delete: [[human], [source], sensitive, Delete a source]
+  source.credential.manage: [[human], [source], critical, Store source secret references]
+  source.discover: [[human], [source], normal, Discover and profile a source]
+  source.sync: [[human], [source], normal, Sync or backfill a source]
+  source.file.upload: [[human], [source], normal, Upload a source file]
+  source.webhook.manage: [[human], [source], sensitive, Register webhook configuration]
+
+  source_record.read: [[human, agent, worker], [source], normal, Read canonical source records]
+  evidence.raw.read: [[human, agent], [source], sensitive, Read raw evidence payloads]
+  connector.action.invoke: [[worker], [], critical, Invoke a connector action, reserved]
+
+  domain_pack.read: [[human, agent], [domain_pack], normal, Read domain packs]
+  domain_pack.manage: [[human], [domain_pack], sensitive, Activate or manage domain packs]
+
+  ontology.read: [[human, agent], [domain_pack], normal, Read the ontology composition]
+  ontology.generate: [[human], [domain_pack], normal, Generate a draft ontology]
+  ontology.edit: [[human], [domain_pack], normal, Edit a draft ontology]
+  ontology.validate: [[human], [domain_pack], normal, Validate an ontology candidate]
+  ontology.publish: [[human], [domain_pack], critical, Publish an immutable ontology version]
+
+  mapping.read: [[human, agent], [domain_pack, source], normal, Read source mappings]
+  mapping.edit: [[human], [domain_pack, source], normal, Edit source mappings]
+  mapping.publish: [[human], [domain_pack, source], sensitive, Publish source mappings]
+  authority.read: [[human, agent], [domain_pack], normal, Read source authority]
+  authority.edit: [[human], [domain_pack], sensitive, Edit source authority]
+  rule.read: [[human, agent], [domain_pack], normal, Read domain rules]
+  rule.edit: [[human], [domain_pack], sensitive, Edit domain rules]
+  policy.read: [[human, agent], [domain_pack], normal, Read policies]
+  policy.edit: [[human], [domain_pack], sensitive, Edit policies]
+
+  domain_run.read: [[human, agent], [domain_pack], normal, Read domain runs]
+  domain_run.create: [[human], [domain_pack], normal, Start a domain run]
+  entity.read: [[human, agent, worker], [domain_pack], normal, Read canonical entities]
+  entity_resolution.read: [[human, agent], [domain_pack], normal, Read identity decisions]
+  entity_resolution.review: [[human], [domain_pack], normal, Review ambiguous identity links]
+
+  case.read: [[human, agent, worker], [domain_pack], normal, Read domain cases]
+  case.triage: [[human], [domain_pack], normal, Assign dismiss or reopen a case]
+  case.investigate: [[human], [domain_pack], normal, Start an investigation]
+  case.classify: [[agent], [domain_pack], normal, Propose a case classification, reserved]
+  investigation.read: [[human], [domain_pack], normal, Read investigations]
+  investigation.record: [[agent], [domain_pack], normal, Append investigation results, reserved]
+  domain.compute: [[agent, worker], [domain_pack], normal, Run deterministic computations, reserved]
+
+  playbook.read: [[human, agent], [playbook, domain_pack], normal, Read playbooks]
+  playbook.edit: [[human], [playbook, domain_pack], sensitive, Edit playbooks (P1)]
+  playbook.publish: [[human], [playbook, domain_pack], critical, Publish playbooks (P1)]
+  playbook.recommend: [[agent], [playbook, domain_pack], normal, Recommend a playbook, reserved]
+  playbook.validate: [[human, agent], [playbook, domain_pack], normal, Dry-run a playbook]
+  playbook.request: [[human], [playbook, domain_pack], sensitive, Request a playbook]
+  playbook.approve: [[human], [playbook, domain_pack], critical, Approve a playbook request]
+  playbook.reject: [[human], [playbook, domain_pack], critical, Reject a playbook request]
+  playbook.execute: [[worker], [], critical, Execute under a single-use grant, reserved]
+
+  execution.read: [[human], [playbook, domain_pack], normal, Read executions]
+  execution.record: [[worker], [], sensitive, Record execution attempts, reserved]
+  outcome.verify: [[worker], [], sensitive, Verify post-action state, reserved]
+  execution_mode.manage: [[human], [], critical, Switch one exact scope to LIVE, reserved]
+
+platform:
+  platform.tenant.read: [[platform_human], [], sensitive, Read tenant metadata]
+  platform.tenant.manage: [[platform_human], [], critical, Manage tenants]
+  platform.connector.register: [[platform_human], [], sensitive, Register connectors]
+  platform.domain_pack.register: [[platform_human], [], sensitive, Register domain packs]
+  platform.ops.read: [[platform_human], [], normal, Read platform operations data]
+  platform.support.request: [[platform_human], [], critical, Request break-glass access]
+  platform.support.approve: [[platform_human], [], critical, Approve break-glass access]
+  platform.support.access: [[platform_human], [], critical, Use approved break-glass access]
+  platform.release.attest: [[ci], [], critical, Issue or revoke release attestations]

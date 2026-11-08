@@ -1,0 +1,21 @@
+# SaaS Subscription Lifecycle reference pack (spec 14.4). Proves extensibility only;
+# it is not a production SaaS operations product. Filled in by task 6.1.
+
+namespace: saas
+version: 0.1.0
+compatible_platform_versions: ">=0.1.0,<1.0.0"
+dependencies: []
+conflicts: []
+ontology_definitions: []
+mapping_hints: []
+validators: []
+entity_resolution_policies: []
+
+case_types:
+  - {code: RENEWAL_INVOICE_MISMATCH, default_severity: medium}
+
+agent_tools: []
+permissions: []
+connector_action_capabilities: []
+playbook_templates: []
+test_fixtures: []

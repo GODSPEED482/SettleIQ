@@ -1,0 +1,33 @@
+# PayPal Sandbox adapter (spec 10). Rate limits and retries stay `unverified` until
+# OPEN-PP-01 is closed against current provider documentation.
+
+connector_id: paypal
+version: 0.1.0
+protocols: [https-rest, webhook, csv]
+source_types: [payment_provider]
+auth_mode: oauth2_client_credentials
+secret_reference_required: true
+
+supports_discovery: false
+supports_metadata: false
+supports_batch_extraction: true
+supports_incremental: false
+supports_events: true
+supports_file_ingestion: true
+supports_detail_lookup: true
+
+extraction_modes: [backfill]
+capabilities:
+  - {key: transactions.read, version: 1.0.0, parameters: {}}
+  - {key: captures.read, version: 1.0.0, parameters: {}}
+  - {key: refunds.read, version: 1.0.0, parameters: {}}
+  - {key: refunds.create, version: 1.0.0, parameters: {}}
+  - {key: webhooks.receive, version: 1.0.0, parameters: {}}
+  - {key: reports.balance_reconciliation.read, version: 1.0.0, parameters: {}}
+  - {key: files.upload, version: 1.0.0, parameters: {}}
+
+rate_limit: {status: unverified}
+retry: {status: unverified}
+supported_schema_versions: []
+health_signals: [oauth_token, webhook_last_received]
+limits: {}

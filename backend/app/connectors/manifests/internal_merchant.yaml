@@ -1,0 +1,46 @@
+# Internal-merchant write adapter (spec 4.4.1). Registered separately from the PostgreSQL
+# read source, so registering that source grants no write authority.
+
+connector_id: internal-merchant
+version: 0.1.0
+protocols: [postgresql]
+source_types: [merchant_database]
+auth_mode: database_role
+secret_reference_required: true
+
+supports_discovery: false
+supports_metadata: false
+supports_batch_extraction: false
+supports_incremental: false
+supports_events: false
+supports_file_ingestion: false
+supports_detail_lookup: true
+
+extraction_modes: []
+capabilities:
+  - key: merchant.payment.read
+    version: 1.0.0
+    parameters:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, payment_id]
+      properties:
+        tenant_id: {type: string, format: uuid}
+        payment_id: {type: string}
+  - key: merchant.payment_status.correct
+    version: 1.0.0
+    parameters:
+      type: object
+      additionalProperties: false
+      required: [tenant_id, payment_id, expected_current_status, requested_status]
+      properties:
+        tenant_id: {type: string, format: uuid}
+        payment_id: {type: string}
+        expected_current_status: {const: PENDING}
+        requested_status: {const: COMPLETED}
+
+rate_limit: {status: not_applicable}
+retry: {policy: idempotent_key_only}
+supported_schema_versions: []
+health_signals: [database_connection]
+limits: {}

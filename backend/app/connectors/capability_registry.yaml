@@ -1,0 +1,13 @@
+# Canonical connector capability keys (spec 4.4). One spelling per operation.
+# A new connector adds its keys here; platform code does not change.
+
+capabilities:
+  - {key: transactions.read, kind: read}
+  - {key: captures.read, kind: read}
+  - {key: refunds.read, kind: read}
+  - {key: refunds.create, kind: action}
+  - {key: webhooks.receive, kind: event}
+  - {key: reports.balance_reconciliation.read, kind: read}
+  - {key: files.upload, kind: file}
+  - {key: merchant.payment.read, kind: read}
+  - {key: merchant.payment_status.correct, kind: action}

@@ -1,0 +1,106 @@
+"""Applies the permission catalogue and system-managed sets. Safe to re-run.
+
+Run after migrations with the migration role: `python -m app.authz.seed`.
+Creates catalogue data only; never users, tenants or grants (AC-IAM-11).
+"""
+
+import os
+from uuid import NAMESPACE_URL, uuid5
+
+from sqlalchemy import Connection, create_engine, text
+
+from app.authz.catalogue import get_catalogue, load_permission_sets
+
+
+def _set_id(key: str, version: int) -> str:
+    return str(uuid5(NAMESPACE_URL, f"settleiq:permission-set:{key}:{version}"))
+
+
+def seed(conn: Connection) -> None:
+    catalogue = get_catalogue()
+    for spec in catalogue:
+        conn.execute(
+            text(
+                """
+                INSERT INTO permissions (key, resource, action, scope_type, narrowable_scopes,
+                    principal_types, sensitivity, grant_requires, tenant_grantable, namespace,
+                    release, description)
+                VALUES (:key, :resource, :action, :scope_type, :narrowable, :principals,
+                    :sensitivity, :grant_requires, :grantable, :namespace, :release, :description)
+                ON CONFLICT (key) DO UPDATE SET
+                    resource = EXCLUDED.resource, action = EXCLUDED.action,
+                    scope_type = EXCLUDED.scope_type,
+                    narrowable_scopes = EXCLUDED.narrowable_scopes,
+                    principal_types = EXCLUDED.principal_types,
+                    sensitivity = EXCLUDED.sensitivity,
+                    grant_requires = EXCLUDED.grant_requires,
+                    tenant_grantable = EXCLUDED.tenant_grantable,
+                    namespace = EXCLUDED.namespace, release = EXCLUDED.release,
+                    description = EXCLUDED.description
+                """
+            ),
+            {
+                "key": spec.key,
+                "resource": spec.resource,
+                "action": spec.action,
+                "scope_type": spec.scope_type,
+                "narrowable": list(spec.narrowable_scopes),
+                "principals": list(spec.principal_types),
+                "sensitivity": spec.sensitivity,
+                "grant_requires": list(spec.grant_requires),
+                "grantable": spec.tenant_grantable,
+                "namespace": spec.namespace,
+                "release": spec.release,
+                "description": spec.description,
+            },
+        )
+
+    version = 1
+    for permission_set in load_permission_sets(catalogue):
+        set_id = _set_id(permission_set.key, version)
+        conn.execute(
+            text(
+                """
+                INSERT INTO permission_sets
+                    (id, key, version, display_name, principal_type, status, derivation)
+                VALUES (:id, :key, :version, :display_name, :principal_type, 'ACTIVE', :derivation)
+                ON CONFLICT (key, version) DO UPDATE SET
+                    display_name = EXCLUDED.display_name,
+                    principal_type = EXCLUDED.principal_type,
+                    derivation = EXCLUDED.derivation
+                """
+            ),
+            {
+                "id": set_id,
+                "key": permission_set.key,
+                "version": version,
+                "display_name": permission_set.display_name,
+                "principal_type": permission_set.principal_type,
+                "derivation": permission_set.derivation,
+            },
+        )
+        conn.execute(
+            text("DELETE FROM permission_set_items WHERE permission_set_id = :id"), {"id": set_id}
+        )
+        items = [(key, "ALLOW") for key in permission_set.allow]
+        items += [(key, "DENY") for key in permission_set.deny]
+        for key, effect in items:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO permission_set_items (permission_set_id, permission_key, effect)
+                    VALUES (:id, :key, :effect)
+                    """
+                ),
+                {"id": set_id, "key": key, "effect": effect},
+            )
+
+
+def main() -> None:
+    engine = create_engine(os.environ["MIGRATION_DATABASE_URL"])
+    with engine.begin() as conn:
+        seed(conn)
+
+
+if __name__ == "__main__":
+    main()

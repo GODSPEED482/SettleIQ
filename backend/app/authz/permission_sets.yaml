@@ -1,0 +1,185 @@
+# V1 system-managed permission sets (spec 3.5). Applied by `python -m app.authz.seed`.
+#
+# These names are data. Authorization code checks permission keys only, and CI fails if
+# a set name appears in application code (AC-AUTHZ-01).
+#
+# `derivation: OWNER_POINTER` means the set is computed from tenants.owner_user_id and
+# can never be stored as a grant (POL-13).
+
+sets:
+  - key: business_admin
+    display_name: Business Admin
+    principal_type: human
+    allow:
+      - tenant.read
+      - tenant.update
+      - member.read
+      - member.invite
+      - member.invitation.manage
+      - member.role.assign
+      - member.remove
+      - role.read
+      - audit.read
+      - connector.read
+      - source.read
+      - source.create
+      - source.update
+      - source.discover
+      - domain_pack.read
+      - domain_pack.manage
+      - ontology.read
+      - ontology.generate
+      - ontology.edit
+      - ontology.validate
+      - ontology.publish
+      - mapping.read
+      - mapping.edit
+      - mapping.publish
+      - authority.read
+      - authority.edit
+      - rule.read
+      - rule.edit
+      - policy.read
+      - policy.edit
+      - playbook.read
+      - domain_run.read
+      - case.read
+      - execution.read
+
+  - key: tenant_owner
+    display_name: Tenant Owner
+    principal_type: human
+    derivation: OWNER_POINTER
+    includes: [business_admin]
+    allow:
+      - tenant.delete
+      - tenant.ownership.transfer
+      - execution_mode.manage
+
+  - key: domain_operator
+    display_name: Domain Operator
+    principal_type: human
+    allow:
+      - tenant.read
+      - source.read
+      - source.sync
+      - source.file.upload
+      - source_record.read
+      - evidence.raw.read
+      - domain_pack.read
+      - ontology.read
+      - mapping.read
+      - authority.read
+      - rule.read
+      - policy.read
+      - domain_run.read
+      - domain_run.create
+      - entity.read
+      - entity_resolution.read
+      - entity_resolution.review
+      - case.read
+      - case.triage
+      - case.investigate
+      - investigation.read
+      - playbook.read
+      - playbook.validate
+      - playbook.request
+      - execution.read
+
+  - key: approver
+    display_name: Approver
+    principal_type: human
+    allow:
+      - tenant.read
+      - ontology.read
+      - mapping.read
+      - authority.read
+      - rule.read
+      - policy.read
+      - source_record.read
+      - evidence.raw.read
+      - entity.read
+      - entity_resolution.read
+      - domain_run.read
+      - case.read
+      - investigation.read
+      - playbook.read
+      - playbook.approve
+      - playbook.reject
+      - execution.read
+
+  - key: integration_admin
+    display_name: Integration Admin
+    principal_type: human
+    allow:
+      - tenant.read
+      - connector.read
+      - source.read
+      - source.create
+      - source.update
+      - source.delete
+      - source.credential.manage
+      - source.discover
+      - source.sync
+      - source.file.upload
+      - source.webhook.manage
+      - source_record.read
+      - domain_pack.read
+      - ontology.read
+      - mapping.read
+
+  - key: platform_operator
+    display_name: Platform Operator
+    principal_type: platform_human
+    allow:
+      - platform.tenant.read
+      - platform.tenant.manage
+      - platform.connector.register
+      - platform.domain_pack.register
+      - platform.ops.read
+      - platform.support.request
+
+  # Spec 3.5 also grants "minimum support-request metadata read" but Appendix A defines
+  # no key for it. Resolve with the break-glass work.
+  - key: platform_security_approver
+    display_name: Platform Security Approver
+    principal_type: platform_human
+    allow:
+      - platform.support.approve
+
+  - key: investigation_agent
+    display_name: Investigation Agent
+    principal_type: agent
+    allow:
+      - source.read
+      - source_record.read
+      - evidence.raw.read
+      - domain_pack.read
+      - ontology.read
+      - mapping.read
+      - authority.read
+      - rule.read
+      - policy.read
+      - domain_run.read
+      - entity.read
+      - entity_resolution.read
+      - case.read
+      - case.classify
+      - investigation.record
+      - domain.compute
+      - playbook.read
+      - playbook.recommend
+      - playbook.validate
+
+  - key: playbook_worker
+    display_name: Playbook Worker
+    principal_type: worker
+    allow:
+      - playbook.execute
+      - connector.action.invoke
+      - execution.record
+      - outcome.verify
+      - domain.compute
+      - source_record.read
+      - entity.read
+      - case.read

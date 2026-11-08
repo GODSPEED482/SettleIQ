@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: settleiq
+          POSTGRES_USER: settleiq_owner
+          POSTGRES_PASSWORD: ci-owner
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U settleiq_owner -d settleiq"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://settleiq_app:ci-app@localhost:5432/settleiq
+      MIGRATION_DATABASE_URL: postgresql+psycopg://settleiq_owner:ci-owner@localhost:5432/settleiq
+      APP_DB_PASSWORD: ci-app
+      # An unreachable database fails the run, so isolation tests cannot be skipped.
+      REQUIRE_DB_TESTS: "1"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run alembic upgrade head
+      - run: uv run python -m app.authz.seed
+      - run: uv run pytest
+      - run: uv run python -m app.route_map > route-map.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: route-map
+          path: backend/route-map.json
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

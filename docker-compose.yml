@@ -1,0 +1,80 @@
+# Local stack. Copy .env.example to .env first.
+#
+# The worker has no published port and shares no network with `web`: the private
+# route in app/worker_api.py must be unreachable from browsers (AC-AUTHZ-17).
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD:?copy .env.example to .env}@db:5432/${POSTGRES_DB:?copy .env.example to .env}
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?copy .env.example to .env}
+      POSTGRES_USER: ${POSTGRES_USER:?copy .env.example to .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?copy .env.example to .env}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: ./backend
+    command: sh -c "alembic upgrade head && python -m app.authz.seed"
+    environment:
+      <<: *backend-env
+      MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+
+  api:
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment: *backend-env
+    volumes:
+      - ./backend/app:/srv/app/app
+      - ./backend/packs:/srv/app/packs
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [edge, backend]
+
+  worker:
+    build: ./backend
+    command: uvicorn app.worker_api:app --host 0.0.0.0 --port 8001
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [backend]
+
+  web:
+    build: ./frontend
+    environment:
+      VITE_PROXY_TARGET: http://api:8000
+    volumes:
+      - ./frontend/src:/srv/app/src
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - api
+    networks: [edge]
+
+networks:
+  edge:
+  backend:
+
+volumes:
+  db_data:

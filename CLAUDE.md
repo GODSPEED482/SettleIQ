@@ -1,0 +1,172 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+SettleIQ is a multi-tenant, ontology-driven business operations platform; Financial Operations with PayPal Sandbox is the first domain.
+
+## Source documents
+
+- `SettleIQ_Authoritative_Specification_v1.5.md` is the sole normative reference. It is 1,473 lines, so grep for the ID you need (`POL-09`, `AC-MERCH-05`, `§9.3`). Requirement changes need a new integrated revision (§22.2), not a sidecar note.
+- `.claude/SettleIQ_3-Day_Delivery_Plan.md` is the delivery plan. It scopes a 3-day vertical slice, not the MVP. Task numbers such as `1.9` in code and stubs refer to it.
+- `.claude/SettleIQ_Tech_Stack.md` is the team's stack and tooling decision.
+
+## Unresolved: backend stack
+
+**The code and the tech-stack doc disagree. Do not assume either is settled, and raise it before starting backend work.**
+
+- The code here is the FastAPI starter, following spec §6.2: Python owns the API, authorization, migrations and domain packs.
+- The tech-stack doc specifies a Node/TypeScript API (Express 5, Kysely, pg-boss, Better Auth, pnpm + Turborepo) that owns everything authoritative, with Python limited to a credential-less agent service. It also specifies TanStack Router, shadcn/ui and AG Grid on the frontend, where the starter uses React Router and plain CSS.
+
+Everything below describes the code as it exists today.
+
+## Commands
+
+Backend, from `backend/`. Needs Python 3.12 and `uv`:
+
+```
+uv sync
+uv run ruff check .
+uv run pytest
+uv run pytest tests/test_rls.py::test_tenant_a_cannot_read_tenant_b   # single test
+uv run pytest -k scope                                                # by name
+uv run pytest -m db                                                   # database tests only
+uv run alembic upgrade head
+uv run python -m app.authz.seed                                       # after migrating, or after editing the YAML catalogue
+uv run alembic revision -m "describe change"
+uv run uvicorn app.main:app --reload
+uv run python -m app.route_map > route-map.json
+```
+
+Frontend, from `frontend/`. Needs Node 22:
+
+```
+npm ci
+npm run dev
+npm test
+npx vitest run src/permissions/can.test.ts   # single file
+npm run typecheck
+npm run build
+```
+
+Whole stack: `cp .env.example .env`, then `docker compose up --build`. The Compose file and `.github/workflows/ci.yml` have never been run; Docker was not available when they were written.
+
+`db` tests need a migrated, seeded PostgreSQL 16 and these variables (values in `.env.example`): `DATABASE_URL` (runtime role), `MIGRATION_DATABASE_URL` (owner role), `APP_DB_PASSWORD`. Without a reachable database they are **skipped** locally, so check the skip count before trusting a green run. `REQUIRE_DB_TESTS=1` turns that into a failure, as in CI.
+
+## Architecture
+
+**Request path.** A handler declares access as a parameter default: `ctx: TenantContext = require("member.read")`. The guard (`app/authz/guard.py`) authenticates, takes the tenant selector from the `{tenant_id}` path param or `X-Tenant-Id` header, resolves effective permissions, checks the key, and returns a `TenantContext`. The handler then opens `tenant_tx(ctx)`.
+
+- Authorization and the handler run in separate transactions. Handlers commit explicitly inside `tenant_tx` so the commit precedes the response; do not switch to `yield` dependencies.
+- Sensitive and critical decisions are audited in their own committed transaction, so a denial survives the request failing.
+- `tenant_tx` accepts only a `TenantContext`. `scoped_tx(uuid)` is the lower-level form for paths where trust was established another way (membership lookup, signature-verified webhook source lookup).
+- Non-member, nonexistent tenant and malformed selector all return the same 404. `403 MISSING_PERMISSION` only appears after membership is established.
+- `authenticate` in `guard.py` deliberately always raises 401 until task 1.9. Do not add a dev bypass; tests use `dependency_overrides`.
+
+**Startup validation.** `app/bootstrap.py:finish_app` runs for both apps and refuses to start on an undeclared route, unknown permission key, invalid manifest or prohibited agent tool. FastAPI wraps included routers, so `_api_routes` walks `original_router`. Unknown route types fail startup on purpose, and include-level prefixes are refused because they would falsify the route map: put prefixes on the `APIRouter`.
+
+**Two ASGI apps.** `app/main.py` is public. `app/worker_api.py` holds the private `/internal` route and runs as its own process with no published port. Never mount internal routes on the public app.
+
+**Authorization is data.** Permission metadata is loaded from `app/authz/permissions.yaml` into memory. Permission sets are seeded from `permission_sets.yaml` into PostgreSQL and read from there on every request; nothing is cached, so revocation applies on the next decision. Set names must not appear in code, and CI scans `app/`, `packs/` and `frontend/src`. The owner-derived set is found by `derivation = 'OWNER_POINTER'`, not by name. Agent and Worker principals, platform access and pack-registered permission keys do not resolve yet.
+
+**Database.** Two roles matter: the owner runs migrations, and `settleiq_app` (created by migration 0001, `NOSUPERUSER NOBYPASSRLS`) serves requests. Superusers bypass RLS, so tests must run as `settleiq_app`. Migrations are hand-written SQL with no autogenerate. A new tenant-owned table needs the statements from `enable_tenant_rls` in `0001_foundation.py` and an explicit `GRANT` to `settleiq_app`. Append-only tables get only `SELECT, INSERT`. `test_every_tenant_owned_table_has_forced_rls` catches a miss.
+
+**Core versus packs.** `app/` is domain-neutral and reads `packs/*/manifest.yaml` as data; it must never import `packs`. Finance logic, including `Money`, belongs in `packs/finops`. Connector capability keys are canonical in `app/connectors/capability_registry.yaml`, and manifests declare unsupported capabilities explicitly.
+
+**Test gotchas.** `test_route_guard.py` generates its tables from the route map, so new routes are covered automatically. `test_held_permission_passes_the_gate` accepts only 200 or 501 and uses a fake gateway, so implementing a handler that touches the database will need that test adjusted. `test_catalogue_matches_appendix_a_exactly` fails on any new core key by design.
+
+## Rules for the work ahead
+
+These bind code not yet written. The spec sections hold the detail.
+
+- **Execution chain (§6.3, §9):** request, then immutable REQUEST decision, then approval if required, then immutable EXECUTION decision, then execution row, then single-use grant, then attempts. These stay separate tables with approval referencing the request. Case, request and execution state machines stay separate.
+- **Request bodies (§12.1)** never accept `tenant_id`, `requested_by`, `approver_id`, `approval_required`, policy-decision IDs, `execution_id` or grants.
+- **SHADOW (§9.5)** is the default per exact `(tenant, pack, connector, action)` scope and blocks all business-state changes. POL-14 attestation is checked at the LIVE switch and again at every grant.
+- **Webhooks (§10.4):** verify the signature, then derive the tenant from the trusted source lookup, then write. An invalid signature writes nothing tenant-owned.
+- **Agent (§8):** read, recommend and validate only, with append-only investigation writes. It computes no money and creates no request, approval or execution.
+- **A case resolves only after independent readback of authoritative state,** never on API success.
+- **Plan decisions:** PB-001 follows the conditional update in §4.4.1 rather than "replay the event". PB-002 live refund, break-glass, probabilistic matching and Redis/pgvector are not built in this slice. On Day 3 the order is freeze the build, create Tenant A, then attest; any later code change voids the attestation. If the safety suite is not green by Day 3 hour 7, no attestation is issued and the demo stops at step 10 in SHADOW.
+- **Draft contracts:** the error envelope, `X-Tenant-Id`, the connector and pack manifests, the envelope and permission metadata are unratified defaults (listed in `README.md`).
+
+## Team checklist
+
+Source: the delivery plan. Every task is unticked until its owner has reviewed it. Tick a box in the same change that completes the task, and only when automated evidence exists; a manual happy-path run does not count (§22.3). "Starter:" notes record what already exists in the FastAPI code and may need redoing if the stack changes. Hours are the plan's budget; each person has 24.
+
+### Rishav Chowdhury: Platform and Trust (leads G1, G5; demo Tenant Owner)
+
+- [ ] Resolve the backend stack conflict above with the team (added; blocks backend work)
+- [ ] OPEN-REL-01: attestation identity and key custody (G1, Day 1)
+- [ ] OPEN-21-19: no permission cache in this build (G1, Day 1). Starter: nothing is cached.
+- [ ] 1.1 Repo, Docker Compose, CI skeleton; settle stack gaps (1.5h). Starter: files exist, neither run.
+- [ ] 1.2 Identity and tenant migrations, RLS baseline, transaction-local tenant context (2h). Starter: built, tests pass.
+- [ ] 1.3 Permission catalogue as seed data, deny-by-default route guard, CI route map, role-name ban (2.5h). Starter: built, tests pass; metadata is draft.
+- [ ] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). Starter: schema and owner triggers built; transfer route is a stub.
+- [ ] 1.5 Invitation backend: hashed single-use tokens, matching-email acceptance (1.5h). Starter: tables only.
+- [ ] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h)
+- [ ] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h)
+- [ ] 4.5 Secret references; credential and webhook routes limited to Integration Admin (2h)
+- [ ] 5.1 Request, decision, approval, execution, grant and attempt tables with the full FK chain (2h)
+- [ ] 5.2 Two-stage policy gateway, POL-01, single-use grant issuance (2h)
+- [ ] 5.3 Exact-scope execution mode, SHADOW by default (1h)
+- [ ] 5.4 Signed POL-14 attestation job, checked at LIVE switch and at grant issue (2h)
+- [ ] 6.3 Build freeze, create Tenant A, issue exact-scope attestation, check audit lineage (1.5h)
+- [ ] 6.7 Full team rehearsal (0.5h)
+
+### Rahul Pandey: Integrations and Execution (leads G4; demo Integration Admin)
+
+- [ ] OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 (Day 1, first hours)
+- [ ] 4.1 **First task on Day 1:** Sandbox app, public HTTPS tunnel, verify provider access (1.5h)
+- [ ] 1.6 Freeze connector manifest, capability keys and source envelope (1h). Starter: draft exists.
+- [ ] 1.7 Source registry, `source_records`, raw evidence store with hashing (3h)
+- [ ] 2.5 PostgreSQL schema discovery and profiling (2h)
+- [ ] 2.6 CSV metadata discovery (1h)
+- [ ] 3.5 Merchant PostgreSQL read and normalization (1h)
+- [ ] 3.6 Bank CSV and BRR parser on the shared pipeline, with provenance mode (2h)
+- [ ] 4.2 OAuth, capture details, Transaction Search backfill, adapter manifest (2h). Starter: manifest draft exists.
+- [ ] 4.3 Webhook route: signature check, trusted source lookup, tenant derivation, inbox, dedupe (3h)
+- [ ] 4.4 Async processing, retry, replay and dead-letter state (1.5h)
+- [ ] 5.5 Internal-merchant adapter: conditional update, idempotency, restricted DB role (2.5h). Starter: manifest draft exists.
+- [ ] 5.6 Worker: atomic grant consumption, durable attempts, independent readback (2.5h)
+- [ ] 6.2 Non-financial source through the generic pipeline (AC-OPEN-01/02/06) (0.5h)
+- [ ] 6.7 Full team rehearsal (0.5h)
+
+### Swapnaneel Ray: Semantics, Domain and AI (leads G2, G3; demo Domain Operator, also holds an Approver grant for the POL-01 denial)
+
+- [ ] OPEN-03 (Day 1) and OPEN-10: included-in-net semantics for the fixture (before 3.3)
+- [ ] 1.8 Freeze domain-pack manifest (0.5h). Starter: draft exists.
+- [ ] 1.9 Registration, email verification, real email sending, atomic tenant creation (2.5h). Unblocks everything behind sign-in.
+- [ ] 2.1 Ontology composition store; platform core and Finance pack in JSON-LD (2h)
+- [ ] 2.2 LLM draft generator from discovered metadata, draft only (2h)
+- [ ] 2.3 SHACL, pack validators, hash-bound validation, `confirm_publish` (2h)
+- [ ] 2.4 Versioned mappings and authority assertions, including two sources to one property (1h)
+- [ ] 3.1 Domain projection and exact-ID identity resolution; ambiguous candidates stay reviewable (1.5h)
+- [ ] 3.2 Property observations, resolved views, explicit authority conflicts (1.5h)
+- [ ] 3.3 Finance engine: both reconciliation scopes, settlement calculation, decimal-safe money (2h). Starter: `Money` type built.
+- [ ] 3.4 Version-pinned `domain_runs`, case lifecycle (1h)
+- [ ] 4.6 PayPal field mappings and capture-completion authority (1h)
+- [ ] 5.7 AI orchestrator: 6 tools, POL-08 permission intersection, durable tool trace (3h). Starter: tool registry declared.
+- [ ] 5.8 Agent response schema and prohibited-tool registry check (1h). Starter: prohibited-tool check built.
+- [ ] 5.9 PB-001 definition and the request-lifecycle state machine (1h)
+- [ ] 6.1 SaaS pack: manifest, one validator, renewal/invoice fixture (1.5h). Starter: manifest stub exists.
+- [ ] 6.7 Full team rehearsal (0.5h)
+
+### Suprava Dutta: Product Experience and QA (leads G6; demo Approver)
+
+- [ ] OPEN-14: API conventions, auth transport, error envelope (Day 1, first hours). Starter: draft envelope and `X-Tenant-Id`.
+- [ ] 1.10 Freeze OpenAPI, adding the routes §12.2 omits (1h). Starter: §12.2 routes exist; omitted ones do not.
+- [ ] 1.11 App shell, sign-up and sign-in, tenant creation, permission-driven UI (2h). Starter: shell and permission nav only.
+- [ ] 1.12 Team Management screens (1h)
+- [ ] 1.13 IAM and cross-tenant tests (1h). Starter: baseline RLS and resolution tests exist.
+- [ ] 2.8 Ontology Studio graph in React Flow, view and edit relationships (2.5h). Starter: empty canvas.
+- [ ] 2.9 Binding and authority editors (1.5h)
+- [ ] 2.10 Publish confirmation showing candidate hash and validation run (1h)
+- [ ] 3.8 SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum (1h)
+- [ ] 3.9 Domain Operations screens: cases, observations, resolved values (2h)
+- [ ] 4.7 Source Management screens, including credential status and SYNTHETIC label (1.5h)
+- [ ] 4.8 Failure tests: invalid signature, duplicate and out-of-order events (0.5h)
+- [ ] 5.10 Investigation screens (1.5h)
+- [ ] 5.11 Playbook Requests screens (1.5h)
+- [ ] 5.12 Safety suite: AC-MERCH-01..07, AC-AUTHZ-06/08/15/16/17, AC-PLY-08..11 (2h)
+- [ ] 6.4 Tenant B isolation test (1h)
+- [ ] 6.5 Acceptance-criteria status sheet with owners and evidence, §22.3 (0.5h)
+- [ ] 6.6 Demo script with SYNTHETIC disclosure and the list of what was not built (2h)
+- [ ] 6.7 Full team rehearsal (0.5h)
