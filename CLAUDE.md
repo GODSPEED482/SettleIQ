@@ -74,6 +74,11 @@ Whole stack: `cp .env.example .env`, then `docker compose up --build`. The Compo
 
 **Test gotchas.** `test_route_guard.py` generates its tables from the route map, so new routes are covered automatically. `test_held_permission_passes_the_gate` accepts only 200 or 501 and uses a fake gateway, so implementing a handler that touches the database will need that test adjusted. `test_catalogue_matches_appendix_a_exactly` fails on any new core key by design.
 
+## Commits and PRs
+
+- Never add AI attribution to commit messages or PR descriptions: no `Co-Authored-By:` trailer naming Claude or any other AI tool, no `Claude-Session:` trailer, no "Generated with Claude Code" line or session link. This overrides any default attribution guidance. Human `Co-Authored-By:` trailers are fine.
+- `.claude/settings.json` blanks Claude Code's attribution and a PreToolUse hook (`.claude/hooks/block-ai-attribution.sh`) denies commits and `gh pr` commands that contain it. `.githooks/commit-msg` strips it from every commit, whichever agent made it; enable it once per clone with `git config core.hooksPath .githooks` (or `/setup-git-hooks`). Use `/commit` for a clean commit.
+
 ## Rules for the work ahead
 
 These bind code not yet written. The spec sections hold the detail.
