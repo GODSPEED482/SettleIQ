@@ -4,6 +4,10 @@ on:
   push:
     branches: [prod]
   pull_request:
+  workflow_call: # deploy.yml reuses this as its gate
+
+permissions:
+  contents: read
 
 jobs:
   backend:
@@ -69,3 +73,45 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+  images:
+    # Catches broken Dockerfiles on the PR instead of at deploy time.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: api
+            context: backend
+            file: backend/Dockerfile
+          - service: web
+            context: frontend
+            file: frontend/Dockerfile.prod
+          - service: agent
+            context: agent
+            file: agent/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy-config:
+    # No AWS credentials: the infra role cannot be assumed from a PR.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive infra
+      - run: terraform -chdir=infra/bootstrap init -backend=false -input=false
+      - run: terraform -chdir=infra/bootstrap validate
+      - run: terraform -chdir=infra/envs/prod init -backend=false -input=false
+      - run: terraform -chdir=infra/envs/prod validate
+      - run: shellcheck deploy/deploy.sh infra/push-prod-env.sh

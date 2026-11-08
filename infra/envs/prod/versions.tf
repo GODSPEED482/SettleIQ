@@ -1,0 +1,28 @@
+terraform {
+  required_version = ">= 1.10" # needed for S3-native state locking (use_lockfile)
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+
+  backend "s3" {
+    bucket       = "settleiq-tfstate-762098338837" # from bootstrap output tfstate_bucket
+    key          = "prod/terraform.tfstate"
+    region       = "ap-south-1"
+    use_lockfile = true
+    encrypt      = true
+  }
+}
+
+provider "aws" {
+  region = var.region
+  default_tags {
+    tags = {
+      Project     = "settleiq"
+      Environment = var.env
+      ManagedBy   = "terraform"
+    }
+  }
+}
