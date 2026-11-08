@@ -1,4 +1,4 @@
-# TODO(G1 1.7 Rahul): mount raw-evidence storage on api and worker, under /data, writable by uid 10001.
+# TODO(G1 1.7 Rahul): mount raw-evidence storage on api and worker, under /data (10 GB, shared with Postgres), writable by uid 10001.
 # TODO(G1 1.9 Swapnaneel): pass the SMTP relay and auth settings to the services that need them.
 # Production stack on the EC2 host. docker-compose.yml at the repo root is the local stack.
 #

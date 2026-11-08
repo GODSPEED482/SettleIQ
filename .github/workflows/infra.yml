@@ -1,3 +1,4 @@
+# TODO(G1 1.1 Rishav): add the BUDGET_ALERT_EMAIL repository secret; plan fails without it.
 name: infra
 
 # Runs only for a push to prod that touches infra/. Pull requests get keyless fmt and validate
