@@ -1,0 +1,33 @@
+# Financial Operations constraints (spec 5.8). They apply only when this pack is active.
+
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix finops: <urn:settleiq:pack:finops#> .
+
+finops:PaymentShape a sh:NodeShape ;
+    sh:targetClass finops:Payment ;
+    sh:property [
+        sh:path finops:amount ;
+        sh:minCount 1 ;
+        sh:message "A payment needs an amount." ;
+    ] ;
+    sh:property [
+        sh:path finops:currency ;
+        sh:minCount 1 ;
+        sh:message "A monetary amount needs a currency." ;
+    ] .
+
+finops:CaptureShape a sh:NodeShape ;
+    sh:targetClass finops:Capture ;
+    sh:property [
+        sh:path [ sh:inversePath finops:generatesCapture ] ;
+        sh:minCount 1 ;
+        sh:message "A capture needs an associated payment." ;
+    ] .
+
+finops:SettlementEntryShape a sh:NodeShape ;
+    sh:targetClass finops:SettlementEntry ;
+    sh:property [
+        sh:path finops:includedInSettlement ;
+        sh:minCount 1 ;
+        sh:message "A settlement entry must belong to a settlement batch." ;
+    ] .

@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.authz.guard import TenantContext, require
 from app.errors import not_implemented
-from app.semantics import generation, store
+from app.semantics import generation, store, validation
 
 router = APIRouter(prefix="/api", tags=["semantics"])
 
@@ -23,6 +23,10 @@ class _Body(BaseModel):
 class ManagePackBody(_Body):
     namespace: str
     action: Literal["ACTIVATE", "DISABLE"]
+
+
+class ValidateBody(_Body):
+    draft_id: UUID
 
 
 class EditDraftBody(_Body):
@@ -55,8 +59,10 @@ def read_generation_job(job_id: UUID, ctx: TenantContext = require("ontology.rea
 
 
 @router.post("/ontology/validate")
-def validate_ontology(ctx: TenantContext = require("ontology.validate")) -> None:
-    raise not_implemented("2.3")
+def validate_ontology(
+    body: ValidateBody, ctx: TenantContext = require("ontology.validate")
+) -> dict:
+    return validation.validate_draft(ctx, body.draft_id)
 
 
 @router.post("/ontology/publish")
@@ -77,6 +83,11 @@ def create_ontology_draft(ctx: TenantContext = require("ontology.edit")) -> dict
 @router.get("/ontology/drafts/open")
 def read_ontology_draft(ctx: TenantContext = require("ontology.read")) -> dict:
     return store.read_open_draft(ctx)
+
+
+@router.post("/ontology/drafts/{draft_id}/abandon")
+def abandon_ontology_draft(draft_id: UUID, ctx: TenantContext = require("ontology.edit")) -> dict:
+    return store.abandon_draft(ctx, draft_id)
 
 
 @router.patch("/ontology/drafts/{draft_id}")

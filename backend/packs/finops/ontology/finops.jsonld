@@ -26,6 +26,12 @@
     {"@id": "finops:PaymentProvider", "@type": "owl:Class", "rdfs:label": "Payment provider", "rdfs:subClassOf": "core:DomainEntity"},
     {"@id": "finops:ReconciliationCase", "@type": "owl:Class", "rdfs:label": "Reconciliation case", "rdfs:subClassOf": "core:WorkflowCase"},
 
+    {"@id": "finops:amount", "@type": "owl:DatatypeProperty", "rdfs:label": "amount", "rdfs:domain": "finops:FinancialEntity"},
+    {"@id": "finops:currency", "@type": "owl:DatatypeProperty", "rdfs:label": "currency", "rdfs:domain": "finops:FinancialEntity"},
+    {"@id": "finops:lifecycleStatus", "@type": "owl:DatatypeProperty", "rdfs:label": "lifecycle status", "rdfs:domain": "finops:FinancialEntity"},
+    {"@id": "finops:orderReference", "@type": "owl:DatatypeProperty", "rdfs:label": "order reference", "rdfs:domain": "finops:FinancialEntity"},
+    {"@id": "finops:occurredAt", "@type": "owl:DatatypeProperty", "rdfs:label": "occurred at", "rdfs:domain": "finops:FinancialEntity"},
+
     {"@id": "finops:placesOrder", "@type": "owl:ObjectProperty", "rdfs:label": "places order", "rdfs:domain": "finops:Customer", "rdfs:range": "finops:Order"},
     {"@id": "finops:hasPayment", "@type": "owl:ObjectProperty", "rdfs:label": "has payment", "rdfs:domain": "finops:Order", "rdfs:range": "finops:Payment"},
     {"@id": "finops:hasAuthorization", "@type": "owl:ObjectProperty", "rdfs:label": "has authorization", "rdfs:domain": "finops:Payment", "rdfs:range": "finops:Authorization"},

@@ -18,6 +18,9 @@ BASE_PREFIXES = {
 }
 
 
+IRI_VALUED_TERMS = ("rdfs:subClassOf", "rdfs:domain", "rdfs:range", "owl:equivalentClass")
+
+
 class ArtifactError(ValueError):
     pass
 
@@ -77,8 +80,9 @@ def pack_artifacts(pack: DomainPackManifest) -> list[Artifact]:
     return artifacts
 
 
-def extension_context(tenant_id: UUID, pack_namespaces: list[str]) -> dict[str, str]:
+def extension_context(tenant_id: UUID, pack_namespaces: list[str]) -> dict[str, Any]:
     """The fixed prefixes a tenant extension may use. Tenants cannot redefine them."""
-    context = dict(BASE_PREFIXES) | {CORE_NAMESPACE: core_iri()}
+    context: dict[str, Any] = dict(BASE_PREFIXES) | {CORE_NAMESPACE: core_iri()}
     context |= {namespace: pack_iri(namespace) for namespace in sorted(pack_namespaces)}
+    context |= {term: {"@type": "@id"} for term in IRI_VALUED_TERMS}
     return context | {"tenant": tenant_iri(tenant_id)}

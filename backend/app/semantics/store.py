@@ -256,14 +256,50 @@ def read_open_draft(ctx: TenantContext) -> dict[str, Any]:
         return _draft_view(conn, row)
 
 
+def _contains_context(value: Any) -> bool:
+    if isinstance(value, dict):
+        return "@context" in value or any(_contains_context(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_context(item) for item in value)
+    return False
+
+
 def _check_extension_graph(graph: list[dict[str, Any]]) -> None:
-    """Extensions add tenant terms. Redefining a core or pack term needs a versioned migration."""
+    """Extensions add tenant terms. Redefining a core or pack term needs a versioned migration.
+
+    A nested @context could name a remote URL that the JSON-LD parser would fetch, so none is
+    accepted at any depth. The server supplies the only context.
+    """
     for node in graph:
         node_id = node.get("@id")
         if not isinstance(node_id, str) or not node_id.startswith("tenant:"):
             raise validation_failed(f"extension term must use the tenant prefix: {node_id!r}")
-        if "@context" in node:
+        if _contains_context(node):
             raise validation_failed("extension terms cannot declare their own @context")
+
+
+def abandon_draft(ctx: TenantContext, draft_id: UUID) -> dict[str, str]:
+    """Close an open draft, for example when the active packs changed after it was created."""
+    with tenant_tx(ctx) as conn:
+        row = conn.execute(
+            text("SELECT status FROM ontology_drafts WHERE id = :id FOR UPDATE"), {"id": draft_id}
+        ).first()
+        if row is None:
+            raise not_found()
+        if row.status != "OPEN":
+            raise conflict("STALE_DRAFT", "This draft is no longer open.")
+        conn.execute(
+            text(
+                "UPDATE ontology_drafts SET status = 'ABANDONED', updated_at = now() "
+                "WHERE id = :id"
+            ),
+            {"id": draft_id},
+        )
+        write_audit(
+            conn, ctx.tenant_id, ctx.principal, "ontology.draft.abandoned", "ontology",
+            {"draft_id": str(draft_id)},
+        )
+    return {"id": str(draft_id), "status": "ABANDONED"}
 
 
 def edit_draft(

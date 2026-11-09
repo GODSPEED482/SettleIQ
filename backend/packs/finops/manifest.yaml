@@ -8,9 +8,12 @@ dependencies: []
 conflicts: []
 ontology_definitions:
   - {id: finops.ontology, path: ontology/finops.jsonld}
-shacl_shapes: []
+shacl_shapes:
+  - {id: finops.shapes, path: ontology/finops.shacl.ttl}
 mapping_hints: []
-validators: []
+validators:
+  - {id: finops.settlement_cardinality, entrypoint: "packs.finops.validators:check_settlement_cardinality"}
+  - {id: finops.required_terms, entrypoint: "packs.finops.validators:check_required_terms"}
 entity_resolution_policies: []
 domain_engine: null
 

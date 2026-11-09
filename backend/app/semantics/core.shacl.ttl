@@ -1,0 +1,36 @@
+# Structural rules for every composition, whichever packs are active (spec 5.8).
+
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix core: <urn:settleiq:core#> .
+
+core:ClassShape a sh:NodeShape ;
+    sh:targetClass owl:Class ;
+    sh:property [
+        sh:path rdfs:label ;
+        sh:minCount 1 ;
+        sh:message "Every class needs a label." ;
+    ] .
+
+core:RelationshipShape a sh:NodeShape ;
+    sh:targetClass owl:ObjectProperty ;
+    sh:property [
+        sh:path rdfs:label ;
+        sh:minCount 1 ;
+        sh:message "Every relationship needs a label." ;
+    ] ;
+    sh:property [
+        sh:path rdfs:domain ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:message "Every relationship needs exactly one domain." ;
+    ] ;
+    sh:property [
+        sh:path rdfs:range ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:message "Every relationship needs exactly one range." ;
+    ] .
