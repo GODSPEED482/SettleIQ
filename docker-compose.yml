@@ -3,11 +3,11 @@
 # The worker has no published port and shares no network with `web`: the private
 # route in app/worker_api.py must be unreachable from browsers (AC-AUTHZ-17).
 #
-# The agent, agent-tools and dispatcher services are stubs until task 5.7, so they only
+# Investigations are stubs until task 5.7. The agent, agent-tools and dispatcher services only
 # start with `--profile agent`. The agent must never join `backend` or use *backend-env.
 
 # TODO(G1 1.1 Rishav): run `docker compose up --build` end to end; this has never been run.
-# TODO(G1 1.1 Rishav): also try `--profile agent`; the dispatcher stub exits until task 5.7.
+# TODO(G1 1.1 Rishav): also try `--profile agent`.
 # TODO(G1 1.7 Rahul): mount the raw-evidence volume on api and worker (plan: local volume).
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD:?copy .env.example to .env}@db:5432/${POSTGRES_DB:?copy .env.example to .env}
@@ -38,6 +38,7 @@ services:
       <<: *backend-env
       MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      DISPATCHER_DB_PASSWORD: ${DISPATCHER_DB_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
@@ -104,6 +105,7 @@ services:
     build: ./agent
     environment:
       LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
       AGENT_TOOLS_URL: http://agent-tools:8002
     networks: [agent]
 

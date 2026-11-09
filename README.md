@@ -107,7 +107,7 @@ The starter needed a working default for these. Each owner should confirm or cha
 | Permission sensitivity and narrowable scopes | `permissions.yaml` | Rishav | Spec §3.3 leaves per-key values open |
 | Permission caching | None; resolved on every request | Rishav | OPEN-21-19 |
 | Auth and session transport | `argon2-cffi` password hashing with opaque server-side sessions in Postgres, sent as an HttpOnly cookie. Session and token handling is our own code, because packaged libraries use verification JWTs that §11.2 does not allow | Swapnaneel, Suprava | OPEN-14, §11.2 |
-| LLM provider | Not chosen | Swapnaneel | §6.2 |
+| LLM provider | OpenAI, through `agent/` only; the model name comes from `LLM_MODEL` | Swapnaneel | §6.2 |
 
 ## Spec gaps found while scaffolding
 

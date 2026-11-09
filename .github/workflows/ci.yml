@@ -27,6 +27,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg://settleiq_app:ci-app@localhost:5432/settleiq
       MIGRATION_DATABASE_URL: postgresql+psycopg://settleiq_owner:ci-owner@localhost:5432/settleiq
       APP_DB_PASSWORD: ci-app
+      DISPATCHER_DB_PASSWORD: ci-dispatcher
       # An unreachable database fails the run, so isolation tests cannot be skipped.
       REQUIRE_DB_TESTS: "1"
     defaults:

@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = ""
 
+    agent_url: str = "http://agent:8100"
+    agent_job_concurrency: int = 1
+
 
 @lru_cache
 def get_settings() -> Settings:

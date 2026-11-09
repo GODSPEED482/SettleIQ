@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.authz.guard import TenantContext, require
 from app.errors import not_implemented
-from app.semantics import store
+from app.semantics import generation, store
 
 router = APIRouter(prefix="/api", tags=["semantics"])
 
@@ -44,9 +44,14 @@ def manage_domain_packs(
     return store.disable_pack(ctx, body.namespace)
 
 
-@router.post("/ontology/generate")
-def generate_ontology(ctx: TenantContext = require("ontology.generate")) -> None:
-    raise not_implemented("2.2")
+@router.post("/ontology/generate", status_code=202)
+def generate_ontology(ctx: TenantContext = require("ontology.generate")) -> dict:
+    return generation.enqueue_generation(ctx)
+
+
+@router.get("/ontology/generation-jobs/{job_id}")
+def read_generation_job(job_id: UUID, ctx: TenantContext = require("ontology.read")) -> dict:
+    return generation.read_generation_job(ctx, job_id)
 
 
 @router.post("/ontology/validate")

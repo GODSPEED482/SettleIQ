@@ -85,6 +85,7 @@ variable "secret_names" {
     "DISPATCHER_DB_PASSWORD",
     "AGENT_TOKEN_SECRET",
     "LLM_API_KEY",
+    "LLM_MODEL",
     "APP_BASE_URL",
     "SMTP_HOST",
     "SMTP_PORT",
