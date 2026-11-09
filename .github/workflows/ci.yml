@@ -1,4 +1,3 @@
-# TODO(G1 1.1 Rishav): confirm all jobs pass on GitHub for this revision; the last green run (ab988b2) used the same action commits but uv --frozen.
 name: CI
 
 on:
