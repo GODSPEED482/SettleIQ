@@ -1,5 +1,4 @@
 # TODO(G1 1.7 Rahul): mount raw-evidence storage on api and worker, under /data (10 GB, shared with Postgres), writable by uid 10001.
-# TODO(G1 1.9 Swapnaneel): pass the SMTP relay and auth settings to the services that need them.
 # TODO(G1 1.1 Rishav): pass DISPATCHER_DB_PASSWORD to migrate; the agent investigation migration (task 5.7) creates that role.
 # Production stack on the EC2 host. docker-compose.yml at the repo root is the local stack.
 #
@@ -60,7 +59,14 @@ services:
     image: ${REGISTRY}/settleiq-api:${TAG}
     # Caddy is the only peer that can reach this port, so its forwarded headers are trusted.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      APP_BASE_URL: ${APP_BASE_URL:-https://app.settleiq.dpdns.org}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     depends_on:
       db:
         condition: service_healthy

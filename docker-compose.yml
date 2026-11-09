@@ -9,7 +9,6 @@
 # TODO(G1 1.1 Rishav): run `docker compose up --build` end to end; this has never been run.
 # TODO(G1 1.1 Rishav): also try `--profile agent`; the dispatcher stub exits until task 5.7.
 # TODO(G1 1.7 Rahul): mount the raw-evidence volume on api and worker (plan: local volume).
-# TODO(G1 1.9 Swapnaneel): pass the SMTP relay settings through this block.
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD:?copy .env.example to .env}@db:5432/${POSTGRES_DB:?copy .env.example to .env}
   ENVIRONMENT: ${ENVIRONMENT:-development}
@@ -47,7 +46,14 @@ services:
   api:
     build: ./backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:5173}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     volumes:
       - ./backend/app:/srv/app/app
       - ./backend/packs:/srv/app/packs

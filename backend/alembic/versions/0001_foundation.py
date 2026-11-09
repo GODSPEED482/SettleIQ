@@ -46,8 +46,6 @@ def upgrade() -> None:
         """
     )
 
-    # TODO(G1 1.9 Swapnaneel): add credential storage and hashed, single-use, expiring
-    # verification tokens in a new migration, shaped by the auth library (spec 11.2).
     op.execute(
         """
         CREATE TABLE users (

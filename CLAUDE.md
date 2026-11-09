@@ -67,7 +67,7 @@ Whole stack: `cp .env.example .env`, then `docker compose up --build`. Add `--pr
 - Sensitive and critical decisions are audited in their own committed transaction, so a denial survives the request failing.
 - `tenant_tx` accepts only a `TenantContext`. `scoped_tx(uuid)` is the lower-level form for paths where trust was established another way (membership lookup, signature-verified webhook source lookup).
 - Non-member, nonexistent tenant and malformed selector all return the same 404. `403 MISSING_PERMISSION` only appears after membership is established.
-- `authenticate` in `guard.py` deliberately always raises 401 until task 1.9. Do not add a dev bypass; tests use `dependency_overrides`.
+- `authenticate` in `guard.py` resolves an opaque session cookie against current state on every request. Do not add a dev bypass; tests use `dependency_overrides`.
 
 **Startup validation.** `app/bootstrap.py:finish_app` runs for every app and refuses to start on an undeclared route, unknown permission key, invalid manifest or prohibited agent tool. FastAPI wraps included routers, so `_api_routes` walks `original_router`. Unknown route types fail startup on purpose, and include-level prefixes are refused because they would falsify the route map: put prefixes on the `APIRouter`.
 

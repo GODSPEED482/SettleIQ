@@ -22,7 +22,7 @@ This is the foundation from plan task 1.1, plus what spec §17 says must not be 
 | Agent tool registry with prohibited-tool check | `backend/app/investigation/tools.py` | Working |
 | Decimal-safe money | `backend/packs/finops/money.py` | Working |
 | Web shell, permission-driven nav, React Flow canvas | `frontend/src/` | Skeleton |
-| **Authentication** | `authenticate` in `guard.py` | **Always returns 401 until task 1.9** |
+| Authentication: sessions, email verification, tenant creation | `backend/app/auth/`, `backend/app/tenancy/creation.py` | Working; sending needs an SMTP relay |
 
 ## Running it
 
@@ -106,7 +106,7 @@ The starter needed a working default for these. Each owner should confirm or cha
 | Domain-pack manifest and activation | Fields frozen in `app/domain_packs/manifest.py`. Versions are PEP 440 ranges; a conflict declared by either pack or an unmet dependency refuses activation; namespaces are unique and IRIs use the pack namespace; rollback re-pins an earlier published version. Multi-pack overrides stay under OPEN-05 | Swapnaneel | OPEN-03 |
 | Permission sensitivity and narrowable scopes | `permissions.yaml` | Rishav | Spec §3.3 leaves per-key values open |
 | Permission caching | None; resolved on every request | Rishav | OPEN-21-19 |
-| Auth library and session transport | Not chosen | Swapnaneel, Suprava | OPEN-14, §11.2 |
+| Auth and session transport | `argon2-cffi` password hashing with opaque server-side sessions in Postgres, sent as an HttpOnly cookie. Session and token handling is our own code, because packaged libraries use verification JWTs that §11.2 does not allow | Swapnaneel, Suprava | OPEN-14, §11.2 |
 | LLM provider | Not chosen | Swapnaneel | §6.2 |
 
 ## Spec gaps found while scaffolding

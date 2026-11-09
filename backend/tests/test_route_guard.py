@@ -185,12 +185,14 @@ def test_critical_route_declarations(method, path, access, permission):
     assert (match[0]["access"], match[0]["permission"]) == (access, permission)
 
 
-# TODO(G1 1.10 Suprava): add sign-in here once it joins the contract as a PUBLIC route.
 def test_public_routes_are_only_the_expected_ones():
     assert {r["path"] for r in ROUTES if r["access"] == "PUBLIC"} == {
         "/healthz",
         "/api/auth/register",
         "/api/auth/verify-email",
+        "/api/auth/resend-verification",
+        "/api/auth/sign-in",
+        "/api/auth/sign-out",
         "/api/webhooks/paypal/{source_id}",
     }
 

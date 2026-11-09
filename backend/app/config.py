@@ -7,9 +7,18 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
 
     # TODO(G1 1.7 Rahul): add the raw-evidence storage location.
-    # TODO(G1 1.9 Swapnaneel): add SMTP relay and auth settings; values stay out of the repo.
     database_url: str
     environment: str = "development"
+
+    app_base_url: str = "http://localhost:5173"
+    session_ttl_hours: int = 24
+    email_token_ttl_hours: int = 24
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
 
 
 @lru_cache

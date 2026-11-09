@@ -73,7 +73,6 @@ variable "github_oidc_sub_prefix" {
   description = "OIDC subject prefix from GET /repos/{owner}/{repo}/actions/oidc/customization/sub; this repository uses immutable owner and repo IDs"
 }
 
-# TODO(G1 1.9 Swapnaneel): add the SMTP relay and auth secret names.
 variable "secret_names" {
   type = list(string)
   default = [
@@ -86,6 +85,12 @@ variable "secret_names" {
     "DISPATCHER_DB_PASSWORD",
     "AGENT_TOKEN_SECRET",
     "LLM_API_KEY",
+    "APP_BASE_URL",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USERNAME",
+    "SMTP_PASSWORD",
+    "SMTP_FROM",
   ]
   description = "Runtime env var names. Terraform creates placeholders only; infra/push-prod-env.sh sets the real values from .env.production"
 }

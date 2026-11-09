@@ -3,9 +3,10 @@ name = "settleiq-backend"
 version = "0.1.0"
 description = "SettleIQ API, worker and domain packs"
 requires-python = ">=3.12,<3.13"
-# TODO(G1 1.9 Swapnaneel): add the maintained auth library chosen under spec 11.2.
 dependencies = [
     "alembic>=1.13",
+    "argon2-cffi>=23.1",
+    "email-validator>=2.2",
     "fastapi>=0.115",
     "packaging>=24",
     "psycopg[binary]>=3.2",

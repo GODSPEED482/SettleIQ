@@ -38,6 +38,19 @@ def missing_permission(permission: str) -> ApiError:
     return ApiError(403, "MISSING_PERMISSION", "Permission required.", permission=permission)
 
 
+def invalid_credentials() -> ApiError:
+    """The same response for an unknown email, a wrong password and a disabled account."""
+    return ApiError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.")
+
+
+def invalid_token() -> ApiError:
+    return ApiError(400, "INVALID_TOKEN", "This link is invalid or has expired.")
+
+
+def rate_limited() -> ApiError:
+    return ApiError(429, "RATE_LIMITED", "Too many attempts. Try again later.")
+
+
 def not_implemented(task: str) -> ApiError:
     return ApiError(501, "NOT_IMPLEMENTED", "Not implemented yet.", task=task)
 
