@@ -108,8 +108,8 @@ def test_clean_candidate_passes_every_validator(finance_draft):
     body = run_validation(member, draft).json()
     assert body["passed"] is True
     assert set(by_name(body)) == {
-        "composition.current", "core.shapes", "finops.shapes", "finops.settlement_cardinality",
-        "finops.required_terms",
+        "composition.current", "mappings.comparable", "mappings.terms_exist", "core.shapes",
+        "finops.shapes", "finops.settlement_cardinality", "finops.required_terms",
     }
 
 

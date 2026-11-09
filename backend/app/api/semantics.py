@@ -8,13 +8,9 @@ from pydantic import BaseModel, ConfigDict
 
 from app.authz.guard import TenantContext, require
 from app.errors import not_implemented
-from app.semantics import generation, store, validation
+from app.semantics import generation, mappings, store, validation
 
 router = APIRouter(prefix="/api", tags=["semantics"])
-
-# TODO(G1 1.10 Suprava): add mapping and authority reads (spec 12.2 omits them), guarded by the
-# existing mapping.read and authority.read keys.
-
 
 class _Body(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -78,6 +74,40 @@ def read_ontology(ctx: TenantContext = require("ontology.read")) -> dict:
 @router.post("/ontology/drafts", status_code=201)
 def create_ontology_draft(ctx: TenantContext = require("ontology.edit")) -> dict:
     return store.create_draft(ctx)
+
+
+@router.get("/mappings")
+def list_mappings(draft_id: UUID, ctx: TenantContext = require("mapping.read")) -> list[dict]:
+    return mappings.list_mappings(ctx, draft_id)
+
+
+@router.post("/mappings", status_code=201)
+def save_mapping(
+    body: mappings.MappingBody, ctx: TenantContext = require("mapping.edit")
+) -> dict:
+    return mappings.save_mapping(ctx, body)
+
+
+@router.post("/mappings/{mapping_id}/retire")
+def retire_mapping(mapping_id: UUID, ctx: TenantContext = require("mapping.edit")) -> dict:
+    return mappings.retire_mapping(ctx, mapping_id)
+
+
+@router.get("/authority")
+def list_authority(draft_id: UUID, ctx: TenantContext = require("authority.read")) -> list[dict]:
+    return mappings.list_authority(ctx, draft_id)
+
+
+@router.post("/authority", status_code=201)
+def save_authority(
+    body: mappings.AuthorityBody, ctx: TenantContext = require("authority.edit")
+) -> dict:
+    return mappings.save_authority(ctx, body)
+
+
+@router.post("/authority/{assertion_id}/retire")
+def retire_authority(assertion_id: UUID, ctx: TenantContext = require("authority.edit")) -> dict:
+    return mappings.retire_authority(ctx, assertion_id)
 
 
 @router.get("/ontology/drafts/open")

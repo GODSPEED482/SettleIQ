@@ -22,6 +22,7 @@ from app.db import tenant_tx
 from app.domain_packs.manifest import PACKS_DIR, DomainPackManifest, load_domain_packs
 from app.domain_packs.registry import resolve_entrypoint
 from app.errors import conflict, not_found
+from app.semantics import mappings
 from app.semantics.hashing import content_hash
 
 logger = logging.getLogger("settleiq.semantics")
@@ -46,14 +47,24 @@ class Candidate:
     composition: list[dict[str, str]]
     artifacts: list[dict[str, Any]]
     tenant_extension: dict[str, Any]
+    mappings: list[dict[str, Any]]
+    authority: list[dict[str, Any]]
     content_hash: str
 
 
 def candidate_content(
-    composition: list[dict[str, str]], tenant_extension: dict[str, Any]
+    composition: list[dict[str, str]],
+    tenant_extension: dict[str, Any],
+    mapping_rows: list[dict[str, Any]],
+    authority_rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Exactly what the publication hash covers."""
-    return {"composition": composition, "tenant_extension": tenant_extension}
+    return {
+        "composition": composition,
+        "tenant_extension": tenant_extension,
+        "mappings": mappings.candidate_mappings(mapping_rows),
+        "authority": mappings.candidate_authority(authority_rows),
+    }
 
 
 def load_candidate(conn: Connection, draft_id: UUID) -> Candidate:
@@ -76,13 +87,19 @@ def load_candidate(conn: Connection, draft_id: UUID) -> Candidate:
     ).all()
     contents = {item.content_hash: item.content for item in rows}
     artifacts = [ref | {"content": contents[ref["content_hash"]]} for ref in row.composition]
+    mapping_rows = mappings.current_mappings(conn, row.id)
+    authority_rows = mappings.current_authority(conn, row.id)
     return Candidate(
         row.id,
         row.revision,
         row.composition,
         artifacts,
         row.tenant_extension,
-        content_hash(candidate_content(row.composition, row.tenant_extension)),
+        mapping_rows,
+        authority_rows,
+        content_hash(
+            candidate_content(row.composition, row.tenant_extension, mapping_rows, authority_rows)
+        ),
     )
 
 
@@ -92,6 +109,23 @@ def _candidate_graph(candidate: Candidate) -> Graph:
         graph.parse(data=json.dumps(artifact["content"]), format="json-ld")
     graph.parse(data=json.dumps(candidate.tenant_extension), format="json-ld")
     return graph
+
+
+def _known_terms(candidate: Candidate) -> set[str]:
+    sources = [artifact["content"] for artifact in candidate.artifacts]
+    return {node["@id"] for source in [*sources, candidate.tenant_extension]
+            for node in source.get("@graph", [])}
+
+
+def _mapping_results(candidate: Candidate) -> list[ValidatorResult]:
+    comparable = mappings.comparability_violations(candidate.mappings)
+    unknown = mappings.unknown_term_violations(
+        candidate.mappings, candidate.authority, _known_terms(candidate)
+    )
+    return [
+        ValidatorResult("mappings.comparable", "platform", not comparable, comparable),
+        ValidatorResult("mappings.terms_exist", "platform", not unknown, unknown),
+    ]
 
 
 def _run_shacl(name: str, data: Graph, shapes_path: Path) -> ValidatorResult:
@@ -140,7 +174,8 @@ def run_validators(
             "platform",
             composed == expected,
             [] if composed == expected else ["Active packs changed. Start a new draft."],
-        )
+        ),
+        *_mapping_results(candidate),
     ]
     try:
         data = _candidate_graph(candidate)
