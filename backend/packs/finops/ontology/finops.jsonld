@@ -1,0 +1,41 @@
+{
+  "@context": {
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "core": "urn:settleiq:core#",
+    "finops": "urn:settleiq:pack:finops#",
+    "rdfs:subClassOf": {"@type": "@id"},
+    "rdfs:domain": {"@type": "@id"},
+    "rdfs:range": {"@type": "@id"}
+  },
+  "@graph": [
+    {"@id": "finops:Customer", "@type": "owl:Class", "rdfs:label": "Customer", "rdfs:subClassOf": "core:DomainEntity"},
+    {"@id": "finops:Order", "@type": "owl:Class", "rdfs:label": "Order", "rdfs:subClassOf": "core:DomainEntity"},
+    {"@id": "finops:FinancialEntity", "@type": "owl:Class", "rdfs:label": "Financial entity", "rdfs:subClassOf": "core:DomainEntity"},
+    {"@id": "finops:FinancialEntry", "@type": "owl:Class", "rdfs:label": "Financial entry", "rdfs:subClassOf": "finops:FinancialEntity"},
+    {"@id": "finops:Payment", "@type": "owl:Class", "rdfs:label": "Payment", "rdfs:subClassOf": "finops:FinancialEntity"},
+    {"@id": "finops:Authorization", "@type": "owl:Class", "rdfs:label": "Authorization", "rdfs:subClassOf": "finops:FinancialEntity"},
+    {"@id": "finops:Capture", "@type": "owl:Class", "rdfs:label": "Capture", "rdfs:subClassOf": "finops:FinancialEntry"},
+    {"@id": "finops:Refund", "@type": "owl:Class", "rdfs:label": "Refund", "rdfs:subClassOf": "finops:FinancialEntry"},
+    {"@id": "finops:ProcessingFee", "@type": "owl:Class", "rdfs:label": "Processing fee", "rdfs:subClassOf": "finops:FinancialEntry"},
+    {"@id": "finops:Chargeback", "@type": "owl:Class", "rdfs:label": "Chargeback", "rdfs:subClassOf": "finops:FinancialEntry"},
+    {"@id": "finops:SettlementBatch", "@type": "owl:Class", "rdfs:label": "Settlement batch", "rdfs:subClassOf": "finops:FinancialEntity"},
+    {"@id": "finops:SettlementEntry", "@type": "owl:Class", "rdfs:label": "Settlement entry", "rdfs:subClassOf": "finops:FinancialEntry"},
+    {"@id": "finops:BankTransaction", "@type": "owl:Class", "rdfs:label": "Bank transaction", "rdfs:subClassOf": "finops:FinancialEntity"},
+    {"@id": "finops:AccountingEntry", "@type": "owl:Class", "rdfs:label": "Accounting entry", "rdfs:subClassOf": "finops:FinancialEntry"},
+    {"@id": "finops:PaymentProvider", "@type": "owl:Class", "rdfs:label": "Payment provider", "rdfs:subClassOf": "core:DomainEntity"},
+    {"@id": "finops:ReconciliationCase", "@type": "owl:Class", "rdfs:label": "Reconciliation case", "rdfs:subClassOf": "core:WorkflowCase"},
+
+    {"@id": "finops:placesOrder", "@type": "owl:ObjectProperty", "rdfs:label": "places order", "rdfs:domain": "finops:Customer", "rdfs:range": "finops:Order"},
+    {"@id": "finops:hasPayment", "@type": "owl:ObjectProperty", "rdfs:label": "has payment", "rdfs:domain": "finops:Order", "rdfs:range": "finops:Payment"},
+    {"@id": "finops:hasAuthorization", "@type": "owl:ObjectProperty", "rdfs:label": "has authorization", "rdfs:domain": "finops:Payment", "rdfs:range": "finops:Authorization"},
+    {"@id": "finops:generatesCapture", "@type": "owl:ObjectProperty", "rdfs:label": "generates capture", "rdfs:domain": "finops:Payment", "rdfs:range": "finops:Capture"},
+    {"@id": "finops:refundsCapture", "@type": "owl:ObjectProperty", "rdfs:label": "refunds capture", "rdfs:domain": "finops:Refund", "rdfs:range": "finops:Capture"},
+    {"@id": "finops:includedInSettlement", "@type": "owl:ObjectProperty", "rdfs:label": "included in settlement", "rdfs:domain": "finops:FinancialEntry", "rdfs:range": "finops:SettlementBatch"},
+    {"@id": "finops:settledThrough", "@type": "owl:ObjectProperty", "rdfs:label": "settled through", "rdfs:domain": "finops:SettlementBatch", "rdfs:range": "finops:BankTransaction"},
+    {"@id": "finops:chargedBy", "@type": "owl:ObjectProperty", "rdfs:label": "charged by", "rdfs:domain": "finops:FinancialEntry", "rdfs:range": "finops:PaymentProvider"},
+    {"@id": "finops:recordedIn", "@type": "owl:ObjectProperty", "rdfs:label": "recorded in", "rdfs:domain": "finops:FinancialEntry", "rdfs:range": "core:DataSource"},
+    {"@id": "finops:hasDiscrepancy", "@type": "owl:ObjectProperty", "rdfs:label": "has discrepancy", "rdfs:domain": "finops:FinancialEntity", "rdfs:range": "finops:ReconciliationCase"},
+    {"@id": "finops:resolvedUsing", "@type": "owl:ObjectProperty", "rdfs:label": "resolved using", "rdfs:domain": "finops:ReconciliationCase", "rdfs:range": "core:Playbook"}
+  ]
+}

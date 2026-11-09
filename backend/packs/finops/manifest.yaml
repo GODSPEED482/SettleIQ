@@ -6,7 +6,8 @@ version: 0.1.0
 compatible_platform_versions: ">=0.1.0,<1.0.0"
 dependencies: []
 conflicts: []
-ontology_definitions: []
+ontology_definitions:
+  - {id: finops.ontology, path: ontology/finops.jsonld}
 shacl_shapes: []
 mapping_hints: []
 validators: []

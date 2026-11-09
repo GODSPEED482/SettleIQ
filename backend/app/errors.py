@@ -51,6 +51,14 @@ def rate_limited() -> ApiError:
     return ApiError(429, "RATE_LIMITED", "Too many attempts. Try again later.")
 
 
+def conflict(code: str, message: str) -> ApiError:
+    return ApiError(409, code, message)
+
+
+def validation_failed(message: str) -> ApiError:
+    return ApiError(422, "VALIDATION_ERROR", message)
+
+
 def not_implemented(task: str) -> ApiError:
     return ApiError(501, "NOT_IMPLEMENTED", "Not implemented yet.", task=task)
 

@@ -66,7 +66,8 @@ def clear_overrides():
 def url(route: dict, tenant: UUID = TENANT) -> str:
     path = route["path"].replace("{tenant_id}", str(tenant))
     for name in ("token", "invitation_id", "user_id", "source_id", "case_id", "decision_id",
-                 "investigation_id", "playbook_id", "request_id", "execution_id", "audit_id"):
+                 "investigation_id", "playbook_id", "request_id", "execution_id", "audit_id",
+                 "draft_id"):
         path = path.replace(f"{{{name}}}", str(uuid4()))
     return path
 
@@ -223,13 +224,24 @@ def test_missing_permission_is_403(route):
     }
 
 
-# TODO(G1 1.13 Suprava): this uses a fake gateway and accepts only 200 or 501, so it needs
-# adjusting once 1.4, 1.5 and 1.7 handlers touch the database.
-# TODO(G1 1.13 Suprava): the agent investigate route returns 202 once task 5.7 lands; allow it.
+class ReachedHandlerDatabase(Exception):
+    pass
+
+
+def _no_database():
+    raise ReachedHandlerDatabase
+
+
+# The gateway is fake, so a handler touching the database has already passed the gate. So has a
+# 422: FastAPI runs dependencies before it reports a body validation error.
 @pytest.mark.parametrize("route", PERMISSION_ROUTES, ids=label)
-def test_held_permission_passes_the_gate(route):
-    response = call(client_for(FakeGateway([full_grant(route)])), route)
-    assert response.status_code in {200, 501}
+def test_held_permission_passes_the_gate(route, monkeypatch):
+    monkeypatch.setattr("app.db.get_engine", _no_database)
+    try:
+        response = call(client_for(FakeGateway([full_grant(route)])), route)
+    except ReachedHandlerDatabase:
+        return
+    assert response.status_code in {200, 202, 422, 501}
 
 
 @pytest.mark.parametrize("route", PERMISSION_ROUTES, ids=label)
