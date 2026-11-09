@@ -6,13 +6,13 @@ Revises: 0004
 
 from alembic import op
 
+from app.migration_support import APP_ROLE, enable_tenant_rls
+
 revision = "0005"
 down_revision = "0004"
 branch_labels = None
 depends_on = None
 
-APP_ROLE = "settleiq_app"
-TENANT_PREDICATE = "NULLIF(current_setting('app.tenant_id', true), '')::uuid"
 
 
 def upgrade() -> None:
@@ -33,13 +33,7 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("ALTER TABLE ontology_validation_runs ENABLE ROW LEVEL SECURITY")
-    op.execute("ALTER TABLE ontology_validation_runs FORCE ROW LEVEL SECURITY")
-    op.execute(
-        f"CREATE POLICY tenant_isolation ON ontology_validation_runs "
-        f"USING (tenant_id = {TENANT_PREDICATE}) "
-        f"WITH CHECK (tenant_id = {TENANT_PREDICATE})"
-    )
+    enable_tenant_rls("ontology_validation_runs")
     op.execute(f"GRANT SELECT, INSERT ON ontology_validation_runs TO {APP_ROLE}")
 
 

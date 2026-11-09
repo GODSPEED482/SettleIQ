@@ -30,7 +30,6 @@ def enable_tenant_rls(table: str, column: str = "tenant_id") -> None:
     )
 
 
-# TODO(G1 1.2 Rishav): owner review of this migration, RLS and the role split.
 # TODO(G1 1.7 Rahul): add data_sources, source_objects, raw_evidence and source_records in a new
 # migration, using enable_tenant_rls and explicit GRANTs. raw_evidence gets SELECT, INSERT only.
 def upgrade() -> None:

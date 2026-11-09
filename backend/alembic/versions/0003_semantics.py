@@ -9,13 +9,13 @@ Revises: 0002
 
 from alembic import op
 
+from app.migration_support import APP_ROLE, enable_tenant_rls
+
 revision = "0003"
 down_revision = "0002"
 branch_labels = None
 depends_on = None
 
-APP_ROLE = "settleiq_app"
-TENANT_PREDICATE = "NULLIF(current_setting('app.tenant_id', true), '')::uuid"
 TENANT_TABLES = (
     "tenant_domain_packs",
     "ontology_artifacts",
@@ -23,16 +23,6 @@ TENANT_TABLES = (
     "ontologies",
     "ontology_relationships",
 )
-
-
-def enable_tenant_rls(table: str) -> None:
-    op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
-    op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
-    op.execute(
-        f"CREATE POLICY tenant_isolation ON {table} "
-        f"USING (tenant_id = {TENANT_PREDICATE}) "
-        f"WITH CHECK (tenant_id = {TENANT_PREDICATE})"
-    )
 
 
 def upgrade() -> None:

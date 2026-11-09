@@ -79,7 +79,7 @@ The queue (`agent_jobs`) and the `settleiq_dispatcher` role, whose only cross-te
 
 **Authorization is data.** Permission metadata is loaded from `app/authz/permissions.yaml` into memory. Permission sets are seeded from `permission_sets.yaml` into PostgreSQL and read from there on every request; nothing is cached, so revocation applies on the next decision. Set names must not appear in code, and CI scans `app/`, `packs/`, `agent/settleiq_agent` and `frontend/src`. The owner-derived set is found by `derivation = 'OWNER_POINTER'`, not by name. Agent and Worker principals, platform access and pack-registered permission keys do not resolve yet.
 
-**Database.** Two roles matter: the owner runs migrations, and `settleiq_app` (created by migration 0001, `NOSUPERUSER NOBYPASSRLS`) serves requests. Superusers bypass RLS, so tests must run as `settleiq_app`. Migrations are hand-written SQL with no autogenerate. A new tenant-owned table needs the statements from `enable_tenant_rls` in `0001_foundation.py` and an explicit `GRANT` to `settleiq_app`. Append-only tables get only `SELECT, INSERT`. `test_every_tenant_owned_table_has_forced_rls` catches a miss.
+**Database.** Two roles matter: the owner runs migrations, and `settleiq_app` (created by migration 0001, `NOSUPERUSER NOBYPASSRLS`) serves requests. Superusers bypass RLS, so tests must run as `settleiq_app`. Migrations are hand-written SQL with no autogenerate. A new tenant-owned table needs `enable_tenant_rls` from `app/migration_support.py` and an explicit `GRANT` to `settleiq_app`. Append-only tables get only `SELECT, INSERT`. `test_every_tenant_owned_table_has_forced_rls` catches a miss.
 
 **Core versus packs.** `app/` is domain-neutral and reads `packs/*/manifest.yaml` as data; it must never import `packs`. Finance logic, including `Money`, belongs in `packs/finops`. Connector capability keys are canonical in `app/connectors/capability_registry.yaml`, and manifests declare unsupported capabilities explicitly.
 
@@ -119,9 +119,9 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 
 - [x] Resolve the backend stack conflict with the team (added; blocked backend work). FastAPI confirmed by Swapnaneel, 2026-11-09.
 - [x] OPEN-REL-01: attestation identity and key custody (G1, Day 1). Decided in spec v1.6 §9.7, approved by Rishav 2026-11-09. The build is task 5.4; OPEN-REL-02 stays open.
-- [ ] OPEN-21-19: no permission cache in this build (G1, Day 1). Starter: nothing is cached.
+- [x] OPEN-21-19: no permission cache in this build (G1, Day 1). Recorded in `README.md`; `test_revoked_grant_stops_on_next_decision` is the evidence.
 - [ ] 1.1 Repo, Docker Compose, CI skeleton; settle stack gaps (1.5h). Starter: files exist, neither run.
-- [ ] 1.2 Identity and tenant migrations, RLS baseline, transaction-local tenant context (2h). Starter: built, tests pass.
+- [x] 1.2 Identity and tenant migrations, RLS baseline, transaction-local tenant context (2h). Reviewed; `tests/test_rls.py` passes against PostgreSQL with no skips.
 - [ ] 1.3 Permission catalogue as seed data, deny-by-default route guard, CI route map, role-name ban (2.5h). Starter: built, tests pass; metadata is draft.
 - [ ] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). Starter: schema and owner triggers built; transfer route is a stub.
 - [ ] 1.5 Invitation backend: hashed single-use tokens, matching-email acceptance (1.5h). Starter: tables only.

@@ -11,14 +11,14 @@ import os
 
 from alembic import op
 
+from app.migration_support import APP_ROLE, enable_tenant_rls
+
 revision = "0004"
 down_revision = "0003"
 branch_labels = None
 depends_on = None
 
-APP_ROLE = "settleiq_app"
 DISPATCHER_ROLE = "settleiq_dispatcher"
-TENANT_PREDICATE = "NULLIF(current_setting('app.tenant_id', true), '')::uuid"
 
 
 def upgrade() -> None:
@@ -59,13 +59,7 @@ def upgrade() -> None:
         "CREATE UNIQUE INDEX agent_jobs_one_in_flight ON agent_jobs (tenant_id, kind, subject_id) "
         "WHERE status IN ('QUEUED', 'RUNNING')"
     )
-    op.execute("ALTER TABLE agent_jobs ENABLE ROW LEVEL SECURITY")
-    op.execute("ALTER TABLE agent_jobs FORCE ROW LEVEL SECURITY")
-    op.execute(
-        f"CREATE POLICY tenant_isolation ON agent_jobs "
-        f"USING (tenant_id = {TENANT_PREDICATE}) "
-        f"WITH CHECK (tenant_id = {TENANT_PREDICATE})"
-    )
+    enable_tenant_rls("agent_jobs")
     op.execute(
         f"CREATE POLICY dispatcher_claim ON agent_jobs TO {DISPATCHER_ROLE} "
         "USING (true) WITH CHECK (true)"

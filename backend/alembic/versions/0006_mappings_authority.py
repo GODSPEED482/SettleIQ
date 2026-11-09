@@ -9,13 +9,13 @@ Revises: 0005
 
 from alembic import op
 
+from app.migration_support import APP_ROLE, enable_tenant_rls
+
 revision = "0006"
 down_revision = "0005"
 branch_labels = None
 depends_on = None
 
-APP_ROLE = "settleiq_app"
-TENANT_PREDICATE = "NULLIF(current_setting('app.tenant_id', true), '')::uuid"
 TABLES = ("source_mappings", "authority_assertions")
 
 
@@ -77,13 +77,7 @@ def upgrade() -> None:
         """
     )
     for table in TABLES:
-        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
-        op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
-        op.execute(
-            f"CREATE POLICY tenant_isolation ON {table} "
-            f"USING (tenant_id = {TENANT_PREDICATE}) "
-            f"WITH CHECK (tenant_id = {TENANT_PREDICATE})"
-        )
+        enable_tenant_rls(table)
         op.execute(f"GRANT SELECT, INSERT ON {table} TO {APP_ROLE}")
 
 
