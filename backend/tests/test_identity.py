@@ -1,6 +1,7 @@
 """Registration, verification, sessions and tenant creation through the real routes (task 1.9)."""
 
 import re
+import smtplib
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app import config
+from app import mail as mail_module
 from app.auth import sessions
 from app.auth.passwords import hash_password, verify_password
 from app.auth.tokens import hash_token, new_token
@@ -120,6 +122,70 @@ def test_mail_fails_closed_without_a_relay(monkeypatch):
             SmtpMailSender().send("a@example.com", "s", "b")
     finally:
         config.get_settings.cache_clear()
+
+
+class _Relay:
+    instances: list["_Relay"] = []
+    error: Exception | None = None
+
+    def __init__(self, host: str, port: int, timeout: int) -> None:
+        self.address = (host, port)
+        self.tls = False
+        self.credentials = None
+        self.sent = []
+        _Relay.instances.append(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc) -> None:
+        return None
+
+    def starttls(self, context) -> None:
+        self.tls = context is not None
+
+    def login(self, username: str, password: str) -> None:
+        self.credentials = (username, password)
+
+    def send_message(self, message) -> None:
+        if _Relay.error:
+            raise _Relay.error
+        assert self.tls, "message sent before TLS"
+        self.sent.append(message)
+
+
+class _SmtpSettings:
+    smtp_host = "relay.example.com"
+    smtp_port = 587
+    smtp_username = "user"
+    smtp_password = "secret-password"
+    smtp_from = "SettleIQ <no-reply@example.com>"
+
+
+@pytest.fixture
+def relay(monkeypatch):
+    _Relay.instances, _Relay.error = [], None
+    monkeypatch.setattr(mail_module.smtplib, "SMTP", _Relay)
+    monkeypatch.setattr(mail_module, "get_settings", lambda: _SmtpSettings())
+    return _Relay
+
+
+def test_smtp_sender_uses_tls_and_the_relay_credentials(relay):
+    SmtpMailSender().send("a@example.com", "Subject", "Body")
+    used = relay.instances[0]
+    assert used.address == ("relay.example.com", 587)
+    assert used.tls is True
+    assert used.credentials == ("user", "secret-password")
+    message = used.sent[0]
+    assert (message["To"], message["Subject"]) == ("a@example.com", "Subject")
+    assert message["From"] == "SettleIQ <no-reply@example.com>"
+
+
+def test_smtp_failure_reports_only_the_error_type(relay):
+    relay.error = smtplib.SMTPAuthenticationError(535, b"bad secret-password for user")
+    with pytest.raises(MailDeliveryError) as caught:
+        SmtpMailSender().send("a@example.com", "Subject", "Body")
+    assert str(caught.value) == "SMTPAuthenticationError"
 
 
 class _Settings:

@@ -161,9 +161,11 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 
 ### Swapnaneel Ray: Semantics, Domain and AI (leads G2, G3; demo Domain Operator, also holds an Approver grant for the POL-01 denial)
 
-- [ ] OPEN-03 (Day 1) and OPEN-10: included-in-net semantics for the fixture (before 3.3)
-- [ ] 1.8 Freeze domain-pack manifest (0.5h). Starter: draft exists.
-- [ ] 1.9 Registration, email verification, real email sending, atomic tenant creation (2.5h). Unblocks everything behind sign-in.
+- [x] OPEN-03 (Day 1). Recorded in `README.md`; activation rules are tested in `test_contracts.py`.
+- [ ] OPEN-10: included-in-net semantics for the fixture (before 3.3; not a G1 item)
+- [x] 1.8 Freeze domain-pack manifest (0.5h). Evidence in `test_contracts.py`.
+- [x] 1.9 Registration, email verification, email sending, atomic tenant creation (2.5h). Evidence in `test_identity.py`.
+- [ ] 1.9 follow-up: configure an SMTP relay and confirm a real email arrives. Sending is tested only against a fake relay; sign-up and invitations cannot finish without one.
 - [ ] 2.1 Ontology composition store; platform core and Finance pack in JSON-LD (2h)
 - [ ] 2.2 LLM draft generator from discovered metadata, draft only (2h)
 - [ ] 2.3 SHACL, pack validators, hash-bound validation, `confirm_publish` (2h)
