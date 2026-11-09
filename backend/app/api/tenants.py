@@ -1,11 +1,21 @@
 """Tenant administration, ownership and execution mode (spec 3, 9.5)."""
 
+from uuid import UUID
+
 from fastapi import APIRouter
+from pydantic import BaseModel, ConfigDict
 
 from app.authz.guard import TenantContext, require
 from app.errors import not_implemented
+from app.tenancy import ownership
 
 router = APIRouter(prefix="/api/tenants/{tenant_id}", tags=["tenants"])
+
+
+class TransferBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    new_owner_user_id: UUID
 
 
 # TODO(G1 1.5 Rishav): high-entropy token stored hashed with expiry; POL-02 grant ceiling; no owner
@@ -58,11 +68,11 @@ def remove_member(user_id: str, ctx: TenantContext = require("member.remove")) -
     raise not_implemented("1.5")
 
 
-# TODO(G1 1.4 Rishav): lock the tenant row; target is a different ACTIVE member; pointer and audit
-# event in one transaction; concurrent transfers serialize and fail closed (spec 3.2).
 @router.post("/ownership-transfer")
-def transfer_ownership(ctx: TenantContext = require("tenant.ownership.transfer")) -> None:
-    raise not_implemented("1.4")
+def transfer_ownership(
+    body: TransferBody, ctx: TenantContext = require("tenant.ownership.transfer")
+) -> dict:
+    return ownership.transfer_ownership(ctx, body.new_owner_user_id)
 
 
 @router.put("/execution-mode")

@@ -136,7 +136,6 @@ _GRANTS_SQL = text(
     """
 )
 
-# TODO(G1 1.4 Rishav): owner review of the pointer-derived permissions (POL-13).
 _OWNER_ITEMS_SQL = text(
     """
     SELECT i.permission_key, i.effect, NULL AS scope_type, NULL AS scope_id

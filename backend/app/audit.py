@@ -1,12 +1,17 @@
 """Audit events written inside the caller's transaction, so they commit with the change."""
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import Connection, text
 
 from app.authz.access import Principal
+from app.db import tenant_tx
+from app.errors import not_found
+
+if TYPE_CHECKING:
+    from app.authz.guard import TenantContext
 
 _INSERT_SQL = text(
     """
@@ -40,3 +45,33 @@ def write_audit(
             "detail": json.dumps(detail or {}),
         },
     )
+
+
+def read_audit(ctx: "TenantContext", audit_id: UUID) -> dict[str, Any]:
+    with tenant_tx(ctx) as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT id, principal_kind, principal_id, invoker_user_id, action, permission_key,
+                    resource, scope, decision, policy_rules, detail, created_at
+                FROM audit_logs WHERE id = :id
+                """
+            ),
+            {"id": audit_id},
+        ).first()
+    if row is None:
+        raise not_found()
+    return {
+        "id": str(row.id),
+        "principal_kind": row.principal_kind,
+        "principal_id": str(row.principal_id),
+        "invoker_user_id": str(row.invoker_user_id) if row.invoker_user_id else None,
+        "action": row.action,
+        "permission_key": row.permission_key,
+        "resource": row.resource,
+        "scope": row.scope,
+        "decision": row.decision,
+        "policy_rules": row.policy_rules,
+        "detail": row.detail,
+        "created_at": row.created_at.isoformat(),
+    }

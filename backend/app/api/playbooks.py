@@ -4,8 +4,11 @@ Humans have no execution route here. Bodies must never accept tenant_id, request
 approver_id, approval_required, policy-decision IDs, execution_id or grants (spec 12.1).
 """
 
+from uuid import UUID
+
 from fastapi import APIRouter
 
+from app import audit
 from app.authz.guard import TenantContext, require
 from app.errors import not_implemented
 
@@ -45,5 +48,5 @@ def read_execution(execution_id: str, ctx: TenantContext = require("execution.re
 
 
 @router.get("/audit/{audit_id}")
-def read_audit(audit_id: str, ctx: TenantContext = require("audit.read")) -> None:
-    raise not_implemented("1.4")
+def read_audit(audit_id: UUID, ctx: TenantContext = require("audit.read")) -> dict:
+    return audit.read_audit(ctx, audit_id)

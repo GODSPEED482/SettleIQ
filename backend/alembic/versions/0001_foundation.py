@@ -260,7 +260,6 @@ def upgrade() -> None:
         """
     )
 
-    # TODO(G1 1.4 Rishav): owner review; ownership transfer writes its event here (spec 3.2).
     op.execute(
         """
         CREATE TABLE audit_logs (

@@ -51,6 +51,10 @@ def rate_limited() -> ApiError:
     return ApiError(429, "RATE_LIMITED", "Too many attempts. Try again later.")
 
 
+def policy_denied(policy: str) -> ApiError:
+    return ApiError(403, "POLICY_DENIED", "This action is not allowed by policy.", policy=policy)
+
+
 def conflict(code: str, message: str) -> ApiError:
     return ApiError(409, code, message)
 

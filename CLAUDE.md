@@ -123,7 +123,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [ ] 1.1 Repo, Docker Compose, CI skeleton; settle stack gaps (1.5h). Starter: files exist, neither run.
 - [x] 1.2 Identity and tenant migrations, RLS baseline, transaction-local tenant context (2h). Reviewed; `tests/test_rls.py` passes against PostgreSQL with no skips.
 - [x] 1.3 Permission catalogue as seed data, deny-by-default route guard, CI route map, role-name ban (2.5h). Reviewed per key against §3.3 and §3.5; `test_route_guard.py`, `test_catalogue.py` and `test_code_rules.py` are the evidence.
-- [ ] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). Starter: schema and owner triggers built; transfer route is a stub.
+- [x] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). `tests/test_ownership.py` covers AC-OWNER-01, 03, 04, 05, including concurrent transfers.
 - [ ] 1.5 Invitation backend: hashed single-use tokens, matching-email acceptance (1.5h). Starter: tables only.
 - [ ] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h)
 - [ ] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h)
