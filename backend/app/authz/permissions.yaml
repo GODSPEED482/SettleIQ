@@ -2,13 +2,12 @@
 #
 # Closed per release (AUTHZ-08): an unknown key fails startup. `resource` and `action`
 # are derived from the key; `namespace` is core; `release` comes from this file.
-# Sensitivity and narrowable scopes are DRAFT readings of 3.3; review under task 1.3.
+# Sensitivity and narrowable scopes follow 3.3 and were reviewed per key under task 1.3.
 #
 # Shape:  key: [principals, narrowable_scopes, sensitivity, description]
 # Optional fifth element: flags. `reserved` = owner-reserved or service-only, never
 # tenant-grantable. Platform keys are never tenant-grantable either.
 
-# TODO(G1 1.3 Rishav): review sensitivity and narrowable scopes per key; spec 3.3 leaves them open.
 release: "1.5"
 
 tenant:

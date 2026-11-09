@@ -1,11 +1,13 @@
 """AUTHZ-05 startup checks and the AC-AUTHZ-03 table-driven route tests."""
 
+import json
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
+from app import route_map
 from app.authz.access import EffectiveAccess, GrantRow, Principal, PrincipalKind, Scope, get_gateway
 from app.authz.catalogue import CatalogueError, get_catalogue
 from app.authz.guard import (
@@ -91,6 +93,14 @@ def _app_with(router: APIRouter) -> FastAPI:
     target = FastAPI()
     target.include_router(router)
     return target
+
+
+def test_exported_map_covers_all_three_apps(capsys):
+    route_map.main()
+    paths = {entry["path"] for entry in json.loads(capsys.readouterr().out)}
+    assert "/api/tenants" in paths
+    assert "/internal/executions/{execution_id}/run" in paths
+    assert any(path.startswith("/internal/agent-tools/") for path in paths)
 
 
 def test_undeclared_route_fails_startup():

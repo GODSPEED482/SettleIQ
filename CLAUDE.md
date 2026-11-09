@@ -96,7 +96,7 @@ These bind code not yet written. The spec sections hold the detail.
 - **Agent (§8):** read, recommend and validate only, with append-only investigation writes. It computes no money and creates no request, approval or execution.
 - **A case resolves only after independent readback of authoritative state,** never on API success.
 - **Plan decisions:** PB-001 follows the conditional update in §4.4.1 rather than "replay the event". Break-glass, probabilistic matching and Redis/pgvector are not built in this slice. PB-002 live refund is built, in PayPal Sandbox only, under its own `refunds.create` attestation and safety suite. On Day 3 the order is freeze the build, create Tenant A, then attest; any later code change voids the attestation. If the safety suite is not green by Day 3 hour 7, no attestation is issued and the demo stops at step 10 in SHADOW. If only the refund scope is not green, no refund attestation is issued and the demo skips steps 14-15.
-- **Draft contracts:** the error envelope, `X-Tenant-Id`, the connector and pack manifests, the envelope and permission metadata are unratified defaults (listed in `README.md`).
+- **Draft contracts:** the error envelope, `X-Tenant-Id`, the connector manifest and the envelope are unratified defaults (listed in `README.md`).
 
 ## In-code TODOs
 
@@ -122,7 +122,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] OPEN-21-19: no permission cache in this build (G1, Day 1). Recorded in `README.md`; `test_revoked_grant_stops_on_next_decision` is the evidence.
 - [ ] 1.1 Repo, Docker Compose, CI skeleton; settle stack gaps (1.5h). Starter: files exist, neither run.
 - [x] 1.2 Identity and tenant migrations, RLS baseline, transaction-local tenant context (2h). Reviewed; `tests/test_rls.py` passes against PostgreSQL with no skips.
-- [ ] 1.3 Permission catalogue as seed data, deny-by-default route guard, CI route map, role-name ban (2.5h). Starter: built, tests pass; metadata is draft.
+- [x] 1.3 Permission catalogue as seed data, deny-by-default route guard, CI route map, role-name ban (2.5h). Reviewed per key against §3.3 and §3.5; `test_route_guard.py`, `test_catalogue.py` and `test_code_rules.py` are the evidence.
 - [ ] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). Starter: schema and owner triggers built; transfer route is a stub.
 - [ ] 1.5 Invitation backend: hashed single-use tokens, matching-email acceptance (1.5h). Starter: tables only.
 - [ ] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h)

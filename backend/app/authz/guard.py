@@ -186,7 +186,6 @@ def _api_routes(routes: Iterable[Any]) -> Iterator[APIRoute]:
             raise RouteDeclarationError(f"route type is not guardable: {route!r}")
 
 
-# TODO(G1 1.3 Rishav): owner review of the deny-by-default guard and route validation.
 def validate_routes(app: FastAPI, catalogue: Catalogue) -> None:
     """Fail startup if any route is undeclared, ambiguous or names an unknown key."""
     for route in _api_routes(app.routes):

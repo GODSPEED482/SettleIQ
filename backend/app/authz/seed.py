@@ -57,8 +57,8 @@ def seed(conn: Connection) -> None:
             },
         )
 
-    # TODO(G1 1.3 Rishav): version is fixed at 1 and re-seeding rewrites items in place; decide
-    # how a changed set gets a new version (spec 3.3 calls sets versioned).
+    # Decided for this build: re-seeding rewrites version 1 in place, so a changed set applies on
+    # the next decision (AC-AUTHZ-02). New versions arrive with tenant-defined sets, which are P1.
     version = 1
     for permission_set in load_permission_sets(catalogue):
         set_id = _set_id(permission_set.key, version)
