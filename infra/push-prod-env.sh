@@ -3,7 +3,6 @@
 # deploy.sh reads on the host, and sets the BUDGET_ALERT_EMAIL secret that infra.yml reads.
 # Run from the repo root with your own AWS and gh logins: bash infra/push-prod-env.sh
 # Prints names only. Nothing is sent unless every check passes.
-# TODO(G1 1.1 Rishav): warn on names in .env.production missing from the lists below; they are skipped silently.
 set -euo pipefail
 export MSYS_NO_PATHCONV=1 # stops Git Bash rewriting /settleiq/... into a Windows path
 
@@ -35,6 +34,13 @@ if [ ! -f "$PROD_FILE" ]; then
   exit 1
 fi
 git check-ignore -q "$PROD_FILE" || problem "$PROD_FILE is not ignored by git"
+
+while IFS= read -r name; do
+  case " $required $optional " in
+    *" $name "*) ;;
+    *) echo "warning: $name is in $PROD_FILE but is not sent; add it to the lists in this script" >&2 ;;
+  esac
+done < <(sed -n -E 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/p' "$PROD_FILE" | tr -d '\r')
 
 for name in $required $optional; do
   value="$(value_of "$PROD_FILE" "$name")"

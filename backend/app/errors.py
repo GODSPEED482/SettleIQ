@@ -63,6 +63,10 @@ def validation_failed(message: str) -> ApiError:
     return ApiError(422, "VALIDATION_ERROR", message)
 
 
+def not_ready() -> ApiError:
+    return ApiError(503, "NOT_READY", "The service is not ready.")
+
+
 def not_implemented(task: str) -> ApiError:
     return ApiError(501, "NOT_IMPLEMENTED", "Not implemented yet.", task=task)
 

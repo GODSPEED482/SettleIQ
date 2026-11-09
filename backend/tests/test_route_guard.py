@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
 
 from app import route_map
 from app.authz.access import EffectiveAccess, GrantRow, Principal, PrincipalKind, Scope, get_gateway
@@ -199,6 +200,7 @@ def test_critical_route_declarations(method, path, access, permission):
 def test_public_routes_are_only_the_expected_ones():
     assert {r["path"] for r in ROUTES if r["access"] == "PUBLIC"} == {
         "/healthz",
+        "/readyz",
         "/api/auth/register",
         "/api/auth/verify-email",
         "/api/auth/resend-verification",
@@ -206,6 +208,21 @@ def test_public_routes_are_only_the_expected_ones():
         "/api/auth/sign-out",
         "/api/webhooks/paypal/{source_id}",
     }
+
+
+def test_readiness_reports_a_database_failure_as_503(monkeypatch):
+    def unreachable():
+        raise OperationalError("SELECT 1", {}, Exception("down"))
+
+    monkeypatch.setattr("app.db.get_engine", unreachable)
+    response = TestClient(app).get("/readyz")
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "NOT_READY"
+
+
+@pytest.mark.db
+def test_readiness_passes_with_a_database():
+    assert TestClient(app).get("/readyz").json() == {"status": "ready"}
 
 
 # Table-driven route tests

@@ -106,6 +106,7 @@ The starter needed a working default for these. Each owner should confirm or cha
 | Domain-pack manifest and activation | Fields frozen in `app/domain_packs/manifest.py`. Versions are PEP 440 ranges; a conflict declared by either pack or an unmet dependency refuses activation; namespaces are unique and IRIs use the pack namespace; rollback re-pins an earlier published version. Multi-pack overrides stay under OPEN-05 | Swapnaneel | OPEN-03 |
 | Permission sensitivity and narrowable scopes | Reviewed per key in `permissions.yaml`. Permission sets stay at version 1 and re-seed in place in this build | Rishav | Spec §3.3 leaves per-key values open |
 | Permission caching | Decided for this build: no cache. Every decision re-resolves from current membership and grants, so revocation applies on the next decision, including mid-run for the agent. The spec item stays open for production | Rishav | OPEN-21-19 |
+| Stack gaps from task 1.1 | Raw evidence: local volume. Secrets: SSM rendered to env at deploy. Email: SMTP relay. Signing: GitHub Actions | Rishav | Delivery plan |
 | Auth and session transport | `argon2-cffi` password hashing with opaque server-side sessions in Postgres, sent as an HttpOnly cookie. Session and token handling is our own code, because packaged libraries use verification JWTs that §11.2 does not allow | Swapnaneel, Suprava | OPEN-14, §11.2 |
 | LLM provider | OpenAI, through `agent/` only; the model name comes from `LLM_MODEL` | Swapnaneel | §6.2 |
 

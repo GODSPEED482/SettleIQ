@@ -55,7 +55,7 @@ uv run ruff check .
 uv run pytest
 ```
 
-Whole stack: `cp .env.example .env`, then `docker compose up --build`. Add `--profile agent` for the agent services. The Compose file has never been run; Docker was not available when it was written.
+Whole stack: `cp .env.example .env`, then `docker compose up --build`. Add `--profile agent` for the agent services. Set `DISPATCHER_DB_PASSWORD` first: migrations need it.
 
 `db` tests need a migrated, seeded PostgreSQL 16 and these variables (values in `.env.example`): `DATABASE_URL` (runtime role), `MIGRATION_DATABASE_URL` (owner role), `APP_DB_PASSWORD`, `DISPATCHER_DB_PASSWORD`. On Windows use `127.0.0.1` rather than `localhost` in the URLs: Docker publishes on IPv4 only, and each connection otherwise stalls for seconds. Without a reachable database they are **skipped** locally, so check the skip count before trusting a green run. `REQUIRE_DB_TESTS=1` turns that into a failure, as in CI.
 
@@ -120,7 +120,8 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] Resolve the backend stack conflict with the team (added; blocked backend work). FastAPI confirmed by Swapnaneel, 2026-11-09.
 - [x] OPEN-REL-01: attestation identity and key custody (G1, Day 1). Decided in spec v1.6 §9.7, approved by Rishav 2026-11-09. The build is task 5.4; OPEN-REL-02 stays open.
 - [x] OPEN-21-19: no permission cache in this build (G1, Day 1). Recorded in `README.md`; `test_revoked_grant_stops_on_next_decision` is the evidence.
-- [ ] 1.1 Repo, Docker Compose, CI skeleton; settle stack gaps (1.5h). Starter: files exist, neither run.
+- [x] 1.1 Repo, Docker Compose, CI skeleton; settle stack gaps (1.5h). Full stack run with `--profile agent`; `/readyz` added; production DNS, billing and instance checked.
+- [ ] 1.1 follow-ups that need production or an AWS decision: first run of the hardened `deploy.yml` and `infra.yml` on `prod`; off-machine backup of `infra/bootstrap/terraform.tfstate`; deactivating the apply key.
 - [x] 1.2 Identity and tenant migrations, RLS baseline, transaction-local tenant context (2h). Reviewed; `tests/test_rls.py` passes against PostgreSQL with no skips.
 - [x] 1.3 Permission catalogue as seed data, deny-by-default route guard, CI route map, role-name ban (2.5h). Reviewed per key against §3.3 and §3.5; `test_route_guard.py`, `test_catalogue.py` and `test_code_rules.py` are the evidence.
 - [x] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). `tests/test_ownership.py` covers AC-OWNER-01, 03, 04, 05, including concurrent transfers.

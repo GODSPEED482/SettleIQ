@@ -1,4 +1,4 @@
-# TODO(G1 1.1 Rishav): confirm on the next infra/** push to prod that apply waits for test, signs in and applies; the CI gate and SHA pins have not run on GitHub.
+# TODO(G1 1.1 Rishav): owner review is done; confirm on the next infra/** push to prod that apply waits for test, signs in and applies.
 name: infra
 
 # Runs only for a push to prod that touches infra/, and applies only after all of ci.yml passes.

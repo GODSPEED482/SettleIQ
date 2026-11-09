@@ -6,8 +6,6 @@
 # Investigations are stubs until task 5.7. The agent, agent-tools and dispatcher services only
 # start with `--profile agent`. The agent must never join `backend` or use *backend-env.
 
-# TODO(G1 1.1 Rishav): run `docker compose up --build` end to end; this has never been run.
-# TODO(G1 1.1 Rishav): also try `--profile agent`.
 # TODO(G1 1.7 Rahul): mount the raw-evidence volume on api and worker (plan: local volume).
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD:?copy .env.example to .env}@db:5432/${POSTGRES_DB:?copy .env.example to .env}
