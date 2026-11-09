@@ -165,7 +165,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [ ] OPEN-10: included-in-net semantics for the fixture (before 3.3; not a G1 item)
 - [x] 1.8 Freeze domain-pack manifest (0.5h). Evidence in `test_contracts.py`.
 - [x] 1.9 Registration, email verification, email sending, atomic tenant creation (2.5h). Evidence in `test_identity.py`.
-- [ ] 1.9 follow-up: configure an SMTP relay and confirm a real email arrives. Sending is tested only against a fake relay; sign-up and invitations cannot finish without one.
+- [x] 1.9 follow-up: configure an SMTP relay and confirm a real email arrives. Brevo is configured locally, and a real test email arrived on 2026-11-10. Production still needs its SMTP values in `.env.production`.
 - [ ] 2.1 Ontology composition store; platform core and Finance pack in JSON-LD (2h)
 - [ ] 2.2 LLM draft generator from discovered metadata, draft only (2h)
 - [ ] 2.3 SHACL, pack validators, hash-bound validation, `confirm_publish` (2h)
