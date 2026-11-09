@@ -2,6 +2,8 @@
 
 Date: 2026-11-08
 
+> **Superseded for the backend (2026-11-09).** The backend is FastAPI, following spec §6.2. Everything below that assigns work to a Node/TypeScript API, including Express, Kysely, pg-boss and Better Auth, no longer applies. The frontend library choices remain open. Sponsor tools and other non-backend sections still stand as proposals.
+
 ## Overview
 
 Build SettleIQ as two services and a background worker: a **Node/TypeScript API** that owns everything authoritative, and a **Python service** that runs only the model-facing parts and holds no database credentials.

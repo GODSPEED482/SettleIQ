@@ -18,7 +18,6 @@ from app.api import (
 from app.bootstrap import finish_app
 
 
-# TODO(G1 1.1 Rishav): resolve the backend stack conflict in CLAUDE.md before building on this.
 # TODO(G1 1.10 Suprava): freeze OpenAPI; stubs have no request or response models to freeze yet.
 # TODO(G1 OPEN-14 Suprava): spec 12.1 requires a versioned API; routes are unversioned /api.
 def create_app() -> FastAPI:

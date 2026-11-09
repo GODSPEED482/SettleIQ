@@ -113,4 +113,4 @@ The starter needed a working default for these. Each owner should confirm or cha
 
 - §3.5 gives `platform_security_approver` a "minimum support-request metadata read", but Appendix A has no key for it. The set currently holds only `platform.support.approve`.
 - §12.2 omits sign-in, suspend-member, and mapping, authority and entity reads (plan task 1.10). These routes do not exist yet.
-- **Unresolved stack conflict:** this starter follows spec §6.2 (FastAPI). `.claude/SettleIQ_Tech_Stack.md` specifies a Node/TypeScript API with Python limited to the agent service. The team needs to pick one before backend work starts. Its choices for auth, LLM and frontend libraries also differ from the "Not chosen" rows above and from the current frontend.
+- **Backend stack settled:** the backend is FastAPI, following spec §6.2 (confirmed 2026-11-09). The Node/TypeScript API in `.claude/SettleIQ_Tech_Stack.md` is superseded. That document's frontend library choices (TanStack Router, shadcn/ui, AG Grid) still differ from the current frontend and remain open.
