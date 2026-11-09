@@ -1,17 +1,16 @@
-# TODO(G1 1.1 Rishav): owner review of this workflow; it signs in and applies cleanly on prod.
-# TODO(G1 1.1 Rishav): gate this on CI and narrow the AdministratorAccess role; it applies on merge with no test run.
-# TODO(G1 1.1 Rishav): delete the unused TF_VAR_github_repo below; editing this file starts an app deploy, so do it in a change that deploys anyway.
+# TODO(G1 1.1 Rishav): owner review is done; confirm on the next infra/** push to prod that apply waits for test, signs in and applies.
 name: infra
 
-# Runs only for a push to prod that touches infra/. Pull requests get keyless fmt and validate
-# checks from ci.yml; the AWS infra role trusts only refs/heads/prod.
+# Runs only for a push to prod that touches infra/, and applies only after all of ci.yml passes.
+# Pull requests get keyless fmt and validate checks from ci.yml. Do not add workflow_dispatch or
+# pull_request, and do not set `environment:` on apply: the AWS infra role trusts only
+# refs/heads/prod, and an environment changes the token subject.
 on:
   push:
     branches: [prod]
     paths: ["infra/**"]
 
 permissions:
-  id-token: write
   contents: read
 
 concurrency:
@@ -21,27 +20,37 @@ concurrency:
 env:
   AWS_REGION: ap-south-1
   TF_IN_AUTOMATION: "1"
-  TF_VAR_github_repo: ${{ github.repository }}
-  TF_VAR_budget_alert_email: ${{ secrets.BUDGET_ALERT_EMAIL }}
 
 defaults:
   run:
     working-directory: infra/envs/prod
 
 jobs:
+  test:
+    if: github.ref == 'refs/heads/prod'
+    uses: ./.github/workflows/ci.yml
+
   apply:
+    needs: test # do not add always() to the if below; a failed test must skip this job
     if: github.ref == 'refs/heads/prod'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC -> AWS, no long-lived keys
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false # terraform needs no git token
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: "1.10.5"
           terraform_wrapper: false
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ vars.AWS_INFRA_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - run: terraform init -input=false
       - run: terraform plan -input=false -no-color -out=tfplan
+        env:
+          TF_VAR_budget_alert_email: ${{ secrets.BUDGET_ALERT_EMAIL }} # apply reads it from the saved plan
       - run: terraform apply -input=false tfplan

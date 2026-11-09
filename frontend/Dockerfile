@@ -1,4 +1,3 @@
-# TODO(G1 1.1 Rishav): build this image once; it has never been built.
 FROM node:22-alpine
 
 WORKDIR /srv/app

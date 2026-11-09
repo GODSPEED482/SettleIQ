@@ -6,17 +6,23 @@ from app.authz.catalogue import get_catalogue
 from app.authz.guard import validate_routes
 from app.connectors.manifest import load_connector_manifests
 from app.domain_packs.manifest import load_domain_packs
+from app.domain_packs.registry import resolve_pack_entrypoints
 from app.errors import install_error_handlers
 from app.investigation.tools import build_tool_registry
+from app.semantics.artifacts import core_artifact, pack_artifacts
 
 
-# TODO(G1 1.3 Rishav): owner review of the startup validation.
 def validate_platform(app: FastAPI) -> None:
     """Fail startup on any undeclared route, invalid manifest or prohibited agent tool."""
     catalogue = get_catalogue()
     validate_routes(app, catalogue)
     load_connector_manifests()
-    build_tool_registry(load_domain_packs(), catalogue)
+    packs = load_domain_packs()
+    resolve_pack_entrypoints(packs)
+    core_artifact()
+    for pack in packs.values():
+        pack_artifacts(pack)
+    build_tool_registry(packs, catalogue)
 
 
 def finish_app(app: FastAPI) -> FastAPI:

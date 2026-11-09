@@ -3,23 +3,25 @@ name = "settleiq-backend"
 version = "0.1.0"
 description = "SettleIQ API, worker and domain packs"
 requires-python = ">=3.12,<3.13"
-# TODO(G1 1.1 Rishav): resolve the backend stack conflict in CLAUDE.md before building on this.
-# TODO(G1 1.9 Swapnaneel): add the maintained auth library chosen under spec 11.2.
 dependencies = [
     "alembic>=1.13",
+    "argon2-cffi>=23.1",
+    "email-validator>=2.2",
     "fastapi>=0.115",
+    "httpx>=0.27",
+    "packaging>=24",
     "psycopg[binary]>=3.2",
     "pydantic>=2.9",
     "pydantic-settings>=2.5",
     "pyshacl>=0.26",
     "pyyaml>=6.0",
+    "rfc8785>=0.1.4",
     "sqlalchemy>=2.0.35",
     "uvicorn[standard]>=0.30",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.27",
     "pytest>=8.3",
     "ruff>=0.6",
 ]

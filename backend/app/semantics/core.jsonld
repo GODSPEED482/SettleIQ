@@ -1,0 +1,24 @@
+{
+  "@context": {
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "core": "urn:settleiq:core#"
+  },
+  "@graph": [
+    {"@id": "core:Tenant", "@type": "owl:Class", "rdfs:label": "Tenant", "rdfs:comment": "An isolated customer workspace."},
+    {"@id": "core:Organization", "@type": "owl:Class", "rdfs:label": "Organization", "rdfs:comment": "The business a tenant represents."},
+    {"@id": "core:Actor", "@type": "owl:Class", "rdfs:label": "Actor", "rdfs:comment": "A human or service principal that acts in a tenant."},
+    {"@id": "core:DataSource", "@type": "owl:Class", "rdfs:label": "Data source", "rdfs:comment": "A registered database, API, file, event or other source."},
+    {"@id": "core:SourceObject", "@type": "owl:Class", "rdfs:label": "Source object", "rdfs:comment": "A table, resource, file or event type within a source."},
+    {"@id": "core:SourceRecord", "@type": "owl:Class", "rdfs:label": "Source record", "rdfs:comment": "One record in the generic canonical envelope."},
+    {"@id": "core:EvidenceArtifact", "@type": "owl:Class", "rdfs:label": "Evidence artifact", "rdfs:comment": "Original payload, file or report, preserved immutably."},
+    {"@id": "core:DomainEntity", "@type": "owl:Class", "rdfs:label": "Domain entity", "rdfs:comment": "A canonical business object represented by source records."},
+    {"@id": "core:DomainEvent", "@type": "owl:Class", "rdfs:label": "Domain event", "rdfs:comment": "A business occurrence affecting domain entities."},
+    {"@id": "core:Relationship", "@type": "owl:Class", "rdfs:label": "Relationship", "rdfs:comment": "A typed link between domain entities."},
+    {"@id": "core:Policy", "@type": "owl:Class", "rdfs:label": "Policy", "rdfs:comment": "A rule constraining a decision or action."},
+    {"@id": "core:WorkflowCase", "@type": "owl:Class", "rdfs:label": "Workflow case", "rdfs:comment": "A tracked exception needing review or action."},
+    {"@id": "core:Action", "@type": "owl:Class", "rdfs:label": "Action", "rdfs:comment": "A controlled state-changing operation."},
+    {"@id": "core:Playbook", "@type": "owl:Class", "rdfs:label": "Playbook", "rdfs:comment": "A versioned workflow definition."},
+    {"@id": "core:Provenance", "@type": "owl:Class", "rdfs:label": "Provenance", "rdfs:comment": "Where a value came from and how it was derived."}
+  ]
+}

@@ -1,8 +1,4 @@
-# TODO(G1 1.1 Rishav): owner review of this workflow; the first deploy (44e817f) succeeded.
-# TODO(G1 1.1 Rishav): require a PR and passing checks on prod; the ruleset only blocks force-push and deletion, and a direct push deploys.
-# TODO(G1 1.1 Rishav): roll back when the smoke test fails; deploy.sh has already marked the release live by then.
-# TODO(G1 1.1 Rishav): pin third-party actions to commit SHAs; these jobs can assume the AWS roles.
-# TODO(G1 OPEN-REL-01 Rishav): decide if the attestation signer runs here; POL-14 needs image digests.
+# TODO(G1 1.1 Rishav): owner review is done; confirm on the next push to prod that the pinned actions and rollback steps run.
 name: deploy
 
 # Runs only for a push to prod, which includes a merged PR. Keep it that way: do not add
@@ -50,15 +46,17 @@ jobs:
             context: agent
             file: agent/Dockerfile
     steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
@@ -80,52 +78,112 @@ jobs:
       RELEASE_BUCKET: ${{ vars.RELEASE_BUCKET }}
       APP_DOMAIN: ${{ vars.APP_DOMAIN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Write shell helpers shared by the steps below
+        run: |
+          cat > "$RUNNER_TEMP/deploy-lib.sh" <<'LIB'
+          # ssm_run <comment> <command>: prints the command's stdout; returns 0 only on SSM Success.
+          ssm_run() {
+            local comment=$1 command=$2 params cmd_id status=Pending
+            params=$(mktemp)
+            jq -n --arg c "$command" '{commands: [$c], executionTimeout: ["900"]}' > "$params" || return 1
+            cmd_id=$(aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name AWS-RunShellScript \
+              --comment "$comment" \
+              --parameters "file://$params" \
+              --query Command.CommandId --output text) || return 1
+
+            # `aws ssm wait command-executed` gives up after ~100s; deploys can take longer.
+            # Polls past executionTimeout, so a slow command is not reported while still running.
+            for _ in $(seq 1 96); do
+              status=$(aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$INSTANCE_ID" \
+                --query Status --output text 2>/dev/null || echo Pending)
+              case "$status" in
+                Pending|InProgress|Delayed|Cancelling) sleep 10 ;;
+                *) break ;;
+              esac
+            done
+
+            aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$INSTANCE_ID" \
+              --query StandardOutputContent --output text || true
+            aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$INSTANCE_ID" \
+              --query StandardErrorContent --output text >&2 || true
+            echo "SSM status: $status" >&2
+            [ "$status" = "Success" ]
+          }
+
+          # --max-time: a hung connection must not stall the job and block the rollback.
+          smoke_test() {
+            for _ in $(seq 1 10); do
+              if curl -fsS --max-time 10 "https://$APP_DOMAIN/healthz"; then return 0; fi
+              sleep 6
+            done
+            return 1
+          }
+          LIB
+
       - name: Upload release bundle
         run: aws s3 cp deploy/ "s3://$RELEASE_BUCKET/releases/$TAG/" --recursive
 
+      # deploy.sh overwrites this marker, so it has to be read first.
+      - name: Record the release to roll back to
+        id: previous
+        run: |
+          . "$RUNNER_TEMP/deploy-lib.sh"
+          current=$(ssm_run "read current release" 'cat /opt/settleiq/current 2>/dev/null || true')
+          # This value reaches a root shell on the host during rollback; accept only a git SHA.
+          if [[ "$current" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "tag=$current" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::The host records no usable current release, so a failed smoke test cannot roll back."
+          fi
+
       - name: Run deploy.sh on the host via SSM
         run: |
-          jq -n --arg b "$RELEASE_BUCKET" --arg t "$TAG" '{
-            commands: ["aws s3 cp s3://\($b)/releases/\($t)/ /opt/settleiq/releases/\($t)/ --recursive && bash /opt/settleiq/releases/\($t)/deploy.sh \($t)"],
-            executionTimeout: ["900"]
-          }' > params.json
-
-          CMD_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name AWS-RunShellScript \
-            --comment "deploy $TAG" \
-            --parameters file://params.json \
-            --query Command.CommandId --output text)
-
-          # `aws ssm wait command-executed` gives up after ~100s; deploys can take longer
-          for _ in $(seq 1 90); do
-            STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-              --query Status --output text 2>/dev/null || echo Pending)
-            case "$STATUS" in
-              Pending|InProgress|Delayed) sleep 10 ;;
-              *) break ;;
-            esac
-          done
-
-          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-            --query StandardOutputContent --output text
-          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-            --query StandardErrorContent --output text >&2
-          echo "SSM status: $STATUS"
-          test "$STATUS" = "Success"
+          . "$RUNNER_TEMP/deploy-lib.sh"
+          ssm_run "deploy $TAG" "aws s3 cp s3://$RELEASE_BUCKET/releases/$TAG/ /opt/settleiq/releases/$TAG/ --recursive && bash /opt/settleiq/releases/$TAG/deploy.sh $TAG"
 
       - name: Smoke test through the public URL
+        id: smoke
         run: |
-          for _ in $(seq 1 10); do
-            if curl -fsS "https://$APP_DOMAIN/healthz"; then exit 0; fi
-            sleep 6
-          done
-          echo "health check failed - see the rollback section of docs/DEPLOYMENT.md"
+          . "$RUNNER_TEMP/deploy-lib.sh"
+          if ! smoke_test; then
+            echo "::error::$TAG is marked live on the host but failed the public health check."
+            exit 1
+          fi
+
+      # A failure inside deploy.sh never reaches here: its own trap restores the previous release.
+      - name: Roll back to the previous release
+        if: failure() && steps.smoke.outcome == 'failure'
+        env:
+          PREVIOUS: ${{ steps.previous.outputs.tag }}
+        run: |
+          . "$RUNNER_TEMP/deploy-lib.sh"
+          if [ -z "$PREVIOUS" ] || [ "$PREVIOUS" = "$TAG" ]; then
+            echo "::error::No earlier release to roll back to; $TAG is still live and unhealthy. Manual action needed."
+            exit 1
+          fi
+
+          kept="Migrations from $TAG were NOT reversed, so $PREVIOUS is safe only if they are backward compatible (docs/DEPLOYMENT.md section 7)."
+
+          # --rollback skips migrations: an older image cannot upgrade to a newer head.
+          if ! ssm_run "rollback to $PREVIOUS" "bash /opt/settleiq/releases/$PREVIOUS/deploy.sh $PREVIOUS --rollback"; then
+            echo "::error::ROLLBACK TO $PREVIOUS FAILED. The host may be running $TAG, $PREVIOUS or a mix. Manual action needed: docs/DEPLOYMENT.md section 8. $kept"
+            exit 1
+          fi
+
+          if smoke_test; then
+            echo "::error::$TAG failed its smoke test and the host is back on $PREVIOUS, which is healthy. $kept $TAG is still on prod, so revert it before the next deploy."
+          else
+            echo "::error::Rolled back to $PREVIOUS, but the public health check still fails. Manual action needed. $kept"
+          fi
           exit 1

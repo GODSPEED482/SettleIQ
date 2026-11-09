@@ -19,6 +19,7 @@ from fastapi.dependencies.models import Dependant
 from fastapi.params import Depends as DependsParam
 from fastapi.routing import APIRoute
 
+from app.auth.sessions import allowed_origin, session_cookie_name, session_principal
 from app.authz.access import (
     AccessGateway,
     Decision,
@@ -37,6 +38,7 @@ logger = logging.getLogger("settleiq.authz")
 TENANT_HEADER = "X-Tenant-Id"
 _ACCESS_ATTR = "__settleiq_access__"
 FRAMEWORK_ROUTES = {"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 class RouteDeclarationError(RuntimeError):
@@ -59,17 +61,22 @@ class TenantContext:
     access: EffectiveAccess
 
 
-# TODO(G1 1.9 Swapnaneel): wire the auth library here. Read email_verified from current state, so
-# stale token claims cannot preserve access (AC-IAM-07, spec 11.2).
-# TODO(G1 1.9 Swapnaneel): keep agent tool calls off the session path. They use the delegated
-# token in investigation/tokens.py, which public routes must never accept.
 def authenticate(request: Request) -> Principal:
-    """Authentication seam, implemented by task 1.9.
+    """Resolve the session cookie against current state (AC-IAM-07, spec 11.2).
 
-    Fails closed until a maintained auth library is wired in (spec 11.2). Do not add a
-    development bypass here; tests override this dependency instead.
+    Only the cookie is read, so a delegated agent token can never authenticate here. Do not
+    add a development bypass; tests override this dependency instead.
     """
-    raise unauthenticated()
+    raw = request.cookies.get(session_cookie_name())
+    if raw is None:
+        raise unauthenticated()
+    origin = request.headers.get("origin")
+    if request.method not in SAFE_METHODS and origin is not None and origin != allowed_origin():
+        raise unauthenticated()
+    principal = session_principal(raw)
+    if principal is None:
+        raise unauthenticated()
+    return principal
 
 
 def _declare(call: Any, access: Access) -> DependsParam:
@@ -179,7 +186,6 @@ def _api_routes(routes: Iterable[Any]) -> Iterator[APIRoute]:
             raise RouteDeclarationError(f"route type is not guardable: {route!r}")
 
 
-# TODO(G1 1.3 Rishav): owner review of the deny-by-default guard and route validation.
 def validate_routes(app: FastAPI, catalogue: Catalogue) -> None:
     """Fail startup if any route is undeclared, ambiguous or names an unknown key."""
     for route in _api_routes(app.routes):

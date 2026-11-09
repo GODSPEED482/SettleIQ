@@ -38,9 +38,9 @@ aws ssm get-parameters-by-path --region "$REGION" --path "$PARAM_PATH" --with-de
 chmod 600 .env
 
 # Terraform seeds every parameter with CHANGE_ME; never start a database on that password.
-required="ENVIRONMENT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD APP_DB_PASSWORD ACME_EMAIL"
+required="ENVIRONMENT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD APP_DB_PASSWORD DISPATCHER_DB_PASSWORD ACME_EMAIL"
 if grep -q '^COMPOSE_PROFILES=.*agent' .env; then
-  required="$required DISPATCHER_DB_PASSWORD AGENT_TOKEN_SECRET LLM_API_KEY"
+  required="$required AGENT_TOKEN_SECRET LLM_API_KEY LLM_MODEL"
 fi
 for name in $required; do
   if ! grep -q "^$name=." .env || grep -q "^$name=CHANGE_ME$" .env; then

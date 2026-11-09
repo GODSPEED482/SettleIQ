@@ -10,7 +10,6 @@ from app.authz.guard import TenantContext, require
 router = APIRouter(prefix="/api", tags=["authorization"])
 
 
-# TODO(G1 1.3 Rishav): owner review of these read-only catalogue views.
 @router.get("/permissions")
 def list_permissions(ctx: TenantContext = require("role.read")) -> list[dict]:
     return [asdict(spec) for spec in get_catalogue()]

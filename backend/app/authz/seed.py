@@ -10,6 +10,7 @@ from uuid import NAMESPACE_URL, uuid5
 from sqlalchemy import Connection, create_engine, text
 
 from app.authz.catalogue import get_catalogue, load_permission_sets
+from app.domain_packs.manifest import load_domain_packs
 
 
 def _set_id(key: str, version: int) -> str:
@@ -56,8 +57,8 @@ def seed(conn: Connection) -> None:
             },
         )
 
-    # TODO(G1 1.3 Rishav): version is fixed at 1 and re-seeding rewrites items in place; decide
-    # how a changed set gets a new version (spec 3.3 calls sets versioned).
+    # Decided for this build: re-seeding rewrites version 1 in place, so a changed set applies on
+    # the next decision (AC-AUTHZ-02). New versions arrive with tenant-defined sets, which are P1.
     version = 1
     for permission_set in load_permission_sets(catalogue):
         set_id = _set_id(permission_set.key, version)
@@ -99,10 +100,30 @@ def seed(conn: Connection) -> None:
             )
 
 
+def seed_domain_packs(conn: Connection) -> None:
+    """Record the installed packs. Nothing here activates a pack for any tenant."""
+    for pack in load_domain_packs().values():
+        conn.execute(
+            text(
+                """
+                INSERT INTO domain_packs (namespace, version, manifest)
+                VALUES (:namespace, :version, CAST(:manifest AS jsonb))
+                ON CONFLICT (namespace, version) DO UPDATE SET manifest = EXCLUDED.manifest
+                """
+            ),
+            {
+                "namespace": pack.namespace,
+                "version": pack.version,
+                "manifest": pack.model_dump_json(),
+            },
+        )
+
+
 def main() -> None:
     engine = create_engine(os.environ["MIGRATION_DATABASE_URL"])
     with engine.begin() as conn:
         seed(conn)
+        seed_domain_packs(conn)
 
 
 if __name__ == "__main__":

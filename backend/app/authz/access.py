@@ -136,7 +136,6 @@ _GRANTS_SQL = text(
     """
 )
 
-# TODO(G1 1.4 Rishav): owner review of the pointer-derived permissions (POL-13).
 _OWNER_ITEMS_SQL = text(
     """
     SELECT i.permission_key, i.effect, NULL AS scope_type, NULL AS scope_id
@@ -161,8 +160,6 @@ def _to_row(raw) -> GrantRow:
     return GrantRow(raw.permission_key, raw.effect, scope)
 
 
-# TODO(G1 OPEN-21-19 Rishav): record the decision that this build caches no permissions.
-# TODO(G1 OPEN-21-19 Rishav): agent mid-run revocation (POL-08) depends on that decision.
 class PostgresAccessGateway:
     def __init__(self, catalogue: Catalogue) -> None:
         self._catalogue = catalogue

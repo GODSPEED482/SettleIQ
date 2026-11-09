@@ -30,7 +30,6 @@ def global_tx() -> Iterator[Connection]:
         yield conn
 
 
-# TODO(G1 1.2 Rishav): owner review of the transaction-local tenant context.
 @contextmanager
 def scoped_tx(tenant_id: UUID) -> Iterator[Connection]:
     """Set tenant context for one transaction. The caller must have established trust in

@@ -6,7 +6,6 @@
 # `derivation: OWNER_POINTER` means the set is computed from tenants.owner_user_id and
 # can never be stored as a grant (POL-13).
 
-# TODO(G1 1.3 Rishav): owner review against spec 3.5, including the gap noted in README.md.
 sets:
   - key: business_admin
     display_name: Business Admin
