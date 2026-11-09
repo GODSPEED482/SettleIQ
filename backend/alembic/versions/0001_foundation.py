@@ -224,8 +224,6 @@ def upgrade() -> None:
     )
     op.execute("CREATE INDEX member_grants_user_idx ON member_grants (tenant_id, user_id)")
 
-    # TODO(G1 1.5 Rishav): add delivery state in a new migration; there is no column for it,
-    # and AC-IAM-09 needs delivery failures visible and retryable.
     op.execute(
         """
         CREATE TABLE tenant_invitations (

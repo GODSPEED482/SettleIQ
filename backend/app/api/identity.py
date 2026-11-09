@@ -12,8 +12,9 @@ from app.authz.access import AccessGateway, Principal, get_gateway
 from app.authz.guard import identity, public
 from app.config import get_settings
 from app.db import global_tx
-from app.errors import invalid_credentials, invalid_token, not_found, not_implemented
+from app.errors import invalid_credentials, invalid_token, not_found
 from app.mail import MailDeliveryError, MailSender, get_mail_sender
+from app.tenancy import invitations
 from app.tenancy.creation import create_tenant as create_tenant_atomically
 
 logger = logging.getLogger("settleiq.auth")
@@ -141,13 +142,13 @@ def create_tenant(body: CreateTenantBody, principal: Principal = identity()) -> 
     return {"id": str(tenant_id), "name": body.name}
 
 
-# TODO(G1 1.5 Rishav): this URL has no tenant and tenant_invitations is under RLS, so a no-context
-# read finds nothing. Add a narrow trusted lookup by token hash, then use scoped_tx.
-# TODO(G1 1.5 Rishav): consume the token and install grants atomically; verified email must match;
-# recheck POL-02; existing users join without a new account (AC-IAM-03, 04, 05).
 @router.post("/invitations/{token}/accept")
-def accept_invitation(token: str, principal: Principal = identity()) -> None:
-    raise not_implemented("1.5")
+def accept_invitation(
+    token: str,
+    principal: Principal = identity(),
+    gateway: AccessGateway = Depends(get_gateway),
+) -> dict:
+    return invitations.accept_invitation(principal, token, gateway)
 
 
 # RLS hides memberships until a tenant is selected, so this reads through a trusted lookup.

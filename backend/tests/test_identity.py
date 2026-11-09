@@ -1,7 +1,6 @@
 """Registration, verification, sessions and tenant creation through the real routes (task 1.9)."""
 
 import re
-from itertools import count
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -24,7 +23,6 @@ from app.tenancy import creation
 
 REPO = Path(__file__).parents[2]
 PASSWORD = "correct horse battery"
-_addresses = count(1)
 
 app = create_app()
 
@@ -52,8 +50,9 @@ def mail():
 
 
 def new_client() -> TestClient:
-    # A distinct address per client, so rate limits persisted between runs cannot interfere.
-    return TestClient(app, client=(f"10.{uuid4().int % 250}.0.{next(_addresses) % 250}", 50000))
+    # A random address per client: rate-limit counters persist for an hour, across test runs.
+    a, b, c = uuid4().bytes[:3]
+    return TestClient(app, client=(f"10.{a}.{b}.{c}", 50000))
 
 
 def new_email() -> str:

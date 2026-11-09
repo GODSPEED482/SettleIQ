@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     app_base_url: str = "http://localhost:5173"
     session_ttl_hours: int = 24
     email_token_ttl_hours: int = 24
+    invitation_ttl_hours: int = 168
 
     smtp_host: str = ""
     smtp_port: int = 587
