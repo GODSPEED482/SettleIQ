@@ -119,11 +119,211 @@ resource "aws_iam_role" "gha_infra" {
   assume_role_policy = data.aws_iam_policy_document.infra_trust.json
 }
 
-# Hackathon trade-off: terraform creates IAM roles, so it needs broad rights.
-# The trust policy above (this repo, prod branch only) is the real guard.
-resource "aws_iam_role_policy_attachment" "gha_infra_admin" {
-  role       = aws_iam_role.gha_infra.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+# Only what terraform plan/apply of infra/envs/prod calls: CloudTrail for reads, the provider's create and
+# replace paths for writes. IAM is limited to the stack's own named roles and profile, but the stack writes
+# their inline policies and trust, so the trust policy above (this repo, prod branch only) still guards that.
+# No ec2:DeleteVolume: the data volume is prevent_destroy. KMS comes from the aws/ssm and aws/ebs key policies.
+locals {
+  account_id    = data.aws_caller_identity.me.account_id
+  ec2           = "arn:aws:ec2:${var.region}:${local.account_id}"
+  ssm_prod      = "arn:aws:ssm:${var.region}:${local.account_id}:parameter/settleiq/prod/*"
+  iam           = "arn:aws:iam::${local.account_id}"
+  host_role     = "${local.iam}:role/settleiq-prod-host"
+  stack_roles   = [local.host_role, "${local.iam}:role/settleiq-prod-gha-deploy"]
+  state_bucket  = aws_s3_bucket.tfstate.arn
+  state_object  = "${aws_s3_bucket.tfstate.arn}/prod/terraform.tfstate"
+  release_store = "arn:aws:s3:::settleiq-prod-releases-${local.account_id}"
+}
+
+data "aws_iam_policy_document" "gha_infra" {
+  statement {
+    sid       = "StateList"
+    actions   = ["s3:ListBucket"]
+    resources = [local.state_bucket]
+  }
+  statement {
+    sid       = "StateObject"
+    actions   = ["s3:GetObject", "s3:PutObject"]
+    resources = [local.state_object]
+  }
+  statement {
+    sid       = "StateLock"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = ["${local.state_object}.tflock"]
+  }
+  statement {
+    sid = "ReleasesBucket"
+    actions = [
+      "s3:CreateBucket", "s3:DeleteBucket", "s3:ListBucket",
+      "s3:GetAccelerateConfiguration", "s3:GetBucketAcl", "s3:GetBucketCORS", "s3:GetBucketLogging",
+      "s3:GetBucketObjectLockConfiguration", "s3:GetBucketPolicy", "s3:GetBucketPublicAccessBlock",
+      "s3:GetBucketRequestPayment", "s3:GetBucketTagging", "s3:GetBucketVersioning", "s3:GetBucketWebsite",
+      "s3:GetEncryptionConfiguration", "s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration",
+      "s3:PutBucketPublicAccessBlock", "s3:PutBucketTagging", "s3:PutLifecycleConfiguration",
+    ]
+    resources = [local.release_store]
+  }
+  statement {
+    sid       = "Ec2Read"
+    actions   = ["ec2:Describe*"]
+    resources = ["*"]
+  }
+  statement {
+    sid     = "Ec2Launch"
+    actions = ["ec2:RunInstances"]
+    resources = [
+      "arn:aws:ec2:${var.region}::image/*",
+      "${local.ec2}:instance/*",
+      "${local.ec2}:network-interface/*",
+      "${local.ec2}:security-group/*",
+      "${local.ec2}:subnet/*",
+      "${local.ec2}:volume/*",
+    ]
+  }
+  statement {
+    sid = "Ec2Instance"
+    actions = [
+      "ec2:ModifyInstanceAttribute", "ec2:ModifyInstanceCreditSpecification", "ec2:ModifyInstanceMetadataOptions",
+      "ec2:ModifyNetworkInterfaceAttribute", "ec2:StartInstances", "ec2:StopInstances", "ec2:TerminateInstances",
+    ]
+    resources = [
+      "${local.ec2}:instance/*",
+      "${local.ec2}:network-interface/*",
+      "${local.ec2}:security-group/*",
+      "${local.ec2}:volume/*",
+    ]
+  }
+  statement {
+    sid       = "Ec2Volume"
+    actions   = ["ec2:AttachVolume", "ec2:CreateVolume", "ec2:DetachVolume", "ec2:ModifyVolume"]
+    resources = ["${local.ec2}:instance/*", "${local.ec2}:volume/*"]
+  }
+  statement {
+    sid = "Ec2SecurityGroup"
+    actions = [
+      "ec2:AuthorizeSecurityGroupEgress", "ec2:AuthorizeSecurityGroupIngress", "ec2:CreateSecurityGroup",
+      "ec2:DeleteSecurityGroup", "ec2:RevokeSecurityGroupEgress", "ec2:RevokeSecurityGroupIngress",
+      "ec2:UpdateSecurityGroupRuleDescriptionsEgress", "ec2:UpdateSecurityGroupRuleDescriptionsIngress",
+    ]
+    resources = ["${local.ec2}:security-group/*", "${local.ec2}:vpc/*"]
+  }
+  statement {
+    sid       = "Ec2Address"
+    actions   = ["ec2:AllocateAddress", "ec2:AssociateAddress", "ec2:DisassociateAddress", "ec2:ReleaseAddress"]
+    resources = ["${local.ec2}:elastic-ip/*", "${local.ec2}:instance/*", "${local.ec2}:network-interface/*"]
+  }
+  statement {
+    sid     = "Ec2Tags"
+    actions = ["ec2:CreateTags", "ec2:DeleteTags"]
+    resources = [
+      "${local.ec2}:elastic-ip/*",
+      "${local.ec2}:instance/*",
+      "${local.ec2}:network-interface/*",
+      "${local.ec2}:security-group/*",
+      "${local.ec2}:volume/*",
+    ]
+  }
+  statement {
+    sid = "Ecr"
+    actions = [
+      "ecr:CreateRepository", "ecr:DeleteLifecyclePolicy", "ecr:DeleteRepository", "ecr:DescribeRepositories",
+      "ecr:GetLifecyclePolicy", "ecr:ListTagsForResource", "ecr:PutImageScanningConfiguration",
+      "ecr:PutImageTagMutability", "ecr:PutLifecyclePolicy", "ecr:TagResource", "ecr:UntagResource",
+    ]
+    resources = ["arn:aws:ecr:${var.region}:${local.account_id}:repository/settleiq-*"]
+  }
+  statement {
+    sid = "SsmProdParams"
+    actions = [
+      "ssm:AddTagsToResource", "ssm:DeleteParameter", "ssm:GetParameter", "ssm:ListTagsForResource",
+      "ssm:PutParameter", "ssm:RemoveTagsFromResource",
+    ]
+    resources = [local.ssm_prod]
+  }
+  statement {
+    sid       = "SsmAmiLookup"
+    actions   = ["ssm:GetParameter"]
+    resources = ["arn:aws:ssm:${var.region}::parameter/aws/service/canonical/*"]
+  }
+  statement {
+    sid       = "SsmDescribe"
+    actions   = ["ssm:DescribeParameters"]
+    resources = ["*"]
+  }
+  statement {
+    sid = "IamStackRoles"
+    actions = [
+      "iam:CreateRole", "iam:DeleteRole", "iam:DeleteRolePolicy", "iam:GetRole", "iam:GetRolePolicy",
+      "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole", "iam:ListRolePolicies", "iam:PutRolePolicy",
+      "iam:TagRole", "iam:UntagRole", "iam:UpdateAssumeRolePolicy", "iam:UpdateRole",
+    ]
+    resources = local.stack_roles
+  }
+  statement {
+    sid       = "IamHostManagedPolicies"
+    actions   = ["iam:AttachRolePolicy", "iam:DetachRolePolicy"]
+    resources = [local.host_role]
+    condition {
+      test     = "ArnEquals"
+      variable = "iam:PolicyARN"
+      values = [
+        "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+        "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+      ]
+    }
+  }
+  statement {
+    sid = "IamInstanceProfile"
+    actions = [
+      "iam:AddRoleToInstanceProfile", "iam:CreateInstanceProfile", "iam:DeleteInstanceProfile", "iam:GetInstanceProfile",
+      "iam:RemoveRoleFromInstanceProfile", "iam:TagInstanceProfile", "iam:UntagInstanceProfile",
+    ]
+    resources = ["${local.iam}:instance-profile/settleiq-prod-host"]
+  }
+  statement {
+    sid       = "IamPassHostRole"
+    actions   = ["iam:PassRole"]
+    resources = [local.host_role]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ec2.amazonaws.com"]
+    }
+  }
+  statement {
+    sid       = "IamOidcRead"
+    actions   = ["iam:GetOpenIDConnectProvider"]
+    resources = [local.oidc_arn]
+  }
+  statement {
+    sid       = "IamOidcList"
+    actions   = ["iam:ListOpenIDConnectProviders"]
+    resources = ["*"]
+  }
+  statement {
+    sid = "Budget"
+    actions = [
+      "budgets:ListTagsForResource", "budgets:ModifyBudget", "budgets:TagResource", "budgets:UntagResource",
+      "budgets:ViewBudget",
+    ]
+    resources = ["arn:aws:budgets::${local.account_id}:budget/settleiq-prod-monthly"]
+  }
+  # Keeps this role off itself and the OIDC provider even if the allows above are widened later.
+  statement {
+    sid    = "DenySelfAndOidcChange"
+    effect = "Deny"
+    actions = [
+      "iam:Add*", "iam:Attach*", "iam:Create*", "iam:Delete*", "iam:Detach*", "iam:PassRole", "iam:Put*",
+      "iam:Remove*", "iam:Tag*", "iam:Untag*", "iam:Update*",
+    ]
+    resources = [aws_iam_role.gha_infra.arn, local.oidc_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "gha_infra" {
+  name   = "settleiq-gha-infra-terraform"
+  role   = aws_iam_role.gha_infra.id
+  policy = data.aws_iam_policy_document.gha_infra.json
 }
 
 output "tfstate_bucket" {
