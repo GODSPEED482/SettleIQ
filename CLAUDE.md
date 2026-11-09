@@ -6,7 +6,7 @@ SettleIQ is a multi-tenant, ontology-driven business operations platform; Financ
 
 ## Source documents
 
-- `SettleIQ_Authoritative_Specification_v1.5.md` is the sole normative reference. It is 1,473 lines, so grep for the ID you need (`POL-09`, `AC-MERCH-05`, `§9.3`). Requirement changes need a new integrated revision (§22.2), not a sidecar note.
+- `SettleIQ_Authoritative_Specification_v1.6.md` is the sole normative reference. It is 1,591 lines, so grep for the ID you need (`POL-09`, `AC-MERCH-05`, `§9.3`). Requirement changes need a new integrated revision (§22.2), not a sidecar note.
 - `.claude/SettleIQ_3-Day_Delivery_Plan.md` is the delivery plan. It scopes a 3-day vertical slice, not the MVP. Task numbers such as `1.9` in code and stubs refer to it.
 - `.claude/SettleIQ_Tech_Stack.md` is the team's stack and tooling decision.
 
@@ -120,7 +120,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 ### Rishav Chowdhury: Platform and Trust (leads G1, G5; demo Tenant Owner)
 
 - [ ] Resolve the backend stack conflict above with the team (added; blocks backend work)
-- [ ] OPEN-REL-01: attestation identity and key custody (G1, Day 1)
+- [x] OPEN-REL-01: attestation identity and key custody (G1, Day 1). Decided in spec v1.6 §9.7, approved by Rishav 2026-11-09. The build is task 5.4; OPEN-REL-02 stays open.
 - [ ] OPEN-21-19: no permission cache in this build (G1, Day 1). Starter: nothing is cached.
 - [ ] 1.1 Repo, Docker Compose, CI skeleton; settle stack gaps (1.5h). Starter: files exist, neither run.
 - [ ] 1.2 Identity and tenant migrations, RLS baseline, transaction-local tenant context (2h). Starter: built, tests pass.

@@ -2,7 +2,7 @@
 
 Multi-tenant, ontology-driven business operations platform. Financial Operations with PayPal Sandbox is the first domain.
 
-- **Normative reference:** [`SettleIQ_Authoritative_Specification_v1.5.md`](SettleIQ_Authoritative_Specification_v1.5.md)
+- **Normative reference:** [`SettleIQ_Authoritative_Specification_v1.6.md`](SettleIQ_Authoritative_Specification_v1.6.md)
 - **Delivery plan:** [`.claude/SettleIQ_3-Day_Delivery_Plan.md`](.claude/SettleIQ_3-Day_Delivery_Plan.md). Task numbers in this repo (for example `1.9`) refer to it.
 
 ## What this starter contains

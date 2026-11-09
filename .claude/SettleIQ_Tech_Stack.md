@@ -46,7 +46,7 @@ Every choice below is picked to make a specific spec requirement easy to prove, 
 | JSON-LD + publish hash | `jsonld.js` + `rdf-canonize` in Node | Canonicalize before hashing so key order can't change the hash; Node owns the hash POL-12 binds to |
 | Evidence | S3 (MinIO locally), key = SHA-256 of content, never overwritten | Immutable raw evidence |
 | Secrets | AWS Secrets Manager or Docker secrets; DB stores only the reference | Satisfies spec §11.3 |
-| Attestation | Ed25519: GitHub Actions signs, Node verifies with `node:crypto` | Simplest workable POL-14; record key custody under OPEN-REL-01 |
+| Attestation | Ed25519: GitHub Actions signs, Node verifies with `node:crypto` | Simplest workable POL-14; key custody is decided in spec v1.6 §9.7 |
 | Logging | `pino` with redact paths + OpenTelemetry | Feeds Elastic (see Sponsor tools) |
 
 ## Frontend stack
@@ -133,4 +133,4 @@ Host on one AWS EC2 instance running Docker Compose behind Caddy; Caddy's automa
 - [astropods-adapter-core (PyPI)](https://pypi.org/project/astropods-adapter-core/0.8.0/)
 - [PayPal Server SDK overview](https://openapps.pro/packages/paypal-php-server-sdk)
 - [Bryntum products](https://bryntum.com/?p=19996)
-- SettleIQ Authoritative Specification v1.5 and the SettleIQ 3-Day Delivery Plan
+- SettleIQ Authoritative Specification v1.6 and the SettleIQ 3-Day Delivery Plan
