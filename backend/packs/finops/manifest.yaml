@@ -1,15 +1,17 @@
 # Financial Operations pack manifest (spec 4.5). Contents fill in during G2 and G3.
 
-# TODO(G1 1.8 Swapnaneel): confirm this manifest against the frozen schema.
 namespace: finops
+package: finops
 version: 0.1.0
 compatible_platform_versions: ">=0.1.0,<1.0.0"
 dependencies: []
 conflicts: []
 ontology_definitions: []
+shacl_shapes: []
 mapping_hints: []
 validators: []
 entity_resolution_policies: []
+domain_engine: null
 
 case_types:
   - {code: TXN_MISSING, default_severity: high}
@@ -35,11 +37,15 @@ playbook_templates:
   - id: PB-001
     title: Payment-state recovery
     executable: true
+    definition: null
     connector_action_capabilities: [merchant.payment_status.correct]
+    capability_dependencies: [merchant.payment.read]
   - id: PB-002
     title: Duplicate-capture refund
     executable: true
+    definition: null
     connector_action_capabilities: [refunds.create]
+    capability_dependencies: [refunds.read, captures.read]
   - id: PB-003
     title: Settlement / chargeback workflow
     executable: false

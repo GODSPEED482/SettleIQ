@@ -103,7 +103,7 @@ The starter needed a working default for these. Each owner should confirm or cha
 | Tenant selector on routes without a tenant path | `X-Tenant-Id` header | Suprava | OPEN-14 |
 | Connector manifest fields | `app/connectors/manifest.py` | Rahul | OPEN-01, OPEN-CAP-01 |
 | Envelope evolution | Spec §7.1 fields only | Rahul | OPEN-04 |
-| Domain-pack manifest fields | `app/domain_packs/manifest.py` | Swapnaneel | OPEN-03 |
+| Domain-pack manifest and activation | Fields frozen in `app/domain_packs/manifest.py`. Versions are PEP 440 ranges; a conflict declared by either pack or an unmet dependency refuses activation; namespaces are unique and IRIs use the pack namespace; rollback re-pins an earlier published version. Multi-pack overrides stay under OPEN-05 | Swapnaneel | OPEN-03 |
 | Permission sensitivity and narrowable scopes | `permissions.yaml` | Rishav | Spec §3.3 leaves per-key values open |
 | Permission caching | None; resolved on every request | Rishav | OPEN-21-19 |
 | Auth library and session transport | Not chosen | Swapnaneel, Suprava | OPEN-14, §11.2 |

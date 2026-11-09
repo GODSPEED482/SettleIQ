@@ -1,16 +1,18 @@
 # SaaS Subscription Lifecycle reference pack (spec 14.4). Proves extensibility only;
 # it is not a production SaaS operations product. Filled in by task 6.1.
 
-# TODO(G1 1.8 Swapnaneel): confirm this manifest against the frozen schema.
 namespace: saas
+package: saas_subscription
 version: 0.1.0
 compatible_platform_versions: ">=0.1.0,<1.0.0"
 dependencies: []
 conflicts: []
 ontology_definitions: []
+shacl_shapes: []
 mapping_hints: []
 validators: []
 entity_resolution_policies: []
+domain_engine: null
 
 case_types:
   - {code: RENEWAL_INVOICE_MISMATCH, default_severity: medium}
