@@ -25,9 +25,7 @@ from app.errors import conflict, not_found
 from app.semantics import mappings
 from app.semantics.hashing import content_hash
 
-# TODO(G2 2.3 Swapnaneel): owner review of the candidate hash, SHACL runs and pack validators.
-
-logger = logging.getLogger("settleiq.semantics")
+logger =logging.getLogger("settleiq.semantics")
 
 CORE_SHAPES = Path(__file__).with_name("core.shacl.ttl")
 SH = Namespace("http://www.w3.org/ns/shacl#")
