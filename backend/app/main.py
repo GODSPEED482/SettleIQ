@@ -23,7 +23,7 @@ API_VERSION = "1"
 API_VERSION_HEADER = "API-Version"
 
 
-# TODO(G1 1.10 Suprava): freeze OpenAPI; stubs have no request or response models to freeze yet.
+# The OpenAPI document is frozen in backend/openapi.json; see app/openapi_export.py.
 def create_app() -> FastAPI:
     app = FastAPI(title="SettleIQ", version=API_VERSION)
 

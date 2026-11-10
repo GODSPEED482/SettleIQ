@@ -34,6 +34,7 @@ uv run python -m app.authz.seed                                       # after mi
 uv run alembic revision -m "describe change"
 uv run uvicorn app.main:app --reload
 uv run python -m app.route_map > route-map.json
+uv run python -m app.openapi_export > openapi.json                   # after a deliberate API contract change
 ```
 
 Frontend, from `frontend/`. Needs Node 22:
