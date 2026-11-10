@@ -196,6 +196,27 @@ def test_a_later_draft_publishes_the_next_version(finance_draft):
 
 
 @pytest.mark.db
+def test_a_new_draft_starts_from_the_published_version(finance_draft):
+    member, draft = finance_draft
+    source = add_source(member)
+    edited = member.edit(draft, [VALID_CLASS]).json()
+    member.request("POST", "/api/mappings", json=mapping(draft["id"], source_id=source))
+    member.request("POST", "/api/authority", json=authority(draft["id"], source_id=source))
+    first = publish(member, edited).json()
+
+    successor = member.create_draft().json()
+    assert successor["base_version"] == 1
+    assert successor["tenant_extension"]["@graph"] == [VALID_CLASS]
+    params = {"draft_id": successor["id"]}
+    bindings = member.request("GET", "/api/mappings", params=params).json()
+    assertions = member.request("GET", "/api/authority", params=params).json()
+    assert [(b["source_id"], b["version"]) for b in bindings] == [(source, 1)]
+    assert [(a["source_id"], a["version"]) for a in assertions] == [(source, 1)]
+    # Nothing changed, so the successor is exactly the version it came from.
+    assert validate(member, successor)["content_hash"] == first["content_hash"]
+
+
+@pytest.mark.db
 def test_a_failure_part_way_leaves_nothing_behind(finance_draft, monkeypatch):
     member, draft = finance_draft
     run = validate(member, draft)

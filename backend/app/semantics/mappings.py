@@ -4,6 +4,7 @@ Several bindings may target one property, but only when their values are truly c
 Bindings and assertions are append-only and belong to a draft until it is published.
 """
 
+import json
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, Literal
@@ -294,6 +295,19 @@ def retire_authority(ctx: TenantContext, assertion_id: UUID) -> dict[str, Any]:
 def list_authority(ctx: TenantContext, draft_id: UUID) -> list[dict[str, Any]]:
     with tenant_tx(ctx) as conn:
         return current_authority(conn, draft_id)
+
+
+def copy_bindings(ctx: TenantContext, conn: Connection, source: UUID, target: UUID) -> None:
+    """Carry a published draft's current bindings into its successor, each as a first version."""
+    new_row = {"tenant": ctx.tenant_id, "draft": target, "status": "ACTIVE",
+               "user": ctx.principal.id}
+    for row in candidate_mappings(current_mappings(conn, source)):
+        conn.execute(
+            _INSERT_MAPPING,
+            row | new_row | {"id": uuid4(), "transform": json.dumps(row["transform"])},
+        )
+    for row in candidate_authority(current_authority(conn, source)):
+        conn.execute(_INSERT_AUTHORITY, row | new_row | {"id": uuid4()})
 
 
 def _comparability(mapping: dict[str, Any]) -> tuple:
