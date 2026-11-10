@@ -4,10 +4,11 @@ from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict, StrictBool, field_validator
+from pydantic import BaseModel, ConfigDict
 
 from app.authz.guard import TenantContext, require
-from app.semantics import generation, mappings, publication, store, validation
+from app.errors import not_implemented
+from app.semantics import generation, mappings, store, validation
 
 router = APIRouter(prefix="/api", tags=["semantics"])
 
@@ -22,20 +23,6 @@ class ManagePackBody(_Body):
 
 class ValidateBody(_Body):
     draft_id: UUID
-
-
-class PublishBody(_Body):
-    draft_id: UUID
-    validation_run_id: UUID
-    confirm_publish: StrictBool
-
-    @field_validator("confirm_publish")
-    @classmethod
-    def _explicitly_confirmed(cls, value: bool) -> bool:
-        """Anything but an explicit true is refused, even with ontology.publish."""
-        if not value:
-            raise ValueError("confirm_publish must be true")
-        return value
 
 
 class EditDraftBody(_Body):
@@ -75,10 +62,8 @@ def validate_ontology(
 
 
 @router.post("/ontology/publish")
-def publish_ontology(
-    body: PublishBody, ctx: TenantContext = require("ontology.publish")
-) -> dict:
-    return publication.publish(ctx, body.draft_id, body.validation_run_id)
+def publish_ontology(ctx: TenantContext = require("ontology.publish")) -> None:
+    raise not_implemented("2.7")
 
 
 @router.get("/ontology")
