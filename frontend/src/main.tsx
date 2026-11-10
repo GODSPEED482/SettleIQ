@@ -4,15 +4,18 @@ import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import { PermissionsProvider } from "./permissions/PermissionsContext";
+import { SessionProvider } from "./session/SessionContext";
 import "./styles.css";
 
-// TODO(G1 1.11 Suprava): add a session provider here once OPEN-14 settles the auth transport.
+// The session sits outside permissions: a tenant can only be selected inside a session.
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
-      <PermissionsProvider>
-        <App />
-      </PermissionsProvider>
+      <SessionProvider>
+        <PermissionsProvider>
+          <App />
+        </PermissionsProvider>
+      </SessionProvider>
     </BrowserRouter>
   </StrictMode>,
 );

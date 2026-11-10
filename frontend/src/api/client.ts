@@ -49,6 +49,11 @@ function parse(text: string) {
   }
 }
 
+// The text to show for a failed call. Only the envelope's message reaches the screen.
+export function messageOf(error: unknown): string {
+  return error instanceof ApiError ? error.message : "Something went wrong. Try again.";
+}
+
 export async function checkHealth(): Promise<boolean> {
   try {
     await apiFetch("/healthz");
