@@ -12,10 +12,10 @@ import { WORKSPACES } from "./pages/workspaces";
 import { Workspace } from "./pages/Workspace";
 import { canAny } from "./permissions/can";
 import { usePermissions } from "./permissions/PermissionsContext";
+import { RequirePermission } from "./permissions/RequirePermission";
 import { RequireSession } from "./session/RequireSession";
 import { useSession } from "./session/SessionContext";
 
-// TODO(G1 1.11 Suprava): locked links still navigate; show an unavailable state on those pages.
 // TODO(G1 1.12 Suprava): add the invitation-acceptance screen (POST /invitations/{token}/accept).
 export function App() {
   return (
@@ -89,11 +89,13 @@ function Shell() {
               key={workspace.path}
               path={workspace.path}
               element={
-                workspace.path === "/ontology" ? (
-                  <OntologyStudio workspace={workspace} />
-                ) : (
-                  <Workspace workspace={workspace} />
-                )
+                <RequirePermission permission={workspace.permission}>
+                  {workspace.path === "/ontology" ? (
+                    <OntologyStudio workspace={workspace} />
+                  ) : (
+                    <Workspace workspace={workspace} />
+                  )}
+                </RequirePermission>
               }
             />
           ))}
