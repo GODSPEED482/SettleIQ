@@ -1,11 +1,14 @@
 """AUTHZ-05 startup checks and the AC-AUTHZ-03 table-driven route tests."""
 
+import json
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
 
+from app import route_map
 from app.authz.access import EffectiveAccess, GrantRow, Principal, PrincipalKind, Scope, get_gateway
 from app.authz.catalogue import CatalogueError, get_catalogue
 from app.authz.guard import (
@@ -65,7 +68,8 @@ def clear_overrides():
 def url(route: dict, tenant: UUID = TENANT) -> str:
     path = route["path"].replace("{tenant_id}", str(tenant))
     for name in ("token", "invitation_id", "user_id", "source_id", "case_id", "decision_id",
-                 "investigation_id", "playbook_id", "request_id", "execution_id", "audit_id"):
+                 "investigation_id", "playbook_id", "request_id", "execution_id", "audit_id",
+                 "draft_id", "job_id", "mapping_id", "assertion_id", "entity_id"):
         path = path.replace(f"{{{name}}}", str(uuid4()))
     return path
 
@@ -89,6 +93,14 @@ def _app_with(router: APIRouter) -> FastAPI:
     target = FastAPI()
     target.include_router(router)
     return target
+
+
+def test_exported_map_covers_all_three_apps(capsys):
+    route_map.main()
+    paths = {entry["path"] for entry in json.loads(capsys.readouterr().out)}
+    assert "/api/tenants" in paths
+    assert "/internal/executions/{execution_id}/run" in paths
+    assert any(path.startswith("/internal/agent-tools/") for path in paths)
 
 
 def test_undeclared_route_fails_startup():
@@ -187,10 +199,29 @@ def test_critical_route_declarations(method, path, access, permission):
 def test_public_routes_are_only_the_expected_ones():
     assert {r["path"] for r in ROUTES if r["access"] == "PUBLIC"} == {
         "/healthz",
+        "/readyz",
         "/api/auth/register",
         "/api/auth/verify-email",
+        "/api/auth/resend-verification",
+        "/api/auth/sign-in",
+        "/api/auth/sign-out",
         "/api/webhooks/paypal/{source_id}",
     }
+
+
+def test_readiness_reports_a_database_failure_as_503(monkeypatch):
+    def unreachable():
+        raise OperationalError("SELECT 1", {}, Exception("down"))
+
+    monkeypatch.setattr("app.db.get_engine", unreachable)
+    response = TestClient(app).get("/readyz")
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "NOT_READY"
+
+
+@pytest.mark.db
+def test_readiness_passes_with_a_database():
+    assert TestClient(app).get("/readyz").json() == {"status": "ready"}
 
 
 # Table-driven route tests
@@ -219,10 +250,24 @@ def test_missing_permission_is_403(route):
     }
 
 
+class ReachedHandlerDatabase(Exception):
+    pass
+
+
+def _no_database():
+    raise ReachedHandlerDatabase
+
+
+# The gateway is fake, so a handler touching the database has already passed the gate. So has a
+# 422: FastAPI runs dependencies before it reports a body validation error.
 @pytest.mark.parametrize("route", PERMISSION_ROUTES, ids=label)
-def test_held_permission_passes_the_gate(route):
-    response = call(client_for(FakeGateway([full_grant(route)])), route)
-    assert response.status_code in {200, 501}
+def test_held_permission_passes_the_gate(route, monkeypatch):
+    monkeypatch.setattr("app.db.get_engine", _no_database)
+    try:
+        response = call(client_for(FakeGateway([full_grant(route)])), route)
+    except ReachedHandlerDatabase:
+        return
+    assert response.status_code in {200, 202, 422, 501}
 
 
 @pytest.mark.parametrize("route", PERMISSION_ROUTES, ids=label)
@@ -283,6 +328,38 @@ def test_me_permissions_reports_effective_keys_and_scopes():
 def test_unknown_route_uses_the_canonical_404():
     response = TestClient(app).get("/api/does-not-exist")
     assert response.json() == {"error": {"code": "NOT_FOUND", "message": "Resource not found."}}
+
+
+def test_missing_session_uses_the_canonical_401():
+    response = TestClient(app).get("/api/me/tenants")
+    assert response.status_code == 401
+    assert response.json() == {
+        "error": {"code": "UNAUTHENTICATED", "message": "Authentication required."}
+    }
+
+
+def test_invalid_body_uses_the_canonical_422():
+    response = TestClient(app).post("/api/auth/register", json={"email": "not-an-email"})
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert (error["code"], error["message"]) == ("VALIDATION_ERROR", "Invalid request.")
+    assert {tuple(field["loc"]) for field in error["fields"]} == {
+        ("body", "email"),
+        ("body", "password"),
+    }
+
+
+def test_public_api_states_version_1():
+    """OPEN-14: /api is version 1, in the OpenAPI document and on every response."""
+    client = TestClient(app)
+    assert app.version == "1"
+    assert client.get("/healthz").headers["API-Version"] == "1"
+    assert client.get("/api/does-not-exist").headers["API-Version"] == "1"
+
+
+def test_private_apps_do_not_claim_the_public_version():
+    response = TestClient(create_worker_app()).get("/does-not-exist")
+    assert "API-Version" not in response.headers
 
 
 def test_unverified_identity_is_rejected():

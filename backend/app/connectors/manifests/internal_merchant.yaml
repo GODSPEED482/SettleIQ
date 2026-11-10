@@ -1,8 +1,8 @@
 # Internal-merchant write adapter (spec 4.4.1). Registered separately from the PostgreSQL
-# read source, so registering that source grants no write authority.
+# read source, so registering that source grants no write authority. Frozen under task 1.6.
 
 connector_id: internal-merchant
-version: 0.1.0
+version: 1.0.0
 protocols: [postgresql]
 source_types: [merchant_database]
 auth_mode: database_role
@@ -40,7 +40,12 @@ capabilities:
         requested_status: {const: COMPLETED}
 
 rate_limit: {status: not_applicable}
-retry: {policy: idempotent_key_only}
+retry:
+  retry_on: [network]
+  honour_retry_after: false
+  backoff: exponential
+  max_attempts: 3
+  actions: idempotency_key_only
 supported_schema_versions: []
 health_signals: [database_connection]
 limits: {}

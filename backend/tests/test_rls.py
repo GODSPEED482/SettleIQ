@@ -16,6 +16,9 @@ from app.db import get_engine, global_tx, scoped_tx
 
 pytestmark = pytest.mark.db
 
+# These tests exercise the database layer only; test_iam_acceptance.py traces AC-IAM-01..11 and
+# AC-TEN-01..03 through the routes.
+
 
 def make_user() -> UUID:
     user_id = uuid4()
@@ -219,7 +222,7 @@ def test_catalogue_is_seeded_without_identities():
         assert conn.execute(text("SELECT count(*) FROM permission_sets")).scalar() == 9
 
 
-# Owner invariant
+# Owner invariant. Concurrent transfers: test_ownership.py, through the route.
 
 
 def test_tenant_needs_its_owner_as_member_at_commit():

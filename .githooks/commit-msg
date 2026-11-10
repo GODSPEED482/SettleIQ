@@ -1,0 +1,20 @@
+#!/bin/sh
+# Git commit-msg hook. Strips AI-agent attribution from every commit message,
+# whichever tool made the commit (Claude Code, Codex, Copilot, Cursor, ...).
+# Human Co-Authored-By trailers are kept.
+# Enable once per clone:  git config core.hooksPath .githooks
+msg_file="$1"
+ai='claude|anthropic|openai|codex|chatgpt|gpt-[0-9]|copilot|cursor|gemini|devin|aider|windsurf|codeium'
+
+tmp=$(mktemp) || exit 1
+grep -viE "^[[:space:]]*co-authored-by:.*($ai)|^[[:space:]]*claude-session:|generated with \[?claude|claude\.ai/code/session|claude\.com/claude-code" "$msg_file" > "$tmp"
+
+# Drop trailing blank lines left behind by the removed trailers.
+awk '{ lines[NR] = $0 } END { n = NR; while (n > 0 && lines[n] ~ /^[[:space:]]*$/) n--; for (i = 1; i <= n; i++) print lines[i] }' "$tmp" > "$msg_file"
+rm -f "$tmp"
+
+if ! grep -qvE '^[[:space:]]*(#|$)' "$msg_file"; then
+  echo "commit-msg: message is empty after removing AI attribution" >&2
+  exit 1
+fi
+exit 0

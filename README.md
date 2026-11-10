@@ -2,7 +2,7 @@
 
 Multi-tenant, ontology-driven business operations platform. Financial Operations with PayPal Sandbox is the first domain.
 
-- **Normative reference:** [`SettleIQ_Authoritative_Specification_v1.5.md`](SettleIQ_Authoritative_Specification_v1.5.md)
+- **Normative reference:** [`SettleIQ_Authoritative_Specification_v1.6.md`](SettleIQ_Authoritative_Specification_v1.6.md)
 - **Delivery plan:** [`.claude/SettleIQ_3-Day_Delivery_Plan.md`](.claude/SettleIQ_3-Day_Delivery_Plan.md). Task numbers in this repo (for example `1.9`) refer to it.
 
 ## What this starter contains
@@ -22,7 +22,7 @@ This is the foundation from plan task 1.1, plus what spec §17 says must not be 
 | Agent tool registry with prohibited-tool check | `backend/app/investigation/tools.py` | Working |
 | Decimal-safe money | `backend/packs/finops/money.py` | Working |
 | Web shell, permission-driven nav, React Flow canvas | `frontend/src/` | Skeleton |
-| **Authentication** | `authenticate` in `guard.py` | **Always returns 401 until task 1.9** |
+| Authentication: sessions, email verification, tenant creation | `backend/app/auth/`, `backend/app/tenancy/creation.py` | Working; sending needs an SMTP relay |
 
 ## Running it
 
@@ -99,18 +99,36 @@ The starter needed a working default for these. Each owner should confirm or cha
 
 | Decision | Default chosen | Owner | Spec item |
 |---|---|---|---|
-| Error envelope | `{"error": {"code", "message", ...}}` | Suprava | OPEN-14 |
-| Tenant selector on routes without a tenant path | `X-Tenant-Id` header | Suprava | OPEN-14 |
-| Connector manifest fields | `app/connectors/manifest.py` | Rahul | OPEN-01, OPEN-CAP-01 |
-| Envelope evolution | Spec §7.1 fields only | Rahul | OPEN-04 |
-| Domain-pack manifest fields | `app/domain_packs/manifest.py` | Swapnaneel | OPEN-03 |
-| Permission sensitivity and narrowable scopes | `permissions.yaml` | Rishav | Spec §3.3 leaves per-key values open |
-| Permission caching | None; resolved on every request | Rishav | OPEN-21-19 |
-| Auth library and session transport | Not chosen | Swapnaneel, Suprava | OPEN-14, §11.2 |
-| LLM provider | Not chosen | Swapnaneel | §6.2 |
+| Error envelope | Decided for this build. `{"error": {"code", "message", ...}}` from `app/errors.py`; extra keys sit beside `code` and `message`, and clients read only those two. An inaccessible tenant or resource is always the same 404 | Suprava | OPEN-14 |
+| Tenant selector on routes without a tenant path | Decided for this build. The `X-Tenant-Id` header. It only selects a tenant; membership proves access | Suprava | OPEN-14 |
+| API versioning | Decided for this build. `/api` is version 1, stated in the OpenAPI `info.version` and in an `API-Version: 1` response header. Version 1 changes are additive only; a breaking change ships under `/api/v2` alongside it | Suprava | OPEN-14, §12.1 |
+| Connector manifest, negotiation and lifecycle | Decided for this build. Fields frozen in `app/connectors/manifest.py`; unsupported capabilities are required booleans, and rate limits and retries are typed, so an unverified provider value cannot ship. Keys are canonical (`capability_registry.yaml`); a legacy spelling loads only through a registered, versioned alias. A source binds one declared protocol and source type and snapshots the capabilities; callers negotiate by key presence, because packs reference keys without versions. A source stays pinned to its registration version: minor and patch are additive, and a different major or an older manifest fails closed. There is no upgrade route: disable and re-register | Rahul | OPEN-01, OPEN-CAP-01 |
+| Envelope evolution, metadata, events and files | Decided for this build. The §7.1 fields are frozen; a new field must be nullable and additive with a migration and a spec revision, and there is no envelope version field. Optional ingestion metadata, including provenance (`provider_report` versus `synthetic_reference`), lives on the raw evidence as a typed `RetrievalContext`, not in `attributes`. A record is one observation: a replay collapses, a changed payload is a new record (migration 0009). Event and file conventions are in `app/sources/conventions.py` | Rahul | OPEN-04 |
+| Domain-pack manifest and activation | Fields frozen in `app/domain_packs/manifest.py`. Versions are PEP 440 ranges; a conflict declared by either pack or an unmet dependency refuses activation; namespaces are unique and IRIs use the pack namespace; rollback re-pins an earlier published version. Multi-pack overrides stay under OPEN-05 | Swapnaneel | OPEN-03 |
+| Permission sensitivity and narrowable scopes | Reviewed per key in `permissions.yaml`. Permission sets stay at version 1 and re-seed in place in this build | Rishav | Spec §3.3 leaves per-key values open |
+| Permission caching | Decided for this build: no cache. Every decision re-resolves from current membership and grants, so revocation applies on the next decision, including mid-run for the agent. The spec item stays open for production | Rishav | OPEN-21-19 |
+| Stack gaps from task 1.1 | Raw evidence: local volume. Secrets: SSM rendered to env at deploy. Email: SMTP relay. Signing: GitHub Actions | Rishav | Delivery plan |
+| Auth and session transport | Decided for this build. `argon2-cffi` password hashing with opaque server-side sessions in Postgres, sent as an HttpOnly cookie that the frontend never reads. Writes from another Origin are refused. Session and token handling is our own code, because packaged libraries use verification JWTs that §11.2 does not allow | Swapnaneel, Suprava | OPEN-14, §11.2 |
+| LLM provider | OpenAI, through `agent/` only; the model name comes from `LLM_MODEL` | Swapnaneel | §6.2 |
+
+## PayPal provider facts (OPEN-PP-01)
+
+Checked against PayPal's developer documentation on 2026-11-10. `app/connectors/manifests/paypal.yaml` carries the values; nothing below is assumed beyond what these pages say (Appendix C).
+
+| Fact | Source |
+|---|---|
+| PayPal publishes no rate-limiting policy. Exceeding it returns HTTP 429 `RATE_LIMIT_REACHED`. Do not poll; use webhooks; cache the access token. `Retry-After` and backoff are not documented, so honouring `Retry-After` is our policy | [Rate limiting](https://developer.paypal.com/api/rest/reference/rate-limiting/) |
+| Client-credentials token from `/v1/oauth2/token`; the response gives `expires_in` (seconds) and space-separated `scope` URIs | [Authentication](https://developer.paypal.com/api/rest/authentication/) |
+| Transaction Search: at most 31 days per request, `page_size` 1 to 500 (default 100), up to 3 hours before a transaction appears. Scope `https://uri.paypal.com/services/reporting/search/read`. Not a real-time stream (spec §10.3) | [List transactions](https://developer.paypal.com/api/transaction-search/v1/search-get) |
+| Payments v2: `GET /v2/payments/captures/{capture_id}`, `POST /v2/payments/captures/{capture_id}/refund` (an `amount` makes it partial), `GET /v2/payments/refunds/{refund_id}`. Refund scope `https://uri.paypal.com/services/payments/refund` | [Payments v2](https://developer.paypal.com/api/payments/v2/captures-refund) |
+| `PayPal-Request-Id` makes a request idempotent: a repeat returns the latest status of the original. The retention period is not stated, two simultaneous requests with one key may fail the second, and reuse with a different payload is not described. So the Worker reads back before any retry and never reuses a key for a different payload | [Idempotency](https://developer.paypal.com/api/rest/reference/idempotency/) |
+| Webhooks: any non-2xx response is redelivered up to 25 times over 3 days, then marked Failed (resend from the dashboard). Verify by CRC32 signature or the verify-signature endpoint | [Webhooks](https://developer.paypal.com/api/rest/webhooks/) |
+| SFTP reports need PayPal support to enable report access, and transaction reports need a separate subscription; setup can take 48 hours. Sandbox host is `reports.sandbox.paypal.com`. A Sandbox app does not by itself provide a Balance Report, so plan on the §10.3.1 SYNTHETIC/REFERENCE fixture (task 3.8) | [Access SFTP reports](https://developer.paypal.com/reports/access) |
+
+Still to check with the team's Sandbox app (task 4.1): that the token's scopes include Transaction Search and refunds once Transaction Search is enabled for the app, that the webhook registers, and whether Sandbox report access is enabled.
 
 ## Spec gaps found while scaffolding
 
 - §3.5 gives `platform_security_approver` a "minimum support-request metadata read", but Appendix A has no key for it. The set currently holds only `platform.support.approve`.
 - §12.2 omits sign-in, suspend-member, and mapping, authority and entity reads (plan task 1.10). These routes do not exist yet.
-- **Unresolved stack conflict:** this starter follows spec §6.2 (FastAPI). `.claude/SettleIQ_Tech_Stack.md` specifies a Node/TypeScript API with Python limited to the agent service. The team needs to pick one before backend work starts. Its choices for auth, LLM and frontend libraries also differ from the "Not chosen" rows above and from the current frontend.
+- **Backend stack settled:** the backend is FastAPI, following spec §6.2 (confirmed 2026-11-09). The Node/TypeScript API in `.claude/SettleIQ_Tech_Stack.md` is superseded. That document's frontend library choices (TanStack Router, shadcn/ui, AG Grid) still differ from the current frontend and remain open.

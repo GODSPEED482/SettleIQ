@@ -8,6 +8,21 @@ class Settings(BaseSettings):
 
     database_url: str
     environment: str = "development"
+    raw_evidence_dir: str = "/data/raw-evidence"
+
+    app_base_url: str = "http://localhost:5173"
+    session_ttl_hours: int = 24
+    email_token_ttl_hours: int = 24
+    invitation_ttl_hours: int = 168
+
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+
+    agent_url: str = "http://agent:8100"
+    agent_job_concurrency: int = 1
 
 
 @lru_cache

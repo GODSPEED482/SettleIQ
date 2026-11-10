@@ -2,7 +2,7 @@
 
 ## Context
 
-SettleIQ spec v1.5 is a pre-development baseline written for a ten-day MVP. The workspace holds only the spec: no code, no repo. This plan analyzes the SDLC, splits it into the spec's six gates (G1-G6), breaks each gate into tasks, and assigns those tasks so that **all four people work in every gate**, within **3 days / 12 person-days (96 hours)**.
+SettleIQ spec v1.6 is a pre-development baseline written for a ten-day MVP. The workspace holds only the spec: no code, no repo. This plan analyzes the SDLC, splits it into the spec's six gates (G1-G6), breaks each gate into tasks, and assigns those tasks so that **all four people work in every gate**, within **3 days / 12 person-days (96 hours)**.
 
 **The main constraint.** My rough sizing of the full P0 scope is about 47 person-days, so 12 covers roughly a quarter of it. Spec §23 says the MVP is demonstrable only when all 29 Definition of Done items are true, so this build should be called a **3-day vertical slice, not the MVP**. No requirement changes, so no new spec revision is needed under §22.2. Anything not built stays `NOT STARTED` under §22.3.
 
@@ -17,7 +17,7 @@ SettleIQ spec v1.5 is a pre-development baseline written for a ten-day MVP. The 
 | Implementation | Spec defines G1-G6, with no frontend gate | Each gate includes its own UI work |
 | Testing | Six layers in §16.7 | Built inside each gate; safety-critical tests automated |
 | Release | Signed POL-14 attestation, SHADOW by default | Build freeze and attestation on Day 3 |
-| Demo | 17-step script in §18 | Steps 1-13, 16 (without refund entries) and 17 |
+| Demo | 17-step script in §18 | All 17 steps |
 | Maintenance | P1/P2 roadmap | Out of scope |
 
 ## Scope for 3 days
@@ -28,12 +28,11 @@ SettleIQ spec v1.5 is a pre-development baseline written for a ten-day MVP. The 
 - UI covers demo-path screens only.
 - The agent ships 6 of the 11 tools.
 - Identity resolution uses exact IDs, with ambiguous candidates left for review.
-- The Finance engine covers `STATUS_MISMATCH`, `SETTLEMENT_VARIANCE`, and one INTRA_ENTITY and one INTER_ENTITY fixture.
+- The Finance engine covers `STATUS_MISMATCH`, `SETTLEMENT_VARIANCE`, `DUPLICATE_CAPTURE`, and one INTRA_ENTITY and one INTER_ENTITY fixture.
 - The SaaS pack is a manifest, one validator and one fixture.
 - BRR uses the labelled SYNTHETIC/REFERENCE fixture.
 
 **Not built (stays `NOT STARTED`):**
-- PB-002 live refund (AC-PP-08, demo steps 14-15)
 - Break-glass (AC-AUTHZ-11, DoD item 27)
 - Probabilistic and relationship-based matching (AC-REC-04, AC-REC-05)
 - The remaining discrepancy fixtures (AC-REC-09)
@@ -41,6 +40,8 @@ SettleIQ spec v1.5 is a pre-development baseline written for a ten-day MVP. The 
 - Redis and pgvector (a PostgreSQL job table replaces Redis, which §6.2 allows)
 
 **Fallback rule (Day 3, hour 7).** If the safety suite is not fully green, CI issues no attestation and the demo stops at step 10 in SHADOW, as §16.7 permits. Nobody bypasses the gate to save the demo.
+
+PB-002 has its own attestation and safety suite. If only that scope is not green, no refund attestation is issued and the demo skips steps 14-15. PB-001 is unaffected unless a shared safety-critical test failed.
 
 ## Team tracks and load
 
@@ -53,11 +54,13 @@ SettleIQ spec v1.5 is a pre-development baseline written for a ten-day MVP. The 
 
 | Hours | G1 | G2 | G3 | G4 | G5 | G6 | Total |
 |---|---|---|---|---|---|---|---|
-| Rishav | 9 | 2 | 2 | 2 | 7 | 2 | **24** |
-| Rahul | 4 | 3 | 3 | 8 | 5 | 1 | **24** |
-| Swapnaneel | 3 | 7 | 6 | 1 | 5 | 2 | **24** |
-| Suprava | 5 | 5 | 3 | 2 | 5 | 4 | **24** |
-| **Total** | **21** | **17** | **14** | **13** | **22** | **9** | **96** |
+| Rishav | 9 | 2 | 2 | 2 | 8 | 2.5 | **25.5** |
+| Rahul | 4 | 3 | 3 | 11 | 6.5 | 1 | **28.5** |
+| Swapnaneel | 3 | 7 | 7.5 | 1 | 6 | 2 | **26.5** |
+| Suprava | 5 | 5 | 3 | 2 | 7.5 | 4.5 | **27** |
+| **Total** | **21** | **17** | **15.5** | **16** | **28** | **10** | **107.5** |
+
+**Over capacity.** PB-002 was added on 2026-11-09, taking planned work to 107.5 hours against 96 available. Its task hours are estimates. Task 5.4 is also about 8 hours over budget under the OPEN-REL-01 decision record, which makes roughly 115.5. The team must add time or move work before Day 1.
 
 ## Timeline
 
@@ -111,7 +114,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 **Exit:** AC-ONTO-PUB-01..05 pass; versions are immutable and pinned; the two-sources-to-one-property fixture passes.
 
-### G3: Finance correctness (lead: Swapnaneel, 14h)
+### G3: Finance correctness (lead: Swapnaneel, 15.5h)
 
 | ID | Task | Owner | Hours |
 |---|---|---|---|
@@ -124,10 +127,11 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 | 3.7 | RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests | Rishav | 2 |
 | 3.8 | SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum | Suprava | 1 |
 | 3.9 | Domain Operations screens: cases, observations, resolved values | Suprava | 2 |
+| 3.10 | `DUPLICATE_CAPTURE` detection and fixture: two distinct successful captures for one intended order; equal amounts alone never qualify (AC-PLY-02) | Swapnaneel | 1.5 |
 
 **Exit:** deterministic fixtures are stable; fees already in net are not double-subtracted (AC-REC-07); ambiguous matches are never forced.
 
-### G4: Provider lifecycle (lead: Rahul, 13h)
+### G4: Provider lifecycle (lead: Rahul, 16h)
 
 | ID | Task | Owner | Hours |
 |---|---|---|---|
@@ -139,10 +143,12 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 | 4.6 | PayPal field mappings and capture-completion authority | Swapnaneel | 1 |
 | 4.7 | Source Management screens, including credential status and SYNTHETIC label | Suprava | 1.5 |
 | 4.8 | Failure tests: invalid signature, duplicate and out-of-order events | Suprava | 0.5 |
+| 4.9 | Sandbox duplicate-capture setup: two successful capture IDs for one intended order (§10.6, demo step 14) | Rahul | 0.5 |
+| 4.10 | PayPal `refunds.create` and `refunds.read` adapter: versioned parameter contract, exact capture target, provider idempotency key, Sandbox only | Rahul | 2.5 |
 
 **Exit:** AC-WEBHOOK-01 and AC-PP-03/04/05/06/10 pass, using a real Sandbox `PAYMENT.CAPTURE.COMPLETED` event.
 
-### G5: Safe investigation and action (lead: Rishav, 22h)
+### G5: Safe investigation and action (lead: Rishav, 28h)
 
 | ID | Task | Owner | Hours |
 |---|---|---|---|
@@ -158,10 +164,15 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 | 5.10 | Investigation screens | Suprava | 1.5 |
 | 5.11 | Playbook Requests screens | Suprava | 1.5 |
 | 5.12 | Safety suite: AC-MERCH-01..07, AC-AUTHZ-06/08/15/16/17, AC-PLY-08..11 | Suprava | 2 |
+| 5.13 | PB-002 definition and agent recommendation: duplicate proof, currency and amount, no prior refund or hold, always-required independent approval | Swapnaneel | 1 |
+| 5.14 | Gateway and execution mode for `refunds.create`: PayPal scope independent of PB-001 (AC-EXEC-MODE-03), POL-14 checked per capability | Rishav | 1 |
+| 5.15 | Worker refund execution: grant-bound, durable attempts, no blind retry on an ambiguous outcome, verified completion by readback | Rahul | 1.5 |
+| 5.16 | PB-002 request and approval screens showing the duplicate proof | Suprava | 1 |
+| 5.17 | Refund safety suite: AC-PP-08, AC-PLY-02, PB-002 parts of AC-PLY-08, AC-EXEC-MODE-03, and all required capability categories | Suprava | 1.5 |
 
-**Exit:** the G5 evidence list in §17 is green, except that PB-002 parts of AC-PLY-08 stay `NOT STARTED`.
+**Exit:** the G5 evidence list in §17 is green, including AC-PP-08 and the PB-002 parts of AC-PLY-08.
 
-### G6: Extensibility proof and demo (lead: Suprava, 9h)
+### G6: Extensibility proof and demo (lead: Suprava, 10h)
 
 | ID | Task | Owner | Hours |
 |---|---|---|---|
@@ -172,6 +183,8 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 | 6.5 | Acceptance-criteria status sheet with owners and evidence (§22.3) | Suprava | 0.5 |
 | 6.6 | Demo script with SYNTHETIC disclosure and the list of what was not built | Suprava | 2 |
 | 6.7 | Full team rehearsal | All four | 0.5 each |
+| 6.8 | Issue the separate `refunds.create` exact-scope attestation for the PayPal Sandbox adapter; check audit lineage | Rishav | 0.5 |
+| 6.9 | Extend the demo script and rehearsal to steps 14-15 | Suprava | 0.5 |
 
 **Exit:** demo runs on real identities; Tenant B cannot reach Tenant A; every criterion has an honest status.
 
@@ -179,7 +192,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 | Owner | Items | By |
 |---|---|---|
-| Rishav | OPEN-REL-01 (attestation identity and key custody), OPEN-21-19 (no permission cache in this build) | G1, Day 1 |
+| Rishav | OPEN-21-19 (no permission cache in this build). OPEN-REL-01 is closed by spec v1.6 §9.7. | G1, Day 1 |
 | Rahul | OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 | Day 1, first hours |
 | Swapnaneel | OPEN-03, OPEN-10 (included-in-net semantics for the fixture) | OPEN-03 Day 1; OPEN-10 before 3.3 |
 | Suprava | OPEN-14 (API conventions, auth transport, error envelope) | Day 1, first hours |
@@ -194,7 +207,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 ## Spec issues that affect this plan
 
-1. **Attestation timing.** POL-14 binds to the exact build and tenant, but Tenant A must come from real registration. Order on Day 3 has to be: freeze build, create tenant, then attest. Any later code change voids it.
+1. **Attestation timing.** POL-14 binds to the exact build and tenant, but Tenant A must come from real registration. Order on Day 3 has to be: freeze build, create tenant, then attest. Any later code change voids it, for both attested scopes.
 2. **Missing routes.** §12.2 has no sign-in, suspend-member, or mapping, authority and entity read routes, though other sections require them. Task 1.10 adds them.
 3. **PB-001 wording conflict.** §9.2 and §18 say "replay the event"; §4.4.1 specifies a conditional status update. This plan follows §4.4.1, the more specific contract.
 4. **Break-glass has no gate.** It is required by DoD item 27 but listed in none of G1-G6. It is deferred here and needs a home in any later plan.
@@ -205,4 +218,4 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 - Each gate closes only when its exit evidence exists as an automated test or run artifact. A manual happy-path run doesn't count as `VERIFIED` (§22.3).
 - CI must fail on a missing route permission, a role-name check in authorization code, or any safety-critical test failure.
-- Final check is the rehearsal of demo steps 1-13, 16 and 17 on the frozen build, with no successful mutation while SHADOW is active or the attestation is missing.
+- Final check is the rehearsal of demo steps 1-17 on the frozen build, with no successful mutation while SHADOW is active or the attestation is missing.

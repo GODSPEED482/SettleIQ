@@ -12,7 +12,9 @@ PROD_FILE=.env.production
 LOCAL_FILE=.env
 
 required="ENVIRONMENT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD APP_DB_PASSWORD ACME_EMAIL BUDGET_ALERT_EMAIL"
-optional="DISPATCHER_DB_PASSWORD AGENT_TOKEN_SECRET LLM_API_KEY COMPOSE_PROFILES"
+optional="DISPATCHER_DB_PASSWORD AGENT_TOKEN_SECRET LLM_API_KEY LLM_MODEL COMPOSE_PROFILES APP_BASE_URL SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM"
+# Not secrets, or one relay account shared by both environments; these may match .env.
+may_match_local="COMPOSE_PROFILES LLM_MODEL SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_FROM"
 # Embedded in connection URLs and read from a Compose .env, so $, @ and / would break them.
 url_safe="POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD APP_DB_PASSWORD DISPATCHER_DB_PASSWORD"
 
@@ -33,6 +35,13 @@ if [ ! -f "$PROD_FILE" ]; then
 fi
 git check-ignore -q "$PROD_FILE" || problem "$PROD_FILE is not ignored by git"
 
+while IFS= read -r name; do
+  case " $required $optional " in
+    *" $name "*) ;;
+    *) echo "warning: $name is in $PROD_FILE but is not sent; add it to the lists in this script" >&2 ;;
+  esac
+done < <(sed -n -E 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/p' "$PROD_FILE" | tr -d '\r')
+
 for name in $required $optional; do
   value="$(value_of "$PROD_FILE" "$name")"
   if [ -z "$value" ]; then
@@ -43,7 +52,8 @@ for name in $required $optional; do
   case " $url_safe " in
     *" $name "*) [[ "$value" =~ ^[A-Za-z0-9_-]+$ ]] || problem "$name has characters that break a connection URL" ;;
   esac
-  if [ "$name" != COMPOSE_PROFILES ] && [ "$value" = "$(value_of "$LOCAL_FILE" "$name")" ]; then
+  case " $may_match_local " in *" $name "*) continue ;; esac
+  if [ "$value" = "$(value_of "$LOCAL_FILE" "$name")" ]; then
     problem "$name is the same as in $LOCAL_FILE; production must use its own value"
   fi
 done

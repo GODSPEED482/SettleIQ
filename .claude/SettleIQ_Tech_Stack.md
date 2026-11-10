@@ -2,6 +2,8 @@
 
 Date: 2026-11-08
 
+> **Superseded for the backend (2026-11-09).** The backend is FastAPI, following spec §6.2. Everything below that assigns work to a Node/TypeScript API, including Express, Kysely, pg-boss and Better Auth, no longer applies. The frontend library choices remain open. Sponsor tools and other non-backend sections still stand as proposals.
+
 ## Overview
 
 Build SettleIQ as two services and a background worker: a **Node/TypeScript API** that owns everything authoritative, and a **Python service** that runs only the model-facing parts and holds no database credentials.
@@ -46,7 +48,7 @@ Every choice below is picked to make a specific spec requirement easy to prove, 
 | JSON-LD + publish hash | `jsonld.js` + `rdf-canonize` in Node | Canonicalize before hashing so key order can't change the hash; Node owns the hash POL-12 binds to |
 | Evidence | S3 (MinIO locally), key = SHA-256 of content, never overwritten | Immutable raw evidence |
 | Secrets | AWS Secrets Manager or Docker secrets; DB stores only the reference | Satisfies spec §11.3 |
-| Attestation | Ed25519: GitHub Actions signs, Node verifies with `node:crypto` | Simplest workable POL-14; record key custody under OPEN-REL-01 |
+| Attestation | Ed25519: GitHub Actions signs, Node verifies with `node:crypto` | Simplest workable POL-14; key custody is decided in spec v1.6 §9.7 |
 | Logging | `pino` with redact paths + OpenTelemetry | Feeds Elastic (see Sponsor tools) |
 
 ## Frontend stack
@@ -133,4 +135,4 @@ Host on one AWS EC2 instance running Docker Compose behind Caddy; Caddy's automa
 - [astropods-adapter-core (PyPI)](https://pypi.org/project/astropods-adapter-core/0.8.0/)
 - [PayPal Server SDK overview](https://openapps.pro/packages/paypal-php-server-sdk)
 - [Bryntum products](https://bryntum.com/?p=19996)
-- SettleIQ Authoritative Specification v1.5 and the SettleIQ 3-Day Delivery Plan
+- SettleIQ Authoritative Specification v1.6 and the SettleIQ 3-Day Delivery Plan

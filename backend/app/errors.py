@@ -1,6 +1,7 @@
 """Canonical error envelope (spec 12.1) and non-enumerating failures (spec 11.5).
 
-Envelope shape, DRAFT under OPEN-14: {"error": {"code": str, "message": str, ...}}.
+Envelope shape, ratified under OPEN-14: {"error": {"code": str, "message": str, ...}}. Extra keys
+sit beside `code` and `message`; clients read only those two and must ignore the rest.
 """
 
 from typing import Any
@@ -35,6 +36,35 @@ def email_not_verified() -> ApiError:
 
 def missing_permission(permission: str) -> ApiError:
     return ApiError(403, "MISSING_PERMISSION", "Permission required.", permission=permission)
+
+
+def invalid_credentials() -> ApiError:
+    """The same response for an unknown email, a wrong password and a disabled account."""
+    return ApiError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.")
+
+
+def invalid_token() -> ApiError:
+    return ApiError(400, "INVALID_TOKEN", "This link is invalid or has expired.")
+
+
+def rate_limited() -> ApiError:
+    return ApiError(429, "RATE_LIMITED", "Too many attempts. Try again later.")
+
+
+def policy_denied(policy: str) -> ApiError:
+    return ApiError(403, "POLICY_DENIED", "This action is not allowed by policy.", policy=policy)
+
+
+def conflict(code: str, message: str) -> ApiError:
+    return ApiError(409, code, message)
+
+
+def validation_failed(message: str) -> ApiError:
+    return ApiError(422, "VALIDATION_ERROR", message)
+
+
+def not_ready() -> ApiError:
+    return ApiError(503, "NOT_READY", "The service is not ready.")
 
 
 def not_implemented(task: str) -> ApiError:

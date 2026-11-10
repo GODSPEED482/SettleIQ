@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { can, type EffectivePermission } from "./can";
+import { can, canAny, type EffectivePermission } from "./can";
 
 const source = (id: string) => ({ type: "source", id });
 
@@ -28,5 +28,24 @@ describe("can", () => {
   it("lets a scoped deny override a tenant-wide allow", () => {
     expect(can(permissions, "source.read", source("x"))).toBe(false);
     expect(can(permissions, "source.read", source("y"))).toBe(true);
+  });
+});
+
+describe("canAny", () => {
+  it("opens a workspace to a scope-only holder", () => {
+    expect(canAny(permissions, "source.sync")).toBe(true);
+  });
+
+  it("opens a workspace to a tenant-wide holder", () => {
+    expect(canAny(permissions, "tenant.read")).toBe(true);
+  });
+
+  it("stays closed for keys not held", () => {
+    expect(canAny(permissions, "playbook.approve")).toBe(false);
+  });
+
+  it("stays closed when every scope was revoked", () => {
+    const revoked = [{ key: "source.sync", tenant_wide: false, scopes: [], denied_scopes: [] }];
+    expect(canAny(revoked, "source.sync")).toBe(false);
   });
 });

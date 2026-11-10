@@ -1,5 +1,9 @@
 # Canonical connector capability keys (spec 4.4). One spelling per operation.
 # A new connector adds its keys here; platform code does not change.
+#
+# Frozen under task 1.6 (OPEN-CAP-01). Aliases are compatibility shims only: a legacy
+# spelling is rejected unless it appears under `aliases.mappings` and resolves to a
+# canonical key. Removing an alias is a breaking change, so the alias set is versioned.
 
 capabilities:
   - {key: transactions.read, kind: read}
@@ -11,3 +15,7 @@ capabilities:
   - {key: files.upload, kind: file}
   - {key: merchant.payment.read, kind: read}
   - {key: merchant.payment_status.correct, kind: action}
+
+aliases:
+  version: 1
+  mappings: []

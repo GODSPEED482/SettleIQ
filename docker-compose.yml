@@ -3,12 +3,13 @@
 # The worker has no published port and shares no network with `web`: the private
 # route in app/worker_api.py must be unreachable from browsers (AC-AUTHZ-17).
 #
-# The agent, agent-tools and dispatcher services are stubs until task 5.7, so they only
+# Investigations are stubs until task 5.7. The agent, agent-tools and dispatcher services only
 # start with `--profile agent`. The agent must never join `backend` or use *backend-env.
 
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD:?copy .env.example to .env}@db:5432/${POSTGRES_DB:?copy .env.example to .env}
   ENVIRONMENT: ${ENVIRONMENT:-development}
+  RAW_EVIDENCE_DIR: /data/raw-evidence
 
 services:
   db:
@@ -35,6 +36,7 @@ services:
       <<: *backend-env
       MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      DISPATCHER_DB_PASSWORD: ${DISPATCHER_DB_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
@@ -43,10 +45,18 @@ services:
   api:
     build: ./backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:5173}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     volumes:
       - ./backend/app:/srv/app/app
       - ./backend/packs:/srv/app/packs
+      - raw_evidence:/data/raw-evidence
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -58,6 +68,8 @@ services:
     build: ./backend
     command: uvicorn app.worker_api:app --host 0.0.0.0 --port 8001
     environment: *backend-env
+    volumes:
+      - raw_evidence:/data/raw-evidence
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -94,6 +106,7 @@ services:
     build: ./agent
     environment:
       LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
       AGENT_TOOLS_URL: http://agent-tools:8002
     networks: [agent]
 
@@ -116,3 +129,4 @@ networks:
 
 volumes:
   db_data:
+  raw_evidence:
