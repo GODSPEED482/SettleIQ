@@ -585,6 +585,75 @@ def test_suspended_member_can_be_removed(owner, tenant):
     assert remove(owner, tenant, member.id).status_code == 200
 
 
+# Suspending and reinstating
+
+
+def suspend(actor, tenant, user_id):
+    return actor.request("POST", f"/api/tenants/{tenant}/members/{user_id}/suspend")
+
+
+def reinstate(actor, tenant, user_id):
+    return actor.request("POST", f"/api/tenants/{tenant}/members/{user_id}/reinstate")
+
+
+def test_suspension_applies_on_the_next_request_and_reinstating_restores(owner, tenant, mail):
+    person = invited_person(owner, tenant, mail, "approver")
+    assert suspend(owner, tenant, person.id).json() == {
+        "user_id": str(person.id), "status": "SUSPENDED",
+    }
+    response = person.request("GET", "/api/me/permissions", params={"tenant_id": tenant})
+    assert response.status_code == 404
+    assert person.request("GET", "/api/me/tenants").json() == {"tenants": []}
+    assert reinstate(owner, tenant, person.id).json()["status"] == "ACTIVE"
+    assert "playbook.approve" in person.held(tenant)
+
+
+def test_suspended_member_is_still_listed(owner, tenant, mail):
+    person = invited_person(owner, tenant, mail)
+    suspend(owner, tenant, person.id)
+    listed = owner.request("GET", f"/api/tenants/{tenant}/members").json()
+    assert {m["user_id"]: m["status"] for m in listed}[str(person.id)] == "SUSPENDED"
+
+
+def test_owner_cannot_be_suspended(owner, tenant, mail):
+    admin = invited_person(owner, tenant, mail, "business_admin")
+    response = suspend(admin, tenant, owner.id)
+    assert response.status_code == 403
+    assert policy(response) == "POL-04"
+    assert member_status(tenant, owner.id) == "ACTIVE"
+
+
+def test_suspend_and_reinstate_need_the_matching_state(owner, tenant, mail):
+    person = invited_person(owner, tenant, mail)
+    assert reinstate(owner, tenant, person.id).status_code == 404
+    suspend(owner, tenant, person.id)
+    assert suspend(owner, tenant, person.id).status_code == 404
+    remove(owner, tenant, person.id)
+    assert reinstate(owner, tenant, person.id).status_code == 404
+
+
+def test_suspension_needs_the_removal_key(owner, tenant, mail):
+    person = invited_person(owner, tenant, mail)
+    other = invited_person(owner, tenant, mail)
+    assert suspend(person, tenant, other.id).status_code == 403
+    assert member_status(tenant, other.id) == "ACTIVE"
+
+
+def test_another_tenants_member_cannot_be_suspended(owner, tenant, mail):
+    elsewhere = Actor()
+    other_tenant = elsewhere.create_tenant()
+    person = invited_person(elsewhere, other_tenant, mail)
+    assert suspend(owner, tenant, person.id).status_code == 404
+    assert member_status(other_tenant, person.id) == "ACTIVE"
+
+
+def test_suspend_and_reinstate_are_audited(owner, tenant, mail):
+    person = invited_person(owner, tenant, mail)
+    suspend(owner, tenant, person.id)
+    reinstate(owner, tenant, person.id)
+    assert {"member.suspended", "member.reinstated"} <= audit_actions(tenant)
+
+
 # Audit and isolation
 
 
