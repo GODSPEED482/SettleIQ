@@ -83,6 +83,17 @@ def test_name_similarity_is_labelled_inferred():
     assert item["evidence"][0]["basis"] == "inferred"
 
 
+@pytest.mark.parametrize(
+    ("kind", "field"), [("foreign_key", "customer_id"), ("field_profile", "total")]
+)
+def test_model_text_is_never_labelled_observed(kind, field):
+    item = ground(bindings=[binding(evidence=[evidence(kind, field)])])[0]["evidence"][0]
+    assert item["basis"] == "observed"
+    assert "looks monetary" not in item["detail"]
+    assert field in item["detail"]
+    assert item["rationale"] == "range looks monetary"
+
+
 def test_claimed_foreign_key_must_exist():
     with pytest.raises(UngroundedProposal, match="no foreign key"):
         ground(bindings=[binding(evidence=[evidence("foreign_key", "total")])])
