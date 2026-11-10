@@ -110,6 +110,7 @@ The starter needed a working default for these. Each owner should confirm or cha
 | Stack gaps from task 1.1 | Raw evidence: local volume. Secrets: SSM rendered to env at deploy. Email: SMTP relay. Signing: GitHub Actions | Rishav | Delivery plan |
 | Auth and session transport | Decided for this build. `argon2-cffi` password hashing with opaque server-side sessions in Postgres, sent as an HttpOnly cookie that the frontend never reads. Writes from another Origin are refused. Session and token handling is our own code, because packaged libraries use verification JWTs that §11.2 does not allow | Swapnaneel, Suprava | OPEN-14, §11.2 |
 | LLM provider | OpenAI, through `agent/` only; the model name comes from `LLM_MODEL` | Swapnaneel | §6.2 |
+| Accepting a generated proposal | Decided for this build. Draft reads return proposals with their observed or inferred basis, and the server records no accept or reject state. A person copies one in through `PATCH /api/ontology/drafts/{id}` and `POST /api/mappings` with `method: accepted_proposal`, so accepted content is covered by the candidate hash | Swapnaneel | §5.7, AC-ONT-03 |
 
 ## PayPal provider facts (OPEN-PP-01)
 

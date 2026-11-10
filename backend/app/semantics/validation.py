@@ -25,9 +25,7 @@ from app.errors import conflict, not_found
 from app.semantics import mappings
 from app.semantics.hashing import content_hash
 
-# TODO(G2 2.3 Swapnaneel): owner review of the candidate hash, SHACL runs and pack validators.
-
-logger = logging.getLogger("settleiq.semantics")
+logger =logging.getLogger("settleiq.semantics")
 
 CORE_SHAPES = Path(__file__).with_name("core.shacl.ttl")
 SH = Namespace("http://www.w3.org/ns/shacl#")
@@ -105,7 +103,7 @@ def load_candidate(conn: Connection, draft_id: UUID) -> Candidate:
     )
 
 
-def _candidate_graph(candidate: Candidate) -> Graph:
+def candidate_graph(candidate: Candidate) -> Graph:
     graph = Graph()
     for artifact in candidate.artifacts:
         graph.parse(data=json.dumps(artifact["content"]), format="json-ld")
@@ -164,23 +162,34 @@ def _pack_results(pack: DomainPackManifest, data: Graph) -> list[ValidatorResult
     return results
 
 
+def _composed_packs(candidate: Candidate) -> list[str]:
+    return sorted(r["namespace"] for r in candidate.composition if r["layer"] == "PACK")
+
+
+def composition_is_current(
+    candidate: Candidate, active: list[str], packs: dict[str, DomainPackManifest]
+) -> bool:
+    # Packs with no ontology content contribute no artifact, so only those with content must match.
+    expected = sorted(name for name in active if name in packs and packs[name].ontology_definitions)
+    return _composed_packs(candidate) == expected
+
+
 def run_validators(
     candidate: Candidate, active: list[str], packs: dict[str, DomainPackManifest]
 ) -> list[ValidatorResult]:
-    composed = sorted(r["namespace"] for r in candidate.composition if r["layer"] == "PACK")
-    # Packs with no ontology content contribute no artifact, so only those with content must match.
-    expected = sorted(name for name in active if name in packs and packs[name].ontology_definitions)
+    composed = _composed_packs(candidate)
+    current = composition_is_current(candidate, active, packs)
     results = [
         ValidatorResult(
             "composition.current",
             "platform",
-            composed == expected,
-            [] if composed == expected else ["Active packs changed. Start a new draft."],
+            current,
+            [] if current else ["Active packs changed. Start a new draft."],
         ),
         *_mapping_results(candidate),
     ]
     try:
-        data = _candidate_graph(candidate)
+        data = candidate_graph(candidate)
     except Exception:
         logger.exception("candidate did not parse")
         return [*results, ValidatorResult("candidate.parse", "platform", False,

@@ -1,8 +1,5 @@
 """Pack activation and ontology composition through the real routes (task 2.1, spec 5.1)."""
 
-# TODO(G2 exit Swapnaneel): AC-ONTO-PUB-01..05 pass through the real publish route; published
-# versions are immutable and pinned; the two-sources-to-one-property fixture passes.
-
 import json
 import threading
 from uuid import UUID, uuid4

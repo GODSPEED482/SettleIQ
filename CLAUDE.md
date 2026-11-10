@@ -131,7 +131,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.3 Permission catalogue as seed data, deny-by-default route guard, CI route map, role-name ban (2.5h). Reviewed per key against §3.3 and §3.5; `test_route_guard.py`, `test_catalogue.py` and `test_code_rules.py` are the evidence.
 - [x] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). `tests/test_ownership.py` covers AC-OWNER-01, 03, 04, 05, including concurrent transfers.
 - [x] 1.5 Invitation backend: hashed single-use tokens, matching-email acceptance (1.5h). `tests/test_invitations.py` covers AC-IAM-02 to 06, 08, 09, 10, AC-OWNER-02, AC-AUTHZ-05, 09, 18.
-- [ ] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h)
+- [x] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h). Evidence in `test_publication.py` and `test_mappings.py`.
 - [ ] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h)
 - [ ] 4.5 Secret references; credential and webhook routes limited to Integration Admin (2h)
 - [ ] 5.1 Request, decision, approval, execution, grant and attempt tables with the full FK chain (2h)
@@ -171,10 +171,10 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.8 Freeze domain-pack manifest (0.5h). Evidence in `test_contracts.py`.
 - [x] 1.9 Registration, email verification, email sending, atomic tenant creation (2.5h). Evidence in `test_identity.py`.
 - [x] 1.9 follow-up: configure an SMTP relay and confirm a real email arrives. Brevo is configured locally, and a real test email arrived on 2026-11-10. Production still needs its SMTP values in `.env.production`.
-- [ ] 2.1 Ontology composition store; platform core and Finance pack in JSON-LD (2h)
-- [ ] 2.2 LLM draft generator from discovered metadata, draft only (2h)
-- [ ] 2.3 SHACL, pack validators, hash-bound validation, `confirm_publish` (2h)
-- [ ] 2.4 Versioned mappings and authority assertions, including two sources to one property (1h)
+- [x] 2.1 Ontology composition store; platform core and Finance pack in JSON-LD (2h). Evidence in `test_semantics_store.py` and `test_publication.py`.
+- [x] 2.2 LLM draft generator from discovered metadata, draft only (2h). Evidence in `test_generation.py`; real metadata waits on Rahul's 2.5.
+- [x] 2.3 SHACL, pack validators, hash-bound validation, `confirm_publish` (2h). Evidence in `test_validation.py` and `test_publication.py`.
+- [x] 2.4 Versioned mappings and authority assertions, including two sources to one property (1h). Evidence in `test_mappings.py`.
 - [ ] 3.1 Domain projection and exact-ID identity resolution; ambiguous candidates stay reviewable (1.5h)
 - [ ] 3.2 Property observations, resolved views, explicit authority conflicts (1.5h)
 - [ ] 3.3 Finance engine: both reconciliation scopes, settlement calculation, decimal-safe money (2h). Starter: `Money` type built.
