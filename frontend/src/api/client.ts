@@ -1,6 +1,7 @@
 // Tenant selection only picks a tenant. The server proves access from membership (spec 11.1).
 const TENANT_HEADER = "X-Tenant-Id";
 
+// The error envelope ratified under OPEN-14: {"error": {"code", "message", ...}}.
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -11,28 +12,41 @@ export class ApiError extends Error {
   }
 }
 
+export type ApiOptions = RequestInit & { tenantId?: string; json?: unknown };
+
 // Auth transport (OPEN-14): the HttpOnly session cookie, which the browser sends on same-origin
 // requests. The client never sees or sends a token itself.
-// TODO(G1 1.11 Suprava): response.json() throws on an empty 204; handle no-content responses.
-export async function apiFetch<T>(
-  path: string,
-  options: RequestInit & { tenantId?: string } = {},
-): Promise<T> {
-  const { tenantId, headers, ...rest } = options;
+export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  const { tenantId, json, headers, ...rest } = options;
   const response = await fetch(path, {
     ...rest,
+    ...(json === undefined ? {} : { body: JSON.stringify(json) }),
     credentials: "same-origin",
-    headers: { ...headers, ...(tenantId ? { [TENANT_HEADER]: tenantId } : {}) },
+    headers: {
+      ...headers,
+      ...(json === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(tenantId ? { [TENANT_HEADER]: tenantId } : {}),
+    },
   });
+  // A 204, or any empty body, has nothing to parse.
+  const text = await response.text();
+  const body = text ? parse(text) : undefined;
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
     throw new ApiError(
       response.status,
       body?.error?.code ?? "UNKNOWN",
       body?.error?.message ?? response.statusText,
     );
   }
-  return response.json() as Promise<T>;
+  return body as T;
+}
+
+function parse(text: string) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function checkHealth(): Promise<boolean> {

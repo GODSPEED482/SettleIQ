@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { apiFetch } from "../api/client";
+import { ApiError, apiFetch } from "../api/client";
 import type { EffectivePermission } from "./can";
 
-type Status = "no-tenant" | "loading" | "ready" | "unavailable";
+// "signed-out" is a 401: sign in again. "unavailable" covers a 404, which is also what a tenant
+// the user cannot see returns.
+type Status = "no-tenant" | "loading" | "ready" | "signed-out" | "unavailable";
 
 type PermissionsState = {
   tenantId: string | null;
@@ -37,9 +39,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         setPermissions(body.permissions);
         setStatus("ready");
       })
-      .catch(() => {
-        // TODO(G1 1.11 Suprava): tell 401 (sign in again) apart from 404 (no such tenant).
-        if (current) setStatus("unavailable");
+      .catch((error) => {
+        if (!current) return;
+        const signedOut = error instanceof ApiError && error.status === 401;
+        setStatus(signedOut ? "signed-out" : "unavailable");
       });
     return () => {
       current = false;
