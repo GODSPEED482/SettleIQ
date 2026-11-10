@@ -106,16 +106,15 @@ These bind code not yet written. The spec sections hold the detail.
 
 ## In-code TODOs
 
-Gate 1 work is marked where it happens, as `TODO(G1 <task> <owner>): ...`. `<task>` is a plan task number (`1.9`), an OPEN item (`OPEN-14`) or `exit`; `<owner>` is the first name from the checklist below. "Owner review" TODOs mark starter code that its owner has yet to review.
+Gate 1 is closed: every `TODO(G1 ...)` marker has been removed and its checklist items are ticked. Later gates mark work where it happens, as `TODO(G<n> <task> <owner>): ...`. `<task>` is a plan task number (`2.7`), an OPEN item (`OPEN-10`) or `exit`; `<owner>` is the first name from the checklist below. "Owner review" TODOs mark starter code that its owner has yet to review.
 
 ```
-git grep "TODO(G1 "              # all of Gate 1
-git grep "TODO(G1 .* Rahul)"     # one person
-git grep "TODO(G1 1.5 "          # one task
-git grep "TODO(G1 .*agent"       # what the agent service (tasks 5.7, 5.8) needs from Gate 1
+git grep "TODO(G2 "              # all of Gate 2
+git grep "TODO(G2 .* Rahul)"     # one person
+git grep "TODO(G2 2.7 "          # one task
 ```
 
-Delete a TODO in the same change that completes it. The checklist below stays the record of what is done. Keep permission-set names out of frontend TODOs: the role-name ban matches quoted names in comments too. Later gates can follow the same format (`TODO(G2 ...)`).
+Delete a TODO in the same change that completes it. The checklist below stays the record of what is done. Keep permission-set names out of frontend TODOs: the role-name ban matches quoted names in comments too.
 
 ## Team checklist
 
@@ -127,7 +126,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] OPEN-REL-01: attestation identity and key custody (G1, Day 1). Decided in spec v1.6 §9.7, approved by Rishav 2026-11-09. The build is task 5.4; OPEN-REL-02 stays open.
 - [x] OPEN-21-19: no permission cache in this build (G1, Day 1). Recorded in `README.md`; `test_revoked_grant_stops_on_next_decision` is the evidence.
 - [x] 1.1 Repo, Docker Compose, CI skeleton; settle stack gaps (1.5h). Full stack run with `--profile agent`; `/readyz` added; production DNS, billing and instance checked.
-- [ ] 1.1 follow-ups that need production or an AWS decision: first run of the hardened `deploy.yml` and `infra.yml` on `prod`; off-machine backup of `infra/bootstrap/terraform.tfstate`; deactivating the apply key.
+- [x] 1.1 follow-ups: the hardened workflows ran on `prod` (infra run 42892572082 applied after tests, deploy run 42892572374 rolled back a failed release, deploy run 42894875467 went live); `infra/bootstrap/terraform.tfstate` backed up off-machine; apply key deactivated. Confirmed on `prod` 2026-11-11.
 - [x] 1.2 Identity and tenant migrations, RLS baseline, transaction-local tenant context (2h). Reviewed; `tests/test_rls.py` passes against PostgreSQL with no skips.
 - [x] 1.3 Permission catalogue as seed data, deny-by-default route guard, CI route map, role-name ban (2.5h). Reviewed per key against §3.3 and §3.5; `test_route_guard.py`, `test_catalogue.py` and `test_code_rules.py` are the evidence.
 - [x] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). `tests/test_ownership.py` covers AC-OWNER-01, 03, 04, 05, including concurrent transfers.

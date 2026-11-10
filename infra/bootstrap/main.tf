@@ -1,5 +1,3 @@
-# TODO(G1 1.1 Rishav): back up this directory's terraform.tfstate; it exists only on the machine that applied it.
-# TODO(G1 1.1 Rishav): deactivate the IAM access key used to apply this; the pipeline does not need it.
 # One-time bootstrap: remote-state bucket + GitHub OIDC + the role the infra pipeline uses.
 # Run locally with your own AWS credentials: terraform init && terraform apply
 # Its own state stays local (commit nothing from .terraform/ or *.tfstate).

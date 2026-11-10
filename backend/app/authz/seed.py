@@ -17,7 +17,6 @@ def _set_id(key: str, version: int) -> str:
     return str(uuid5(NAMESPACE_URL, f"settleiq:permission-set:{key}:{version}"))
 
 
-# TODO(G1 exit Rishav): all four teammates join through real invitations; nothing is seeded.
 def seed(conn: Connection) -> None:
     catalogue = get_catalogue()
     for spec in catalogue:
