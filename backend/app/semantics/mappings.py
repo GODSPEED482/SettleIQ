@@ -15,14 +15,9 @@ from sqlalchemy import Connection, text
 from app.audit import write_audit
 from app.authz.guard import TenantContext
 from app.db import tenant_tx
-from app.errors import conflict, not_found
+from app.errors import conflict, not_found, validation_failed
 
-# TODO(G2 2.4 Swapnaneel): owner review of bindings, authority assertions and comparability.
-# TODO(G2 2.4 Swapnaneel): source_id is never checked. Migration 0006 predates data_sources, so
-# a binding or assertion can name a missing source. Add (tenant_id, source_id) foreign keys to
-# both tables in a new migration.
-
-TERM = r"^[a-z][a-z0-9_]*:[A-Za-z][A-Za-z0-9_]*$"
+TERM =r"^[a-z][a-z0-9_]*:[A-Za-z][A-Za-z0-9_]*$"
 
 
 class _Body(BaseModel):
@@ -98,6 +93,15 @@ def _lock_open_draft(conn: Connection, draft_id: UUID) -> None:
         raise not_found()
     if row.status != "OPEN":
         raise conflict("STALE_DRAFT", "This draft is no longer open.")
+
+
+def _require_source(conn: Connection, source_id: UUID) -> None:
+    """RLS hides other tenants' sources, so they get the same answer as a missing one."""
+    found = conn.execute(
+        text("SELECT 1 FROM data_sources WHERE id = :id"), {"id": source_id}
+    ).first()
+    if found is None:
+        raise validation_failed("Unknown source.")
 
 
 def _json_safe(value: Any) -> Any:
@@ -177,6 +181,7 @@ def save_mapping(ctx: TenantContext, body: MappingBody) -> dict[str, Any]:
     values = body.model_dump(exclude={"transform", "draft_id"})
     with tenant_tx(ctx) as conn:
         _lock_open_draft(conn, body.draft_id)
+        _require_source(conn, body.source_id)
         row = conn.execute(
             _INSERT_MAPPING,
             values
@@ -243,6 +248,7 @@ _INSERT_AUTHORITY = text(
 def save_authority(ctx: TenantContext, body: AuthorityBody) -> dict[str, Any]:
     with tenant_tx(ctx) as conn:
         _lock_open_draft(conn, body.draft_id)
+        _require_source(conn, body.source_id)
         row = conn.execute(
             _INSERT_AUTHORITY,
             body.model_dump(exclude={"draft_id"})

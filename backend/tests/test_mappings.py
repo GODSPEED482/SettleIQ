@@ -365,6 +365,59 @@ def test_mappings_and_authority_are_append_only(draft_member, statement):
 
 
 @pytest.mark.db
+def test_a_binding_or_assertion_needs_a_registered_source(draft_member):
+    member, draft = draft_member
+    missing = str(uuid4())
+    assert save(member, mapping(draft, source_id=missing)).status_code == 422
+    assert assert_authority(member, authority(draft, source_id=missing)).status_code == 422
+    assert listed(member, draft) == []
+
+
+@pytest.mark.db
+def test_another_tenants_source_looks_like_a_missing_one(draft_member):
+    member, draft = draft_member
+    other = Member("Other")
+    foreign = str(uuid4())
+    with scoped_tx(other.tenant) as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO data_sources (id, tenant_id, connector_id, connector_version,
+                    source_type, protocol, display_name, created_by)
+                VALUES (:id, :tenant, 'paypal', '1.0.0', 'payment_provider', 'http', 'x', :user)
+                """
+            ),
+            {"id": foreign, "tenant": other.tenant, "user": other.principal.id},
+        )
+    refused = save(member, mapping(draft, source_id=foreign))
+    absent = save(member, mapping(draft, source_id=str(uuid4())))
+    assert refused.status_code == 422
+    assert refused.json() == absent.json()
+
+
+@pytest.mark.db
+def test_the_database_also_refuses_an_unknown_source(draft_member):
+    member, draft = draft_member
+    with pytest.raises(DBAPIError, match="source_mappings_source_fk"):
+        with scoped_tx(member.tenant) as conn:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO source_mappings (id, tenant_id, draft_id, source_id,
+                        external_object, field_path, property_iri, class_iri, version, status,
+                        datatype, transform, nullable, is_unique, sync_strategy, value_basis,
+                        temporal_context, method, created_by)
+                    VALUES (:id, :tenant, :draft, :source, 'o', 'f', 'finops:amount',
+                        'finops:Capture', 1, 'ACTIVE', 'decimal', '{}', false, false, 'event',
+                        'captured', 'at_capture', 'human', :user)
+                    """
+                ),
+                {"id": uuid4(), "tenant": member.tenant, "draft": draft, "source": uuid4(),
+                 "user": member.principal.id},
+            )
+
+
+@pytest.mark.db
 def test_other_tenants_cannot_use_or_see_a_draft(draft_member):
     member, draft = draft_member
     created = save(member, mapping(draft)).json()

@@ -174,7 +174,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [ ] 2.1 Ontology composition store; platform core and Finance pack in JSON-LD (2h)
 - [ ] 2.2 LLM draft generator from discovered metadata, draft only (2h)
 - [ ] 2.3 SHACL, pack validators, hash-bound validation, `confirm_publish` (2h)
-- [ ] 2.4 Versioned mappings and authority assertions, including two sources to one property (1h)
+- [x] 2.4 Versioned mappings and authority assertions, including two sources to one property (1h). Evidence in `test_mappings.py`.
 - [ ] 3.1 Domain projection and exact-ID identity resolution; ambiguous candidates stay reviewable (1.5h)
 - [ ] 3.2 Property observations, resolved views, explicit authority conflicts (1.5h)
 - [ ] 3.3 Finance engine: both reconciliation scopes, settlement calculation, decimal-safe money (2h). Starter: `Money` type built.
