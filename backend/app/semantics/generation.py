@@ -164,6 +164,12 @@ def read_generation_job(ctx: TenantContext, job_id: UUID) -> dict[str, Any]:
     }
 
 
+_OBSERVED_DETAIL = {
+    "foreign_key": "{field} is a foreign key in the discovered metadata.",
+    "field_profile": "{field} is a field in the discovered metadata.",
+}
+
+
 def _label_evidence(
     evidence: tuple[ProposedEvidence, ...] | list[ProposedEvidence],
     fields: set[str],
@@ -175,8 +181,20 @@ def _label_evidence(
             raise UngroundedProposal(f"no foreign key on {item.field}")
         if item.kind != "name_similarity" and item.field not in fields:
             raise UngroundedProposal(f"unknown field {item.field}")
-        basis = "inferred" if item.kind == "name_similarity" else "observed"
-        labelled.append(item.model_dump() | {"basis": basis})
+        if item.kind == "name_similarity":
+            labelled.append(item.model_dump() | {"basis": "inferred"})
+            continue
+        # The server confirmed the field, not the model's reading of it, so that text is kept
+        # apart from what is labelled observed.
+        labelled.append(
+            {
+                "kind": item.kind,
+                "field": item.field,
+                "detail": _OBSERVED_DETAIL[item.kind].format(field=item.field),
+                "rationale": item.detail,
+                "basis": "observed",
+            }
+        )
     return labelled
 
 

@@ -83,6 +83,17 @@ def test_name_similarity_is_labelled_inferred():
     assert item["evidence"][0]["basis"] == "inferred"
 
 
+@pytest.mark.parametrize(
+    ("kind", "field"), [("foreign_key", "customer_id"), ("field_profile", "total")]
+)
+def test_model_text_is_never_labelled_observed(kind, field):
+    item = ground(bindings=[binding(evidence=[evidence(kind, field)])])[0]["evidence"][0]
+    assert item["basis"] == "observed"
+    assert "looks monetary" not in item["detail"]
+    assert field in item["detail"]
+    assert item["rationale"] == "range looks monetary"
+
+
 def test_claimed_foreign_key_must_exist():
     with pytest.raises(UngroundedProposal, match="no foreign key"):
         ground(bindings=[binding(evidence=[evidence("foreign_key", "total")])])
@@ -275,6 +286,38 @@ def test_successful_job_stores_proposals_and_changes_no_draft_content(
     assert after["revision"] == before["revision"]
     assert after["tenant_extension"] == before["tenant_extension"]
     assert [p["status"] for p in stored_proposals(member_with_draft)] == ["PROPOSED", "PROPOSED"]
+
+
+@pytest.mark.db
+def test_draft_reads_return_proposals_with_their_basis(
+    member_with_draft, as_dispatcher, monkeypatch
+):
+    assert open_draft(member_with_draft)["proposals"] == []
+    generate(member_with_draft)
+    with_agent(monkeypatch, GOOD_OUTPUT)
+    as_dispatcher.run(as_dispatcher.claim())
+    proposals = open_draft(member_with_draft)["proposals"]
+    assert [(p["type"], p["status"], p["basis"]) for p in proposals] == [
+        ("term", "PROPOSED", "inferred"),
+        ("binding", "PROPOSED", "inferred"),
+    ]
+    assert {e["basis"] for p in proposals for e in p["evidence"]} == {"observed"}
+
+
+@pytest.mark.db
+def test_proposals_are_outside_the_candidate_hash(member_with_draft, as_dispatcher, monkeypatch):
+    def candidate_hash() -> str:
+        draft_id = open_draft(member_with_draft)["id"]
+        response = member_with_draft.request(
+            "POST", "/api/ontology/validate", json={"draft_id": draft_id}
+        )
+        return response.json()["content_hash"]
+
+    before = candidate_hash()
+    generate(member_with_draft)
+    with_agent(monkeypatch, GOOD_OUTPUT)
+    as_dispatcher.run(as_dispatcher.claim())
+    assert candidate_hash() == before
 
 
 @pytest.mark.db
