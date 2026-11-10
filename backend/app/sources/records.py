@@ -1,7 +1,9 @@
 """Persist the canonical source-record envelope (spec 7.1, AC-REC-02).
 
 A record may only reference raw evidence that is already stored for the same tenant and
-source, and its `payload_hash` must match that evidence.
+source, and its `payload_hash` must match that evidence. A record is one observation: a
+replay returns the existing record, and a changed payload for the same external ID is a new
+record (OPEN-04).
 """
 
 import json
@@ -80,7 +82,8 @@ def persist_record(conn: Connection, envelope: SourceRecordEnvelope) -> UUID:
             VALUES (:id, :tenant, :source, :object, :external_id, :record_type,
                 CAST(:attributes AS jsonb), :evidence, :occurred_at, :observed_at,
                 :payload_hash, :connector_version, :mapping_version)
-            ON CONFLICT (tenant_id, source_id, source_object_id, external_id) DO NOTHING
+            ON CONFLICT (tenant_id, source_id, source_object_id, external_id, payload_hash)
+                DO NOTHING
             RETURNING id
             """
         ),
@@ -88,13 +91,14 @@ def persist_record(conn: Connection, envelope: SourceRecordEnvelope) -> UUID:
     ).first()
     if inserted is not None:
         return inserted.id
-    # The only reachable conflict is a repeated non-null external_id.
+    # The only reachable conflict is a replay: same non-null external_id, same payload.
     existing = conn.execute(
         text(
             """
             SELECT id FROM source_records
             WHERE tenant_id = :tenant AND source_id = :source
               AND source_object_id = :object AND external_id = :external_id
+              AND payload_hash = :payload_hash
             """
         ),
         params,

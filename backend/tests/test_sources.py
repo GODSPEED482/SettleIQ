@@ -10,8 +10,9 @@ from sqlalchemy.exc import DBAPIError
 from app.connectors.manifest import load_connector_manifests
 from app.db import scoped_tx
 from app.errors import ApiError
-from app.sources import evidence, records, registry
+from app.sources import conventions, evidence, records, registry
 from app.sources.envelope import SourceRecordEnvelope
+from app.sources.evidence import RetrievalContext
 from tests.test_semantics_store import Member
 
 PAYPAL = "paypal"
@@ -50,15 +51,26 @@ def add_object(member: Member, source_id: str) -> UUID:
     return object_id
 
 
-def store(member: Member, source_id: str, data: bytes = b'{"id":"CAP-1"}', root=None):
+def store(
+    member: Member,
+    source_id: str,
+    data: bytes = b'{"id":"CAP-1"}',
+    root=None,
+    *,
+    evidence_type="RECORD",
+    context=RetrievalContext(provenance="provider_api"),
+    provider_event_id=None,
+):
     with scoped_tx(member.tenant) as conn:
         return evidence.store_bytes(
             conn,
             tenant_id=member.tenant,
             source_id=UUID(source_id),
             data=data,
-            evidence_type="RECORD",
+            evidence_type=evidence_type,
             content_type="application/json",
+            retrieval_context=context,
+            provider_event_id=provider_event_id,
             root=root,
         )
 
@@ -280,6 +292,127 @@ def test_record_cannot_borrow_another_tenants_evidence(tmp_path):
     with pytest.raises(ApiError, match="Raw evidence"):
         with scoped_tx(other.tenant) as conn:
             records.persist_record(conn, cross)
+
+
+def count_records(member: Member) -> int:
+    with scoped_tx(member.tenant) as conn:
+        return conn.execute(text("SELECT count(*) FROM source_records")).scalar()
+
+
+@pytest.mark.db
+def test_reread_with_a_changed_payload_is_a_new_observation(tmp_path):
+    member = Member()
+    source = create_ok(member)
+    object_id = add_object(member, source["id"])
+    pending = store(member, source["id"], b'{"id":"CAP-1","status":"PENDING"}', tmp_path)
+    completed = store(member, source["id"], b'{"id":"CAP-1","status":"COMPLETED"}', tmp_path)
+    with scoped_tx(member.tenant) as conn:
+        first = records.persist_record(conn, envelope(member, source["id"], object_id, pending))
+        second = records.persist_record(
+            conn, envelope(member, source["id"], object_id, completed)
+        )
+    assert first != second
+    assert count_records(member) == 2
+
+
+@pytest.mark.db
+def test_evidence_keeps_its_provenance(tmp_path):
+    member = Member()
+    source = create_ok(member)
+    context = RetrievalContext(provenance="synthetic_reference", file_name="brr.csv")
+    store(member, source["id"], b"a,b\n1,2\n", tmp_path, evidence_type="REPORT", context=context)
+    with scoped_tx(member.tenant) as conn:
+        stored = conn.execute(text("SELECT retrieval_context FROM raw_evidence")).scalar_one()
+    assert stored == {"provenance": "synthetic_reference", "file_name": "brr.csv"}
+
+
+CAPTURED = "PAYMENT.CAPTURE.COMPLETED"
+
+
+def persist_event(member: Member, source_id: str, body: bytes, root) -> UUID:
+    raw = store(
+        member, source_id, body, root,
+        evidence_type="WEBHOOK",
+        context=RetrievalContext(provenance="provider_event", event_type=CAPTURED),
+        provider_event_id="WH-EVT-1",
+    )
+    with scoped_tx(member.tenant) as conn:
+        object_id = conventions.ensure_object(
+            conn, tenant_id=member.tenant, source_id=UUID(source_id),
+            object_name=conventions.EVENT_OBJECT, object_type="EVENT",
+        )
+        return records.persist_record(
+            conn,
+            envelope(member, source_id, object_id, raw).model_copy(
+                update={
+                    "id": uuid4(),
+                    "external_id": "WH-EVT-1",
+                    "record_type": conventions.event_record_type(PAYPAL, CAPTURED),
+                }
+            ),
+        )
+
+
+@pytest.mark.db
+def test_redelivered_event_is_one_record(tmp_path):
+    member = Member()
+    source = create_ok(member)
+    body = b'{"id":"WH-EVT-1","event_type":"PAYMENT.CAPTURE.COMPLETED"}'
+    first = persist_event(member, source["id"], body, tmp_path)
+    assert persist_event(member, source["id"], body, tmp_path) == first
+    assert count_records(member) == 1
+
+
+def persist_file(member: Member, source_id: str, data: bytes, root) -> None:
+    raw = store(
+        member, source_id, data, root,
+        evidence_type="FILE",
+        context=RetrievalContext(provenance="tenant_file", file_name="bank.csv", row_count=2),
+    )
+    with scoped_tx(member.tenant) as conn:
+        object_id = conventions.ensure_object(
+            conn, tenant_id=member.tenant, source_id=UUID(source_id),
+            object_name=conventions.file_object_name("bank.csv", raw.content_hash),
+            object_type="CSV", checksum=raw.content_hash,
+        )
+        for number, row in enumerate([{"ref": "A", "amount": "1.00"}, {"ref": "B"}], start=1):
+            records.persist_record(
+                conn,
+                envelope(member, source_id, object_id, raw).model_copy(
+                    update={
+                        "id": uuid4(),
+                        "external_id": conventions.file_row_identity(number),
+                        "record_type": "bank:StatementLine",
+                        "attributes": row,
+                    }
+                ),
+            )
+
+
+@pytest.mark.db
+def test_reuploaded_file_does_not_duplicate_rows(tmp_path):
+    member = Member()
+    source = create_ok(member)
+    data = b"ref,amount\nA,1.00\nB,\n"
+    persist_file(member, source["id"], data, tmp_path)
+    persist_file(member, source["id"], data, tmp_path)
+    assert count_records(member) == 2
+    with scoped_tx(member.tenant) as conn:
+        names = conn.execute(text("SELECT object_name FROM source_objects")).scalars().all()
+    assert names == [f"bank.csv@{hashlib.sha256(data).hexdigest()[:16]}"]
+
+
+@pytest.mark.db
+def test_object_name_cannot_change_type(tmp_path):
+    member = Member()
+    source = create_ok(member)
+    with pytest.raises(ValueError, match="already registered as EVENT"):
+        with scoped_tx(member.tenant) as conn:
+            for object_type in ("EVENT", "CSV"):
+                conventions.ensure_object(
+                    conn, tenant_id=member.tenant, source_id=UUID(source["id"]),
+                    object_name="events", object_type=object_type,
+                )
 
 
 # Trusted webhook lookup

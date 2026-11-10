@@ -28,7 +28,9 @@ from app.domain_packs.registry import (
     resolve_pack_entrypoints,
 )
 from app.investigation.tools import ToolRegistryError, build_tool_registry, validate_tools
+from app.sources import conventions
 from app.sources.envelope import SourceRecordEnvelope
+from app.sources.evidence import RetrievalContext
 from packs.finops.money import Money, MoneyError
 
 
@@ -412,6 +414,36 @@ def test_envelope_has_no_financial_fields():
 def test_envelope_rejects_invalid_records(bad):
     with pytest.raises(ValidationError):
         envelope(**bad)
+
+
+def test_event_record_type_is_a_valid_envelope_type():
+    record_type = conventions.event_record_type("paypal", "PAYMENT.CAPTURE.COMPLETED")
+    assert record_type == "paypal:event/PAYMENT.CAPTURE.COMPLETED"
+    assert envelope(record_type=record_type).record_type == record_type
+
+
+@pytest.mark.parametrize(("connector", "event"), [("paypal", ""), ("1pay", "X"), ("pay", "a b")])
+def test_invalid_event_record_type_is_refused(connector, event):
+    with pytest.raises(ValueError, match="event record type"):
+        conventions.event_record_type(connector, event)
+
+
+def test_file_identities_are_deterministic():
+    digest = "ab" * 32
+    assert conventions.file_object_name("brr.csv", digest) == "brr.csv@" + "ab" * 8
+    assert conventions.file_row_identity(1) == "row:1"
+    with pytest.raises(ValueError):
+        conventions.file_row_identity(0)
+    with pytest.raises(ValueError):
+        conventions.file_object_name("brr.csv", "not-a-hash")
+
+
+@pytest.mark.parametrize(
+    "bad", [{}, {"provenance": "guess"}, {"provenance": "provider_api", "authorization": "x"}]
+)
+def test_evidence_provenance_is_required_and_closed(bad):
+    with pytest.raises(ValidationError):
+        RetrievalContext(**bad)
 
 
 def usd(amount: str) -> Money:

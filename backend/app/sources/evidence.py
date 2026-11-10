@@ -14,12 +14,35 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, text
 
 from app.config import get_settings
 from app.errors import validation_failed
 
 EvidenceType = Literal["WEBHOOK", "REPORT", "RECORD", "FILE"]
+
+
+class RetrievalContext(BaseModel):
+    """How the evidence was obtained (OPEN-04). Optional ingestion metadata lives here, not in
+    the record envelope, so `attributes` stays the source payload. Records reach it through
+    `raw_evidence_id`, which keeps provenance visible at every stage (spec 10.3.1)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provenance: Literal[
+        "provider_api",
+        "provider_event",
+        "provider_report",
+        "synthetic_reference",
+        "tenant_file",
+        "database",
+    ]
+    file_name: str | None = None
+    event_type: str | None = None
+    row_count: int | None = Field(default=None, ge=0)
+    # Method, path and non-secret query only; never headers or credentials.
+    request: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -59,8 +82,8 @@ def store_bytes(
     data: bytes,
     evidence_type: EvidenceType,
     content_type: str,
+    retrieval_context: RetrievalContext,
     provider_event_id: str | None = None,
-    retrieval_context: dict[str, Any] | None = None,
     source_timestamp: datetime | None = None,
     root: Path | None = None,
 ) -> EvidenceRef:
@@ -83,7 +106,7 @@ def store_bytes(
         "size": len(data),
         "content_type": content_type,
         "event": provider_event_id,
-        "context": json.dumps(retrieval_context or {}, default=str),
+        "context": json.dumps(retrieval_context.model_dump(mode="json", exclude_none=True)),
         "source_time": source_timestamp,
     }
     row = conn.execute(
