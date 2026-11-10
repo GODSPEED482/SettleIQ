@@ -71,8 +71,6 @@ def validate_ontology(
 # and audit tenant, versions, hash, validation run, publisher and outcome (spec 5.7 step 6,
 # AC-ONTO-PUB-04). The new body changes the frozen contract: regenerate openapi.json, and adjust
 # test_held_permission_passes_the_gate, which accepts only 200 or 501.
-# TODO(G2 2.7 Rishav): only code keeps a PUBLISHED draft frozen; the app role can still update
-# it and add mappings or authority to it. Add a trigger in a new migration that refuses both.
 @router.post("/ontology/publish")
 def publish_ontology(ctx: TenantContext = require("ontology.publish")) -> None:
     raise not_implemented("2.7")

@@ -395,25 +395,85 @@ def test_another_tenants_source_looks_like_a_missing_one(draft_member):
     assert refused.json() == absent.json()
 
 
+def insert_mapping_row(member: Member, draft: str, source: str | UUID) -> None:
+    """Straight into the table as the runtime role, past the route's own checks."""
+    with scoped_tx(member.tenant) as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO source_mappings (id, tenant_id, draft_id, source_id,
+                    external_object, field_path, property_iri, class_iri, version, status,
+                    datatype, transform, nullable, is_unique, sync_strategy, value_basis,
+                    temporal_context, method, created_by)
+                VALUES (:id, :tenant, :draft, :source, 'o', 'f', 'finops:amount',
+                    'finops:Capture', 1, 'ACTIVE', 'decimal', '{}', false, false, 'event',
+                    'captured', 'at_capture', 'human', :user)
+                """
+            ),
+            {"id": uuid4(), "tenant": member.tenant, "draft": draft, "source": source,
+             "user": member.principal.id},
+        )
+
+
+def insert_authority_row(member: Member, draft: str, source: str | UUID) -> None:
+    with scoped_tx(member.tenant) as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO authority_assertions (id, tenant_id, draft_id, property_iri,
+                    entity_type_iri, source_id, version, status, valid_from,
+                    verification_method, created_by)
+                VALUES (:id, :tenant, :draft, 'finops:amount', 'finops:Capture', :source, 1,
+                    'ACTIVE', now(), 'read', :user)
+                """
+            ),
+            {"id": uuid4(), "tenant": member.tenant, "draft": draft, "source": source,
+             "user": member.principal.id},
+        )
+
+
+def mark_published(member: Member, draft: str) -> None:
+    with scoped_tx(member.tenant) as conn:
+        conn.execute(
+            text("UPDATE ontology_drafts SET status = 'PUBLISHED' WHERE id = :id"), {"id": draft}
+        )
+
+
 @pytest.mark.db
 def test_the_database_also_refuses_an_unknown_source(draft_member):
     member, draft = draft_member
     with pytest.raises(DBAPIError, match="source_mappings_source_fk"):
+        insert_mapping_row(member, draft, uuid4())
+
+
+@pytest.mark.db
+def test_an_open_draft_still_takes_bindings_at_the_database(draft_member):
+    member, draft = draft_member
+    insert_mapping_row(member, draft, PAYPAL)
+    insert_authority_row(member, draft, PAYPAL)
+
+
+@pytest.mark.db
+@pytest.mark.parametrize("insert", [insert_mapping_row, insert_authority_row])
+def test_a_published_draft_takes_no_new_bindings(draft_member, insert):
+    member, draft = draft_member
+    mark_published(member, draft)
+    with pytest.raises(DBAPIError, match="immutable"):
+        insert(member, draft, PAYPAL)
+
+
+@pytest.mark.db
+@pytest.mark.parametrize(
+    "assignment",
+    ["status = 'OPEN'", "revision = 99", "tenant_extension = '{}'", "proposals = '[]'"],
+)
+def test_a_published_draft_cannot_be_updated(draft_member, assignment):
+    member, draft = draft_member
+    mark_published(member, draft)
+    with pytest.raises(DBAPIError, match="immutable"):
         with scoped_tx(member.tenant) as conn:
             conn.execute(
-                text(
-                    """
-                    INSERT INTO source_mappings (id, tenant_id, draft_id, source_id,
-                        external_object, field_path, property_iri, class_iri, version, status,
-                        datatype, transform, nullable, is_unique, sync_strategy, value_basis,
-                        temporal_context, method, created_by)
-                    VALUES (:id, :tenant, :draft, :source, 'o', 'f', 'finops:amount',
-                        'finops:Capture', 1, 'ACTIVE', 'decimal', '{}', false, false, 'event',
-                        'captured', 'at_capture', 'human', :user)
-                    """
-                ),
-                {"id": uuid4(), "tenant": member.tenant, "draft": draft, "source": uuid4(),
-                 "user": member.principal.id},
+                text(f"UPDATE ontology_drafts SET {assignment} WHERE id = :id"), {"id": draft}
             )
 
 
