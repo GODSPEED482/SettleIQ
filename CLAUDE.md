@@ -145,7 +145,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 
 ### Rahul Pandey: Integrations and Execution (leads G4; demo Integration Admin)
 
-- [ ] OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 (Day 1, first hours). OPEN-01, OPEN-04 and OPEN-CAP-01 are recorded in `README.md` with evidence in `test_contracts.py` and `test_sources.py`. OPEN-PP-01's documentation facts are recorded in `README.md`; its account checks wait for the Sandbox app (4.1).
+- [x] OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 (Day 1, first hours). Recorded in `README.md`, with evidence in `test_contracts.py` and `test_sources.py`. The Sandbox account checks for OPEN-PP-01 continue under G4 task 4.1.
 - [ ] 4.1 **First task on Day 1:** Sandbox app, public HTTPS tunnel, verify provider access (1.5h)
 - [x] 1.6 Freeze connector manifest, capability keys and source envelope (1h). Evidence in `test_contracts.py`.
 - [x] 1.7 Source registry, `source_records`, raw evidence store with hashing (3h). Evidence in `test_sources.py`.
