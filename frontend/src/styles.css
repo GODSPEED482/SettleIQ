@@ -188,6 +188,24 @@ a {
   padding: 32px;
 }
 
+.tenant-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px;
+  font-size: 14px;
+}
+
+.tenant-picker label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form.narrow {
+  max-width: 420px;
+}
+
 .auth-page {
   display: grid;
   place-items: center;

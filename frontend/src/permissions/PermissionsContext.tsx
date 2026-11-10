@@ -1,6 +1,15 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { ApiError, apiFetch } from "../api/client";
+import { useSession } from "../session/SessionContext";
 import type { EffectivePermission } from "./can";
 
 // "signed-out" is a 401: sign in again. "unavailable" covers a 404, which is also what a tenant
@@ -16,11 +25,51 @@ type PermissionsState = {
 
 const PermissionsContext = createContext<PermissionsState | null>(null);
 
+// The last tenant picked, per browser. A convenience only: it is checked against the session's
+// tenants before use, and membership is proved by the server on every request.
+const TENANT_KEY = "settleiq.tenant";
+
+function rememberedTenant(): string | null {
+  try {
+    return localStorage.getItem(TENANT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function rememberTenant(tenantId: string | null): void {
+  try {
+    if (tenantId) localStorage.setItem(TENANT_KEY, tenantId);
+    else localStorage.removeItem(TENANT_KEY);
+  } catch {
+    // Storage can be blocked; the picker still works for this page load.
+  }
+}
+
 export function PermissionsProvider({ children }: { children: ReactNode }) {
-  // TODO(G1 1.11 Suprava): set this from the tenant picker and clear it on sign-out.
-  // Set by the sign-in and tenant-selection flow (tasks 1.9 and 1.11).
-  const [tenantId, setTenantId] = useState<string | null>(null);
+  const session = useSession();
+  const [chosen, setChosen] = useState<string | null>(rememberedTenant);
   const [permissions, setPermissions] = useState<EffectivePermission[]>([]);
+
+  // Only a tenant the session lists can be selected. With one tenant, it is selected for you.
+  const listed = (id: string | null) => !!id && session.tenants.some((tenant) => tenant.id === id);
+  const tenantId =
+    session.status !== "signed-in"
+      ? null
+      : listed(chosen)
+        ? chosen
+        : session.tenants.length === 1
+          ? session.tenants[0].id
+          : null;
+
+  const setTenantId = useCallback((id: string | null) => {
+    setChosen(id);
+    rememberTenant(id);
+  }, []);
+
+  useEffect(() => {
+    if (session.status === "signed-out") setTenantId(null);
+  }, [session.status, setTenantId]);
   const [status, setStatus] = useState<Status>("no-tenant");
 
   useEffect(() => {
@@ -51,7 +100,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({ tenantId, setTenantId, permissions, status }),
-    [tenantId, permissions, status],
+    [tenantId, setTenantId, permissions, status],
   );
   return <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>;
 }

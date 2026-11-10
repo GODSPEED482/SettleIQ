@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { checkHealth } from "./api/client";
+import { TenantPicker } from "./components/TenantPicker";
 import { SignIn } from "./pages/auth/SignIn";
 import { SignUp } from "./pages/auth/SignUp";
 import { VerifyEmail } from "./pages/auth/VerifyEmail";
+import { CreateTenant } from "./pages/CreateTenant";
 import { OntologyStudio } from "./pages/OntologyStudio";
 import { WORKSPACES } from "./pages/workspaces";
 import { Workspace } from "./pages/Workspace";
@@ -13,8 +15,6 @@ import { usePermissions } from "./permissions/PermissionsContext";
 import { RequireSession } from "./session/RequireSession";
 import { useSession } from "./session/SessionContext";
 
-// TODO(G1 1.11 Suprava): add the tenant-creation route.
-// TODO(G1 1.11 Suprava): add a tenant picker. Nothing calls setTenantId yet, so all nav is locked.
 // TODO(G1 1.11 Suprava): locked links still navigate; show an unavailable state on those pages.
 // TODO(G1 1.12 Suprava): add the invitation-acceptance screen (POST /invitations/{token}/accept).
 export function App() {
@@ -36,7 +36,7 @@ export function App() {
 }
 
 function Shell() {
-  const { signOut, refresh } = useSession();
+  const { signOut, refresh, tenants } = useSession();
   const { permissions, status } = usePermissions();
   const [apiUp, setApiUp] = useState<boolean | null>(null);
 
@@ -53,6 +53,7 @@ function Shell() {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">SettleIQ</div>
+        <TenantPicker />
         <nav>
           {WORKSPACES.map((workspace) => {
             const allowed = canAny(permissions, workspace.permission);
@@ -78,7 +79,11 @@ function Shell() {
       </aside>
       <main className="content">
         <Routes>
-          <Route path="/" element={<Navigate to={WORKSPACES[0].path} replace />} />
+          <Route
+            path="/"
+            element={<Navigate to={tenants.length ? WORKSPACES[0].path : "/tenants/new"} replace />}
+          />
+          <Route path="/tenants/new" element={<CreateTenant />} />
           {WORKSPACES.map((workspace) => (
             <Route
               key={workspace.path}
