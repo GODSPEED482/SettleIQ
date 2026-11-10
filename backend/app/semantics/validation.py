@@ -103,7 +103,7 @@ def load_candidate(conn: Connection, draft_id: UUID) -> Candidate:
     )
 
 
-def _candidate_graph(candidate: Candidate) -> Graph:
+def candidate_graph(candidate: Candidate) -> Graph:
     graph = Graph()
     for artifact in candidate.artifacts:
         graph.parse(data=json.dumps(artifact["content"]), format="json-ld")
@@ -189,7 +189,7 @@ def run_validators(
         *_mapping_results(candidate),
     ]
     try:
-        data = _candidate_graph(candidate)
+        data = candidate_graph(candidate)
     except Exception:
         logger.exception("candidate did not parse")
         return [*results, ValidatorResult("candidate.parse", "platform", False,

@@ -131,7 +131,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.3 Permission catalogue as seed data, deny-by-default route guard, CI route map, role-name ban (2.5h). Reviewed per key against §3.3 and §3.5; `test_route_guard.py`, `test_catalogue.py` and `test_code_rules.py` are the evidence.
 - [x] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). `tests/test_ownership.py` covers AC-OWNER-01, 03, 04, 05, including concurrent transfers.
 - [x] 1.5 Invitation backend: hashed single-use tokens, matching-email acceptance (1.5h). `tests/test_invitations.py` covers AC-IAM-02 to 06, 08, 09, 10, AC-OWNER-02, AC-AUTHZ-05, 09, 18.
-- [ ] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h)
+- [x] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h). Evidence in `test_publication.py` and `test_mappings.py`.
 - [ ] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h)
 - [ ] 4.5 Secret references; credential and webhook routes limited to Integration Admin (2h)
 - [ ] 5.1 Request, decision, approval, execution, grant and attempt tables with the full FK chain (2h)
