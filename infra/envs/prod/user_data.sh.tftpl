@@ -41,7 +41,9 @@ fi
 mkdir -p /data
 grep -q 'LABEL=settleiq-data' /etc/fstab || echo 'LABEL=settleiq-data /data ext4 defaults,nofail 0 2' >> /etc/fstab
 mount -a
-mkdir -p /data/postgres /data/caddy
+mkdir -p /data/postgres /data/caddy /data/raw-evidence
+chown 10001:10001 /data/raw-evidence
+chmod 750 /data/raw-evidence
 
 # host facts for deploy.sh
 mkdir -p /opt/settleiq/releases

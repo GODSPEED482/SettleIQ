@@ -28,7 +28,6 @@ from app.sources.envelope import SourceRecordEnvelope
 from packs.finops.money import Money, MoneyError
 
 
-# TODO(G1 1.6 Rahul): re-check these tests against the frozen connector manifest and envelope.
 def keys_of(manifest: ConnectorManifest) -> set[str]:
     return {capability.key for capability in manifest.capabilities}
 
@@ -60,6 +59,34 @@ def test_legacy_capability_spelling_is_rejected():
     data["capabilities"].append({"key": "batch_read", "version": "1.0.0", "parameters": {}})
     with pytest.raises(ValueError, match="non-canonical"):
         validate_manifest(ConnectorManifest(**data), load_capability_registry())
+
+
+def test_registered_capability_alias_is_accepted():
+    paypal = load_connector_manifests()["paypal"]
+    data = paypal.model_dump()
+    data["capabilities"] = [
+        {"key": "read.transactions", "version": "1.0.0", "parameters": {}}
+        if capability["key"] == "transactions.read"
+        else capability
+        for capability in data["capabilities"]
+    ]
+    validate_manifest(
+        ConnectorManifest(**data),
+        load_capability_registry(),
+        {"read.transactions": "transactions.read"},
+    )
+
+
+def test_alias_to_an_unknown_key_is_rejected():
+    paypal = load_connector_manifests()["paypal"]
+    data = paypal.model_dump()
+    data["capabilities"] = [{"key": "read.transactions", "version": "1.0.0", "parameters": {}}]
+    with pytest.raises(ValueError, match="non-canonical"):
+        validate_manifest(
+            ConnectorManifest(**data),
+            load_capability_registry(),
+            {"read.transactions": "read.missing"},
+        )
 
 
 def test_manifest_flags_cannot_contradict_capabilities():

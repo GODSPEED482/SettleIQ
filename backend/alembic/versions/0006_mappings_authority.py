@@ -19,7 +19,6 @@ depends_on = None
 TABLES = ("source_mappings", "authority_assertions")
 
 
-# TODO(G2 1.7 Rahul): add a foreign key from source_id to data_sources once that table exists.
 def upgrade() -> None:
     op.execute(
         """
