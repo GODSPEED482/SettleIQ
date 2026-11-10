@@ -63,11 +63,21 @@ def update_member_grants(
     return members.change_grants(ctx, user_id, body)
 
 
-# TODO(G1 1.10 Suprava): add suspend-member (spec 12.2 omits it). Appendix A has no suspend key,
-# so agree which existing key guards it; a new key needs a spec revision.
 @router.delete("/members/{user_id}")
 def remove_member(user_id: UUID, ctx: TenantContext = require("member.remove")) -> dict:
     return members.remove_member(ctx, user_id)
+
+
+# Spec 12.2 omits suspension and Appendix A has no suspend key. Suspension is a reversible
+# removal, so member.remove guards both routes (decided under task 1.10).
+@router.post("/members/{user_id}/suspend")
+def suspend_member(user_id: UUID, ctx: TenantContext = require("member.remove")) -> dict:
+    return members.suspend_member(ctx, user_id)
+
+
+@router.post("/members/{user_id}/reinstate")
+def reinstate_member(user_id: UUID, ctx: TenantContext = require("member.remove")) -> dict:
+    return members.reinstate_member(ctx, user_id)
 
 
 @router.post("/ownership-transfer")

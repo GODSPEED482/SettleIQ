@@ -65,12 +65,11 @@ def clear_overrides():
     app.dependency_overrides.clear()
 
 
-# TODO(G1 1.10 Suprava): add any new path parameter from the 1.10 routes to the list below.
 def url(route: dict, tenant: UUID = TENANT) -> str:
     path = route["path"].replace("{tenant_id}", str(tenant))
     for name in ("token", "invitation_id", "user_id", "source_id", "case_id", "decision_id",
                  "investigation_id", "playbook_id", "request_id", "execution_id", "audit_id",
-                 "draft_id", "job_id", "mapping_id", "assertion_id"):
+                 "draft_id", "job_id", "mapping_id", "assertion_id", "entity_id"):
         path = path.replace(f"{{{name}}}", str(uuid4()))
     return path
 
@@ -329,6 +328,38 @@ def test_me_permissions_reports_effective_keys_and_scopes():
 def test_unknown_route_uses_the_canonical_404():
     response = TestClient(app).get("/api/does-not-exist")
     assert response.json() == {"error": {"code": "NOT_FOUND", "message": "Resource not found."}}
+
+
+def test_missing_session_uses_the_canonical_401():
+    response = TestClient(app).get("/api/me/tenants")
+    assert response.status_code == 401
+    assert response.json() == {
+        "error": {"code": "UNAUTHENTICATED", "message": "Authentication required."}
+    }
+
+
+def test_invalid_body_uses_the_canonical_422():
+    response = TestClient(app).post("/api/auth/register", json={"email": "not-an-email"})
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert (error["code"], error["message"]) == ("VALIDATION_ERROR", "Invalid request.")
+    assert {tuple(field["loc"]) for field in error["fields"]} == {
+        ("body", "email"),
+        ("body", "password"),
+    }
+
+
+def test_public_api_states_version_1():
+    """OPEN-14: /api is version 1, in the OpenAPI document and on every response."""
+    client = TestClient(app)
+    assert app.version == "1"
+    assert client.get("/healthz").headers["API-Version"] == "1"
+    assert client.get("/api/does-not-exist").headers["API-Version"] == "1"
+
+
+def test_private_apps_do_not_claim_the_public_version():
+    response = TestClient(create_worker_app()).get("/does-not-exist")
+    assert "API-Version" not in response.headers
 
 
 def test_unverified_identity_is_rejected():

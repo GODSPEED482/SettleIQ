@@ -16,8 +16,8 @@ from app.db import get_engine, global_tx, scoped_tx
 
 pytestmark = pytest.mark.db
 
-# TODO(G1 1.13 Suprava): cover AC-IAM-01..11 and AC-TEN-01..03 through the routes as 1.4, 1.5 and
-# 1.9 land. These tests exercise the database layer only.
+# These tests exercise the database layer only; test_iam_acceptance.py traces AC-IAM-01..11 and
+# AC-TEN-01..03 through the routes.
 
 
 def make_user() -> UUID:
@@ -222,8 +222,7 @@ def test_catalogue_is_seeded_without_identities():
         assert conn.execute(text("SELECT count(*) FROM permission_sets")).scalar() == 9
 
 
-# Owner invariant
-# TODO(G1 1.13 Suprava): add concurrent transfers: they serialize and leave one owner (spec 3.2).
+# Owner invariant. Concurrent transfers: test_ownership.py, through the route.
 
 
 def test_tenant_needs_its_owner_as_member_at_commit():

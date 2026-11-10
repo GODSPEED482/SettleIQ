@@ -1,6 +1,7 @@
 """Canonical error envelope (spec 12.1) and non-enumerating failures (spec 11.5).
 
-Envelope shape, DRAFT under OPEN-14: {"error": {"code": str, "message": str, ...}}.
+Envelope shape, ratified under OPEN-14: {"error": {"code": str, "message": str, ...}}. Extra keys
+sit beside `code` and `message`; clients read only those two and must ignore the rest.
 """
 
 from typing import Any
@@ -11,7 +12,6 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
-# TODO(G1 OPEN-14 Suprava): ratify this envelope, or change it here and in api/client.ts.
 class ApiError(Exception):
     def __init__(self, status: int, code: str, message: str, **details: Any) -> None:
         super().__init__(message)

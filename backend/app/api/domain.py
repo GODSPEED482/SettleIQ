@@ -7,8 +7,6 @@ from app.errors import not_implemented
 
 router = APIRouter(prefix="/api", tags=["domain"])
 
-# TODO(G1 1.10 Suprava): add entity reads (spec 12.2 omits them), guarded by entity.read.
-
 
 @router.post("/domain-runs")
 def create_domain_run(ctx: TenantContext = require("domain_run.create")) -> None:
@@ -28,6 +26,17 @@ def triage_domain_case(case_id: str, ctx: TenantContext = require("case.triage")
 @router.post("/domain-cases/{case_id}/reopen")
 def reopen_domain_case(case_id: str, ctx: TenantContext = require("case.triage")) -> None:
     raise not_implemented("3.4")
+
+
+# Spec 12.2 omits entity reads; task 1.10 adds them under entity.read.
+@router.get("/entities")
+def list_entities(ctx: TenantContext = require("entity.read")) -> None:
+    raise not_implemented("3.1")
+
+
+@router.get("/entities/{entity_id}")
+def read_entity(entity_id: str, ctx: TenantContext = require("entity.read")) -> None:
+    raise not_implemented("3.1")
 
 
 @router.post("/entity-resolution/{decision_id}/decision")

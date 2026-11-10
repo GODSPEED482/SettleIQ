@@ -160,3 +160,32 @@ def remove_member(ctx: TenantContext, user_id: UUID) -> dict[str, str]:
             {"user_id": str(user_id)},
         )
     return {"user_id": str(user_id), "status": "REMOVED"}
+
+
+def _set_status(
+    ctx: TenantContext, user_id: UUID, current: str, new: str, action: str
+) -> dict[str, str]:
+    with tenant_tx(ctx) as conn:
+        owner = _lock_tenant(conn, ctx.tenant_id)
+        if user_id == owner:
+            raise policy_denied("POL-04")
+        _require_member(conn, ctx.tenant_id, user_id, {current})
+        conn.execute(
+            text(
+                "UPDATE tenant_members SET status = :status "
+                "WHERE tenant_id = :tenant AND user_id = :user"
+            ),
+            {"status": new, "tenant": ctx.tenant_id, "user": user_id},
+        )
+        write_audit(conn, ctx.tenant_id, ctx.principal, action, "member", {"user_id": str(user_id)})
+    return {"user_id": str(user_id), "status": new}
+
+
+def suspend_member(ctx: TenantContext, user_id: UUID) -> dict[str, str]:
+    """Grants are kept but resolve to nothing while suspended (AC-IAM-07)."""
+    return _set_status(ctx, user_id, "ACTIVE", "SUSPENDED", "member.suspended")
+
+
+def reinstate_member(ctx: TenantContext, user_id: UUID) -> dict[str, str]:
+    """Grants that were still current at suspension apply again from the next request."""
+    return _set_status(ctx, user_id, "SUSPENDED", "ACTIVE", "member.reinstated")

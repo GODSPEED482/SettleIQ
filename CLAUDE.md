@@ -34,6 +34,7 @@ uv run python -m app.authz.seed                                       # after mi
 uv run alembic revision -m "describe change"
 uv run uvicorn app.main:app --reload
 uv run python -m app.route_map > route-map.json
+uv run python -m app.openapi_export > openapi.json                   # after a deliberate API contract change
 ```
 
 Frontend, from `frontend/`. Needs Node 22:
@@ -101,7 +102,7 @@ These bind code not yet written. The spec sections hold the detail.
 - **Agent (§8):** read, recommend and validate only, with append-only investigation writes. It computes no money and creates no request, approval or execution.
 - **A case resolves only after independent readback of authoritative state,** never on API success.
 - **Plan decisions:** PB-001 follows the conditional update in §4.4.1 rather than "replay the event". Break-glass, probabilistic matching and Redis/pgvector are not built in this slice. PB-002 live refund is built, in PayPal Sandbox only, under its own `refunds.create` attestation and safety suite. On Day 3 the order is freeze the build, create Tenant A, then attest; any later code change voids the attestation. If the safety suite is not green by Day 3 hour 7, no attestation is issued and the demo stops at step 10 in SHADOW. If only the refund scope is not green, no refund attestation is issued and the demo skips steps 14-15.
-- **Draft contracts:** the error envelope and `X-Tenant-Id` are unratified defaults (listed in `README.md`). The connector manifest (OPEN-01, OPEN-CAP-01) and the source-record envelope (OPEN-04) are decided for this build; adapters follow `app/sources/conventions.py` for API reads, events and files.
+- **API contracts:** the error envelope, `X-Tenant-Id`, the session-cookie transport and `/api` as version 1 are ratified under OPEN-14 (listed in `README.md`). The connector manifest (OPEN-01, OPEN-CAP-01) and the source-record envelope (OPEN-04) are decided for this build; adapters follow `app/sources/conventions.py` for API reads, events and files.
 
 ## In-code TODOs
 
@@ -190,11 +191,11 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 
 ### Suprava Dutta: Product Experience and QA (leads G6; demo Approver)
 
-- [ ] OPEN-14: API conventions, auth transport, error envelope (Day 1, first hours). Starter: draft envelope and `X-Tenant-Id`.
-- [ ] 1.10 Freeze OpenAPI, adding the routes §12.2 omits (1h). Starter: §12.2 routes exist; omitted ones do not.
-- [ ] 1.11 App shell, sign-up and sign-in, tenant creation, permission-driven UI (2h). Starter: shell and permission nav only.
-- [ ] 1.12 Team Management screens (1h)
-- [ ] 1.13 IAM and cross-tenant tests (1h). Starter: baseline RLS and resolution tests exist.
+- [x] OPEN-14: API conventions, auth transport, error envelope (Day 1, first hours). Envelope, `X-Tenant-Id`, the session cookie and `/api` as version 1 are ratified in `README.md`; evidence in `test_route_guard.py` (canonical 401, 404 and 422, `API-Version`). Pagination and idempotency headers wait for the first routes that need them.
+- [x] 1.10 Freeze OpenAPI, adding the routes §12.2 omits (1h). Added suspend and reinstate (under `member.remove`), entity reads and the 202 investigation body; `backend/openapi.json` is frozen by `test_openapi.py`.
+- [x] 1.11 App shell, sign-up and sign-in, tenant creation, permission-driven UI (2h). Evidence in `session.test.tsx`, `tenants.test.tsx`, `RequirePermission.test.tsx`, `client.test.ts` and `can.test.ts`.
+- [x] 1.12 Team Management screens (1h). Members, grants, suspension, invitations, ownership transfer and invitation acceptance; evidence in `team.test.tsx` and `accept.test.tsx`.
+- [x] 1.13 IAM and cross-tenant tests (1h). `test_iam_acceptance.py` traces AC-IAM-01..11 and AC-TEN-01..03 to their tests and fails if one is renamed away.
 - [ ] 2.8 Ontology Studio graph in React Flow, view and edit relationships (2.5h). Starter: empty canvas.
 - [ ] 2.9 Binding and authority editors (1.5h)
 - [ ] 2.10 Publish confirmation showing candidate hash and validation run (1h)
