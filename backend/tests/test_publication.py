@@ -6,11 +6,12 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from app.authz.guard import authenticate
 from app.db import scoped_tx
 from app.domain_packs.manifest import DomainPackManifest, load_domain_packs
-from app.semantics import publication
+from app.semantics import mappings, publication
 from packs.finops import validators as finops_validators
 from tests.test_mappings import authority, mapping
 from tests.test_semantics_store import Member, app
@@ -462,6 +463,120 @@ def test_publish_racing_an_edit_has_one_winner(finance_draft, attempt_number):
         lambda: member.client.patch(f"/api/ontology/drafts/{draft['id']}", json=edit),
     )
     assert sorted(results) == [200, 409]
+
+
+# Gate 2 exit: versions are immutable and pinned, and two sources can bind one property
+
+
+def version_snapshot(member: Member, version: int) -> dict:
+    with scoped_tx(member.tenant) as conn:
+        row = conn.execute(
+            text("SELECT * FROM ontologies WHERE version = :v"), {"v": version}
+        ).one()
+        relationships = conn.execute(
+            text(
+                "SELECT iri, domain_iri, range_iri, definition FROM ontology_relationships "
+                "WHERE ontology_id = :o ORDER BY iri"
+            ),
+            {"o": row.id},
+        ).all()
+        return {
+            "row": tuple(row),
+            "relationships": [tuple(item) for item in relationships],
+            "mappings": mappings.current_mappings(conn, row.draft_id),
+            "authority": mappings.current_authority(conn, row.draft_id),
+        }
+
+
+@pytest.mark.db
+def test_an_earlier_version_stays_pinned_after_a_newer_one(finance_draft):
+    member, draft = finance_draft
+    source = add_source(member)
+    edited = member.edit(draft, [VALID_CLASS]).json()
+    member.request("POST", "/api/mappings", json=mapping(draft["id"], source_id=source))
+    member.request("POST", "/api/authority", json=authority(draft["id"], source_id=source))
+    first = publish(member, edited).json()
+    pinned = version_snapshot(member, 1)
+
+    successor = member.create_draft().json()
+    other_class = {"@id": "tenant:Gold", "@type": "owl:Class", "rdfs:label": "Gold"}
+    changed = member.edit(successor, [VALID_CLASS, other_class]).json()
+    member.request(
+        "POST", "/api/mappings", json=mapping(successor["id"], source_id=source, nullable=True)
+    )
+    params = {"draft_id": successor["id"]}
+    assertion = member.request("GET", "/api/authority", params=params).json()[0]
+    member.request("POST", f"/api/authority/{assertion['id']}/retire")
+    second = publish(member, changed).json()
+
+    assert second["version"] == 2
+    assert second["content_hash"] != first["content_hash"]
+    assert version_snapshot(member, 1) == pinned
+    latest = version_snapshot(member, 2)
+    assert latest["mappings"][0]["nullable"] is True
+    assert latest["authority"] == []
+    assert member.request("GET", "/api/ontology").json()["version"] == 2
+
+
+@pytest.mark.db
+def test_the_routes_refuse_to_change_a_published_draft(finance_draft):
+    member, draft = finance_draft
+    source = add_source(member)
+    created = member.request(
+        "POST", "/api/mappings", json=mapping(draft["id"], source_id=source)
+    ).json()
+    publish(member, draft)
+    attempts = [
+        member.request("POST", "/api/mappings", json=mapping(draft["id"], source_id=source)),
+        member.request("POST", "/api/authority", json=authority(draft["id"], source_id=source)),
+        member.request("POST", f"/api/mappings/{created['id']}/retire"),
+        member.edit(draft, [VALID_CLASS]),
+        member.request("POST", f"/api/ontology/drafts/{draft['id']}/abandon"),
+    ]
+    assert [attempt.status_code for attempt in attempts] == [409] * 5
+
+
+@pytest.mark.db
+@pytest.mark.parametrize(
+    "statement",
+    ["UPDATE ontology_relationships SET iri = 'x'", "DELETE FROM ontology_relationships"],
+)
+def test_published_relationships_are_immutable(finance_draft, statement):
+    member, draft = finance_draft
+    publish(member, draft)
+    with pytest.raises(DBAPIError, match="permission denied"):
+        with scoped_tx(member.tenant) as conn:
+            conn.execute(text(statement))
+
+
+@pytest.mark.db
+def test_two_sources_to_one_property_publish_as_separate_bindings(finance_draft):
+    member, draft = finance_draft
+    first, second = add_source(member), add_source(member)
+    for body in (
+        mapping(draft["id"], source_id=first),
+        mapping(draft["id"], source_id=second, external_object="payments"),
+    ):
+        assert member.request("POST", "/api/mappings", json=body).status_code == 201
+    assert publish(member, draft).status_code == 200
+    bindings = version_snapshot(member, 1)["mappings"]
+    assert {b["source_id"] for b in bindings} == {first, second}
+    assert {b["property_iri"] for b in bindings} == {"finops:amount"}
+    assert len(bindings) == 2
+
+
+@pytest.mark.db
+def test_incomparable_sources_on_one_property_cannot_publish(finance_draft):
+    member, draft = finance_draft
+    first, second = add_source(member), add_source(member)
+    member.request("POST", "/api/mappings", json=mapping(draft["id"], source_id=first))
+    member.request(
+        "POST", "/api/mappings",
+        json=mapping(draft["id"], source_id=second, value_basis="fulfilled"),
+    )
+    response = publish(member, draft)
+    assert_refused(response, "VALIDATION_NOT_PASSED", member)
+    assert published_count(member) == 0
 
 
 # Tenant isolation
