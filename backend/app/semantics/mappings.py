@@ -4,7 +4,6 @@ Several bindings may target one property, but only when their values are truly c
 Bindings and assertions are append-only and belong to a draft until it is published.
 """
 
-import json
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, Literal
@@ -16,9 +15,9 @@ from sqlalchemy import Connection, text
 from app.audit import write_audit
 from app.authz.guard import TenantContext
 from app.db import tenant_tx
-from app.errors import conflict, not_found, validation_failed
+from app.errors import conflict, not_found
 
-TERM =r"^[a-z][a-z0-9_]*:[A-Za-z][A-Za-z0-9_]*$"
+TERM = r"^[a-z][a-z0-9_]*:[A-Za-z][A-Za-z0-9_]*$"
 
 
 class _Body(BaseModel):
@@ -94,15 +93,6 @@ def _lock_open_draft(conn: Connection, draft_id: UUID) -> None:
         raise not_found()
     if row.status != "OPEN":
         raise conflict("STALE_DRAFT", "This draft is no longer open.")
-
-
-def _require_source(conn: Connection, source_id: UUID) -> None:
-    """RLS hides other tenants' sources, so they get the same answer as a missing one."""
-    found = conn.execute(
-        text("SELECT 1 FROM data_sources WHERE id = :id"), {"id": source_id}
-    ).first()
-    if found is None:
-        raise validation_failed("Unknown source.")
 
 
 def _json_safe(value: Any) -> Any:
@@ -182,7 +172,6 @@ def save_mapping(ctx: TenantContext, body: MappingBody) -> dict[str, Any]:
     values = body.model_dump(exclude={"transform", "draft_id"})
     with tenant_tx(ctx) as conn:
         _lock_open_draft(conn, body.draft_id)
-        _require_source(conn, body.source_id)
         row = conn.execute(
             _INSERT_MAPPING,
             values
@@ -249,7 +238,6 @@ _INSERT_AUTHORITY = text(
 def save_authority(ctx: TenantContext, body: AuthorityBody) -> dict[str, Any]:
     with tenant_tx(ctx) as conn:
         _lock_open_draft(conn, body.draft_id)
-        _require_source(conn, body.source_id)
         row = conn.execute(
             _INSERT_AUTHORITY,
             body.model_dump(exclude={"draft_id"})
@@ -295,19 +283,6 @@ def retire_authority(ctx: TenantContext, assertion_id: UUID) -> dict[str, Any]:
 def list_authority(ctx: TenantContext, draft_id: UUID) -> list[dict[str, Any]]:
     with tenant_tx(ctx) as conn:
         return current_authority(conn, draft_id)
-
-
-def copy_bindings(ctx: TenantContext, conn: Connection, source: UUID, target: UUID) -> None:
-    """Carry a published draft's current bindings into its successor, each as a first version."""
-    new_row = {"tenant": ctx.tenant_id, "draft": target, "status": "ACTIVE",
-               "user": ctx.principal.id}
-    for row in candidate_mappings(current_mappings(conn, source)):
-        conn.execute(
-            _INSERT_MAPPING,
-            row | new_row | {"id": uuid4(), "transform": json.dumps(row["transform"])},
-        )
-    for row in candidate_authority(current_authority(conn, source)):
-        conn.execute(_INSERT_AUTHORITY, row | new_row | {"id": uuid4()})
 
 
 def _comparability(mapping: dict[str, Any]) -> tuple:
