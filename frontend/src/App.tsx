@@ -8,6 +8,7 @@ import { SignUp } from "./pages/auth/SignUp";
 import { VerifyEmail } from "./pages/auth/VerifyEmail";
 import { CreateTenant } from "./pages/CreateTenant";
 import { OntologyStudio } from "./pages/OntologyStudio";
+import { TeamManagement } from "./pages/team/TeamManagement";
 import { WORKSPACES } from "./pages/workspaces";
 import { Workspace } from "./pages/Workspace";
 import { canAny } from "./permissions/can";
@@ -90,7 +91,9 @@ function Shell() {
               path={workspace.path}
               element={
                 <RequirePermission permission={workspace.permission}>
-                  {workspace.path === "/ontology" ? (
+                  {workspace.path === "/team" ? (
+                    <TeamManagement />
+                  ) : workspace.path === "/ontology" ? (
                     <OntologyStudio workspace={workspace} />
                   ) : (
                     <Workspace workspace={workspace} />

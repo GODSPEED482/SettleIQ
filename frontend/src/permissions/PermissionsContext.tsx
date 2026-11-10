@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -19,6 +20,8 @@ type Status = "no-tenant" | "loading" | "ready" | "signed-out" | "unavailable";
 type PermissionsState = {
   tenantId: string | null;
   setTenantId: (tenantId: string | null) => void;
+  // Re-reads permissions, for after a change that can alter the caller's own access.
+  reload: () => void;
   permissions: EffectivePermission[];
   status: Status;
 };
@@ -50,6 +53,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const session = useSession();
   const [chosen, setChosen] = useState<string | null>(rememberedTenant);
   const [permissions, setPermissions] = useState<EffectivePermission[]>([]);
+  const [version, setVersion] = useState(0);
+  const reload = useCallback(() => setVersion((current) => current + 1), []);
 
   // Only a tenant the session lists can be selected. With one tenant, it is selected for you.
   const listed = (id: string | null) => !!id && session.tenants.some((tenant) => tenant.id === id);
@@ -71,15 +76,20 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     if (session.status === "signed-out") setTenantId(null);
   }, [session.status, setTenantId]);
   const [status, setStatus] = useState<Status>("no-tenant");
+  const loadedTenant = useRef<string | null>(null);
 
   useEffect(() => {
-    setPermissions([]);
+    // A new tenant starts from nothing. A reload keeps the current permissions on screen until
+    // the fresh ones arrive, so the workspace in use is not unmounted.
+    const switched = loadedTenant.current !== tenantId;
+    loadedTenant.current = tenantId;
+    if (switched) setPermissions([]);
     if (!tenantId) {
       setStatus("no-tenant");
       return;
     }
     let current = true;
-    setStatus("loading");
+    if (switched) setStatus("loading");
     apiFetch<{ permissions: EffectivePermission[] }>(
       `/api/me/permissions?tenant_id=${encodeURIComponent(tenantId)}`,
     )
@@ -96,11 +106,11 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     return () => {
       current = false;
     };
-  }, [tenantId]);
+  }, [tenantId, version]);
 
   const value = useMemo(
-    () => ({ tenantId, setTenantId, permissions, status }),
-    [tenantId, setTenantId, permissions, status],
+    () => ({ tenantId, setTenantId, reload, permissions, status }),
+    [tenantId, setTenantId, reload, permissions, status],
   );
   return <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>;
 }
