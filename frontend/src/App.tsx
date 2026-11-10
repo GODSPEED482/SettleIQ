@@ -5,7 +5,7 @@ import { checkHealth } from "./api/client";
 import { OntologyStudio } from "./pages/OntologyStudio";
 import { WORKSPACES } from "./pages/workspaces";
 import { Workspace } from "./pages/Workspace";
-import { can } from "./permissions/can";
+import { canAny } from "./permissions/can";
 import { usePermissions } from "./permissions/PermissionsContext";
 
 // TODO(G1 1.11 Suprava): add sign-up, sign-in, email-verification and tenant-creation routes.
@@ -27,7 +27,7 @@ export function App() {
         <div className="brand">SettleIQ</div>
         <nav>
           {WORKSPACES.map((workspace) => {
-            const allowed = can(permissions, workspace.permission);
+            const allowed = canAny(permissions, workspace.permission);
             return (
               <NavLink
                 key={workspace.path}
