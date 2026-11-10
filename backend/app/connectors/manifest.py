@@ -96,7 +96,7 @@ class ConnectorManifest(_Strict):
     retry: RetryPolicy
     supported_schema_versions: list[str]
     health_signals: list[str] = Field(min_length=1)
-    # Provider limits, keyed by a capability this manifest declares.
+    # Provider limits, keyed by the canonical key of a capability this manifest declares.
     limits: dict[str, dict[str, Any]]
 
     @model_validator(mode="after")
@@ -104,9 +104,6 @@ class ConnectorManifest(_Strict):
         keys = [capability.key for capability in self.capabilities]
         if len(keys) != len(set(keys)):
             raise ValueError("duplicate capability key")
-        undeclared = set(self.limits) - set(keys)
-        if undeclared:
-            raise ValueError(f"limits for undeclared capabilities {sorted(undeclared)}")
         return self
 
 
@@ -144,6 +141,7 @@ def validate_manifest(
     """Reject non-canonical keys and flags that contradict the declared capabilities."""
     aliases = load_capability_aliases() if aliases is None else aliases
     kinds = set()
+    declared = set()
     for capability in manifest.capabilities:
         try:
             canonical = canonical_key(capability.key, registry, aliases)
@@ -151,7 +149,13 @@ def validate_manifest(
             raise ValueError(
                 f"{manifest.connector_id}: non-canonical key {capability.key!r}"
             ) from None
+        declared.add(canonical)
         kinds.add(registry[canonical].kind)
+    undeclared = set(manifest.limits) - declared
+    if undeclared:
+        raise ValueError(
+            f"{manifest.connector_id}: limits for undeclared capabilities {sorted(undeclared)}"
+        )
     if manifest.supports_events != ("event" in kinds):
         raise ValueError(f"{manifest.connector_id}: supports_events contradicts capabilities")
     if manifest.supports_file_ingestion != ("file" in kinds):

@@ -116,6 +116,14 @@ def test_unverified_provider_behaviour_is_not_a_manifest_value(field):
         ConnectorManifest(**data)
 
 
+def test_paypal_states_its_verified_provider_behaviour():
+    paypal = load_connector_manifests()["paypal"]
+    assert paypal.rate_limit.status == "undisclosed"
+    assert paypal.retry.actions == "idempotency_key_only"
+    assert paypal.limits["transactions.read"]["max_range_days"] == 31
+    assert paypal.limits["transactions.read"]["max_page_size"] == 500
+
+
 def test_documented_rate_limit_needs_its_figure():
     data = load_connector_manifests()["paypal"].model_dump()
     data["rate_limit"] = {"status": "documented"}
@@ -126,8 +134,8 @@ def test_documented_rate_limit_needs_its_figure():
 def test_limits_must_name_a_declared_capability():
     data = load_connector_manifests()["internal-merchant"].model_dump()
     data["limits"] = {"transactions.read": {"max_range_days": 31}}
-    with pytest.raises(ValidationError, match="undeclared"):
-        ConnectorManifest(**data)
+    with pytest.raises(ValueError, match="undeclared"):
+        validate_manifest(ConnectorManifest(**data), load_capability_registry())
 
 
 def test_duplicate_connector_id_is_rejected(tmp_path):

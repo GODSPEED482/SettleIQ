@@ -1,8 +1,9 @@
-# PayPal Sandbox adapter (spec 10). Rate limits and retries stay `unverified` until
-# OPEN-PP-01 is closed against current provider documentation. The manifest shape itself is
-# frozen under task 1.6 (OPEN-01, OPEN-CAP-01).
+# PayPal Sandbox adapter (spec 10). Rate limits, retries and limits were checked against
+# PayPal's developer documentation on 2026-11-10 (OPEN-PP-01); README.md lists the sources.
+# The manifest shape is frozen under task 1.6 (OPEN-01, OPEN-CAP-01).
 
-# TODO(G1 OPEN-PP-01 Rahul): verify limits and retries against current PayPal documentation.
+# TODO(G1 4.1 Rahul): with the Sandbox app, confirm the token scopes include Transaction
+# Search and refunds, register the webhook, and record whether Sandbox SFTP reports are enabled.
 connector_id: paypal
 version: 1.0.0
 protocols: [https-rest, webhook, csv]
@@ -66,7 +67,13 @@ capabilities:
   - key: files.upload
     version: 1.0.0
     parameters: {}
-rate_limit: {status: undisclosed}
+rate_limit:
+  status: undisclosed
+  guidance:
+    - PayPal publishes no rate-limiting policy; exceeding it returns HTTP 429 RATE_LIMIT_REACHED.
+    - Do not poll; use webhooks for event-driven updates.
+    - Reuse the OAuth access token until expires_in; never request one per call.
+# Our policy, not a PayPal guarantee: PayPal does not document Retry-After.
 retry:
   retry_on: ["429", "5xx", network]
   honour_retry_after: true
@@ -75,4 +82,6 @@ retry:
   actions: idempotency_key_only
 supported_schema_versions: []
 health_signals: [oauth_token, webhook_last_received]
-limits: {}
+limits:
+  transactions.read: {max_range_days: 31, max_page_size: 500, availability_lag_hours: 3}
+  webhooks.receive: {provider_redeliveries: 25, provider_redelivery_days: 3}

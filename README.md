@@ -110,6 +110,22 @@ The starter needed a working default for these. Each owner should confirm or cha
 | Auth and session transport | `argon2-cffi` password hashing with opaque server-side sessions in Postgres, sent as an HttpOnly cookie. Session and token handling is our own code, because packaged libraries use verification JWTs that §11.2 does not allow | Swapnaneel, Suprava | OPEN-14, §11.2 |
 | LLM provider | OpenAI, through `agent/` only; the model name comes from `LLM_MODEL` | Swapnaneel | §6.2 |
 
+## PayPal provider facts (OPEN-PP-01)
+
+Checked against PayPal's developer documentation on 2026-11-10. `app/connectors/manifests/paypal.yaml` carries the values; nothing below is assumed beyond what these pages say (Appendix C).
+
+| Fact | Source |
+|---|---|
+| PayPal publishes no rate-limiting policy. Exceeding it returns HTTP 429 `RATE_LIMIT_REACHED`. Do not poll; use webhooks; cache the access token. `Retry-After` and backoff are not documented, so honouring `Retry-After` is our policy | [Rate limiting](https://developer.paypal.com/api/rest/reference/rate-limiting/) |
+| Client-credentials token from `/v1/oauth2/token`; the response gives `expires_in` (seconds) and space-separated `scope` URIs | [Authentication](https://developer.paypal.com/api/rest/authentication/) |
+| Transaction Search: at most 31 days per request, `page_size` 1 to 500 (default 100), up to 3 hours before a transaction appears. Scope `https://uri.paypal.com/services/reporting/search/read`. Not a real-time stream (spec §10.3) | [List transactions](https://developer.paypal.com/api/transaction-search/v1/search-get) |
+| Payments v2: `GET /v2/payments/captures/{capture_id}`, `POST /v2/payments/captures/{capture_id}/refund` (an `amount` makes it partial), `GET /v2/payments/refunds/{refund_id}`. Refund scope `https://uri.paypal.com/services/payments/refund` | [Payments v2](https://developer.paypal.com/api/payments/v2/captures-refund) |
+| `PayPal-Request-Id` makes a request idempotent: a repeat returns the latest status of the original. The retention period is not stated, two simultaneous requests with one key may fail the second, and reuse with a different payload is not described. So the Worker reads back before any retry and never reuses a key for a different payload | [Idempotency](https://developer.paypal.com/api/rest/reference/idempotency/) |
+| Webhooks: any non-2xx response is redelivered up to 25 times over 3 days, then marked Failed (resend from the dashboard). Verify by CRC32 signature or the verify-signature endpoint | [Webhooks](https://developer.paypal.com/api/rest/webhooks/) |
+| SFTP reports need PayPal support to enable report access, and transaction reports need a separate subscription; setup can take 48 hours. Sandbox host is `reports.sandbox.paypal.com`. A Sandbox app does not by itself provide a Balance Report, so plan on the §10.3.1 SYNTHETIC/REFERENCE fixture (task 3.8) | [Access SFTP reports](https://developer.paypal.com/reports/access) |
+
+Still to check with the team's Sandbox app (task 4.1): that the token's scopes include Transaction Search and refunds once Transaction Search is enabled for the app, that the webhook registers, and whether Sandbox report access is enabled.
+
 ## Spec gaps found while scaffolding
 
 - §3.5 gives `platform_security_approver` a "minimum support-request metadata read", but Appendix A has no key for it. The set currently holds only `platform.support.approve`.

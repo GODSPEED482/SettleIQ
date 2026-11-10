@@ -101,7 +101,7 @@ These bind code not yet written. The spec sections hold the detail.
 - **Agent (§8):** read, recommend and validate only, with append-only investigation writes. It computes no money and creates no request, approval or execution.
 - **A case resolves only after independent readback of authoritative state,** never on API success.
 - **Plan decisions:** PB-001 follows the conditional update in §4.4.1 rather than "replay the event". Break-glass, probabilistic matching and Redis/pgvector are not built in this slice. PB-002 live refund is built, in PayPal Sandbox only, under its own `refunds.create` attestation and safety suite. On Day 3 the order is freeze the build, create Tenant A, then attest; any later code change voids the attestation. If the safety suite is not green by Day 3 hour 7, no attestation is issued and the demo stops at step 10 in SHADOW. If only the refund scope is not green, no refund attestation is issued and the demo skips steps 14-15.
-- **Draft contracts:** the error envelope, `X-Tenant-Id`, the connector manifest and the envelope are unratified defaults (listed in `README.md`).
+- **Draft contracts:** the error envelope and `X-Tenant-Id` are unratified defaults (listed in `README.md`). The connector manifest (OPEN-01, OPEN-CAP-01) and the source-record envelope (OPEN-04) are decided for this build; adapters follow `app/sources/conventions.py` for API reads, events and files.
 
 ## In-code TODOs
 
@@ -145,7 +145,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 
 ### Rahul Pandey: Integrations and Execution (leads G4; demo Integration Admin)
 
-- [ ] OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 (Day 1, first hours)
+- [ ] OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 (Day 1, first hours). OPEN-01, OPEN-04 and OPEN-CAP-01 are recorded in `README.md` with evidence in `test_contracts.py` and `test_sources.py`. OPEN-PP-01's documentation facts are recorded in `README.md`; its account checks wait for the Sandbox app (4.1).
 - [ ] 4.1 **First task on Day 1:** Sandbox app, public HTTPS tunnel, verify provider access (1.5h)
 - [x] 1.6 Freeze connector manifest, capability keys and source envelope (1h). Evidence in `test_contracts.py`.
 - [x] 1.7 Source registry, `source_records`, raw evidence store with hashing (3h). Evidence in `test_sources.py`.
