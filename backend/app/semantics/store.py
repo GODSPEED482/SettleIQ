@@ -195,10 +195,6 @@ def _extension(ctx: TenantContext, conn: Connection, graph: list[dict]) -> dict[
     return {"@context": extension_context(ctx.tenant_id, _active_namespaces(conn)), "@graph": graph}
 
 
-# TODO(G2 2.2 Swapnaneel): the view leaves out ontology_drafts.proposals, so generated proposals
-# cannot be read or reviewed. Return them with their observed or inferred basis (spec 5.7), and
-# decide whether accepting or rejecting one records its status or the studio only copies it in
-# through PATCH /ontology/drafts and POST /mappings with method accepted_proposal.
 def _draft_view(conn: Connection, row: Any) -> dict[str, Any]:
     return {
         "id": str(row.id),
@@ -207,10 +203,11 @@ def _draft_view(conn: Connection, row: Any) -> dict[str, Any]:
         "status": row.status,
         "artifacts": _artifact_contents(conn, row.composition),
         "tenant_extension": row.tenant_extension,
+        "proposals": row.proposals,
     }
 
 
-_DRAFT_COLUMNS = "id, revision, base_version, status, composition, tenant_extension"
+_DRAFT_COLUMNS = "id, revision, base_version, status, composition, tenant_extension, proposals"
 
 
 def create_draft(ctx: TenantContext) -> dict[str, Any]:

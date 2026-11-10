@@ -289,6 +289,38 @@ def test_successful_job_stores_proposals_and_changes_no_draft_content(
 
 
 @pytest.mark.db
+def test_draft_reads_return_proposals_with_their_basis(
+    member_with_draft, as_dispatcher, monkeypatch
+):
+    assert open_draft(member_with_draft)["proposals"] == []
+    generate(member_with_draft)
+    with_agent(monkeypatch, GOOD_OUTPUT)
+    as_dispatcher.run(as_dispatcher.claim())
+    proposals = open_draft(member_with_draft)["proposals"]
+    assert [(p["type"], p["status"], p["basis"]) for p in proposals] == [
+        ("term", "PROPOSED", "inferred"),
+        ("binding", "PROPOSED", "inferred"),
+    ]
+    assert {e["basis"] for p in proposals for e in p["evidence"]} == {"observed"}
+
+
+@pytest.mark.db
+def test_proposals_are_outside_the_candidate_hash(member_with_draft, as_dispatcher, monkeypatch):
+    def candidate_hash() -> str:
+        draft_id = open_draft(member_with_draft)["id"]
+        response = member_with_draft.request(
+            "POST", "/api/ontology/validate", json={"draft_id": draft_id}
+        )
+        return response.json()["content_hash"]
+
+    before = candidate_hash()
+    generate(member_with_draft)
+    with_agent(monkeypatch, GOOD_OUTPUT)
+    as_dispatcher.run(as_dispatcher.claim())
+    assert candidate_hash() == before
+
+
+@pytest.mark.db
 def test_generation_never_publishes(member_with_draft, as_dispatcher, monkeypatch):
     generate(member_with_draft)
     with_agent(monkeypatch, GOOD_OUTPUT)

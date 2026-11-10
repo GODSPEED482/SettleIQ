@@ -18,8 +18,6 @@ from app.authz.guard import TenantContext
 from app.db import tenant_tx
 from app.errors import conflict, not_found
 
-# TODO(G2 2.2 Swapnaneel): owner review of grounding here and of agent/settleiq_agent/drafting.py.
-
 
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
