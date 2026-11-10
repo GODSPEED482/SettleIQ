@@ -48,6 +48,7 @@ variable "budget_alert_email" {
   }
 }
 
+# A new image needs its ECR repo applied before the deploy that pushes it; deploy and infra run in parallel.
 variable "services" {
   type        = list(string)
   default     = ["api", "web", "agent"] # one ECR repo per image the pipeline builds
@@ -83,6 +84,13 @@ variable "secret_names" {
     "DISPATCHER_DB_PASSWORD",
     "AGENT_TOKEN_SECRET",
     "LLM_API_KEY",
+    "LLM_MODEL",
+    "APP_BASE_URL",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USERNAME",
+    "SMTP_PASSWORD",
+    "SMTP_FROM",
   ]
   description = "Runtime env var names. Terraform creates placeholders only; infra/push-prod-env.sh sets the real values from .env.production"
 }

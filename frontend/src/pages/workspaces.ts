@@ -9,6 +9,7 @@ export type WorkspaceDefinition = {
 };
 
 export const WORKSPACES: WorkspaceDefinition[] = [
+  // TODO(G1 1.12 Suprava): build the Team screens: members, grants, invitations, transfer.
   {
     path: "/team",
     title: "Team",

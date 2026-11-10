@@ -1,6 +1,8 @@
 # PayPal Sandbox adapter (spec 10). Rate limits and retries stay `unverified` until
 # OPEN-PP-01 is closed against current provider documentation.
 
+# TODO(G1 OPEN-PP-01 Rahul): verify limits and retries against current PayPal documentation.
+# TODO(G1 1.6 Rahul): confirm this manifest against the frozen schema.
 connector_id: paypal
 version: 0.1.0
 protocols: [https-rest, webhook, csv]

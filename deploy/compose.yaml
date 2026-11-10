@@ -1,3 +1,4 @@
+# TODO(G1 1.7 Rahul): mount raw-evidence storage on api and worker, under /data (10 GB, shared with Postgres), writable by uid 10001.
 # Production stack on the EC2 host. docker-compose.yml at the repo root is the local stack.
 #
 # Fixed project name: every release directory must drive the SAME containers/volumes.
@@ -57,12 +58,19 @@ services:
     image: ${REGISTRY}/settleiq-api:${TAG}
     # Caddy is the only peer that can reach this port, so its forwarded headers are trusted.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      APP_BASE_URL: ${APP_BASE_URL:-https://app.settleiq.dpdns.org}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=2)"]
       interval: 10s
       timeout: 3s
       retries: 6
@@ -85,7 +93,8 @@ services:
       start_period: 20s
     networks: [backend]
 
-  # The agent services are stubs until task 5.7. Enable them with COMPOSE_PROFILES=agent in SSM.
+  # Ontology generation needs these; investigations are stubs until task 5.7. Enable them with
+  # COMPOSE_PROFILES=agent in SSM.
   agent-tools:
     <<: *python
     profiles: [agent]
@@ -126,6 +135,7 @@ services:
     image: ${REGISTRY}/settleiq-agent:${TAG}
     environment:
       LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
       AGENT_TOOLS_URL: http://agent-tools:8002
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8100), 2)"]
@@ -145,6 +155,7 @@ services:
       <<: *backend-env
       MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      DISPATCHER_DB_PASSWORD: ${DISPATCHER_DB_PASSWORD}
     depends_on:
       db:
         condition: service_healthy

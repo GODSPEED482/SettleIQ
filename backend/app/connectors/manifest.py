@@ -30,6 +30,7 @@ class DeclaredCapability(_Strict):
     parameters: dict[str, Any]
 
 
+# TODO(G1 1.6 Rahul): freeze these fields once OPEN-01 and OPEN-CAP-01 are closed.
 class ConnectorManifest(_Strict):
     connector_id: str
     version: str = Field(pattern=SEMVER)

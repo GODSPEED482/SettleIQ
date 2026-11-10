@@ -7,6 +7,8 @@ from app.errors import not_implemented
 
 router = APIRouter(prefix="/api", tags=["domain"])
 
+# TODO(G1 1.10 Suprava): add entity reads (spec 12.2 omits them), guarded by entity.read.
+
 
 @router.post("/domain-runs")
 def create_domain_run(ctx: TenantContext = require("domain_run.create")) -> None:

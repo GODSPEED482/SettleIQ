@@ -1,3 +1,4 @@
+# TODO(G1 1.11 Suprava): pass VITE_* values as build args if the client needs any; none reach this build.
 # Production image: static build served by nginx. Dockerfile runs the local Vite dev server.
 FROM node:22-alpine AS build
 

@@ -19,6 +19,7 @@ from fastapi.dependencies.models import Dependant
 from fastapi.params import Depends as DependsParam
 from fastapi.routing import APIRoute
 
+from app.auth.sessions import allowed_origin, session_cookie_name, session_principal
 from app.authz.access import (
     AccessGateway,
     Decision,
@@ -33,9 +34,11 @@ from app.errors import email_not_verified, missing_permission, not_found, unauth
 
 logger = logging.getLogger("settleiq.authz")
 
+# TODO(G1 OPEN-14 Suprava): ratify X-Tenant-Id as the selector for routes with no tenant path.
 TENANT_HEADER = "X-Tenant-Id"
 _ACCESS_ATTR = "__settleiq_access__"
 FRAMEWORK_ROUTES = {"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 class RouteDeclarationError(RuntimeError):
@@ -59,12 +62,21 @@ class TenantContext:
 
 
 def authenticate(request: Request) -> Principal:
-    """Authentication seam, implemented by task 1.9.
+    """Resolve the session cookie against current state (AC-IAM-07, spec 11.2).
 
-    Fails closed until a maintained auth library is wired in (spec 11.2). Do not add a
-    development bypass here; tests override this dependency instead.
+    Only the cookie is read, so a delegated agent token can never authenticate here. Do not
+    add a development bypass; tests override this dependency instead.
     """
-    raise unauthenticated()
+    raw = request.cookies.get(session_cookie_name())
+    if raw is None:
+        raise unauthenticated()
+    origin = request.headers.get("origin")
+    if request.method not in SAFE_METHODS and origin is not None and origin != allowed_origin():
+        raise unauthenticated()
+    principal = session_principal(raw)
+    if principal is None:
+        raise unauthenticated()
+    return principal
 
 
 def _declare(call: Any, access: Access) -> DependsParam:

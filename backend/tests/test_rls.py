@@ -16,6 +16,9 @@ from app.db import get_engine, global_tx, scoped_tx
 
 pytestmark = pytest.mark.db
 
+# TODO(G1 1.13 Suprava): cover AC-IAM-01..11 and AC-TEN-01..03 through the routes as 1.4, 1.5 and
+# 1.9 land. These tests exercise the database layer only.
+
 
 def make_user() -> UUID:
     user_id = uuid4()
@@ -220,6 +223,7 @@ def test_catalogue_is_seeded_without_identities():
 
 
 # Owner invariant
+# TODO(G1 1.13 Suprava): add concurrent transfers: they serialize and leave one owner (spec 3.2).
 
 
 def test_tenant_needs_its_owner_as_member_at_commit():

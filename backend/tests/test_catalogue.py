@@ -8,6 +8,7 @@ from app.authz.catalogue import (
     load_permission_sets,
 )
 
+# Any new core key fails this by design: it needs a spec revision (22.2).
 APPENDIX_A = """
 platform.tenant.read platform.tenant.manage platform.connector.register
 platform.domain_pack.register platform.ops.read platform.support.request

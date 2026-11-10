@@ -2,7 +2,7 @@
 
 Multi-tenant, ontology-driven business operations platform. Financial Operations with PayPal Sandbox is the first domain.
 
-- **Normative reference:** [`SettleIQ_Authoritative_Specification_v1.5.md`](SettleIQ_Authoritative_Specification_v1.5.md)
+- **Normative reference:** [`SettleIQ_Authoritative_Specification_v1.6.md`](SettleIQ_Authoritative_Specification_v1.6.md)
 - **Delivery plan:** [`.claude/SettleIQ_3-Day_Delivery_Plan.md`](.claude/SettleIQ_3-Day_Delivery_Plan.md). Task numbers in this repo (for example `1.9`) refer to it.
 
 ## What this starter contains
@@ -22,7 +22,7 @@ This is the foundation from plan task 1.1, plus what spec §17 says must not be 
 | Agent tool registry with prohibited-tool check | `backend/app/investigation/tools.py` | Working |
 | Decimal-safe money | `backend/packs/finops/money.py` | Working |
 | Web shell, permission-driven nav, React Flow canvas | `frontend/src/` | Skeleton |
-| **Authentication** | `authenticate` in `guard.py` | **Always returns 401 until task 1.9** |
+| Authentication: sessions, email verification, tenant creation | `backend/app/auth/`, `backend/app/tenancy/creation.py` | Working; sending needs an SMTP relay |
 
 ## Running it
 
@@ -103,14 +103,15 @@ The starter needed a working default for these. Each owner should confirm or cha
 | Tenant selector on routes without a tenant path | `X-Tenant-Id` header | Suprava | OPEN-14 |
 | Connector manifest fields | `app/connectors/manifest.py` | Rahul | OPEN-01, OPEN-CAP-01 |
 | Envelope evolution | Spec §7.1 fields only | Rahul | OPEN-04 |
-| Domain-pack manifest fields | `app/domain_packs/manifest.py` | Swapnaneel | OPEN-03 |
-| Permission sensitivity and narrowable scopes | `permissions.yaml` | Rishav | Spec §3.3 leaves per-key values open |
-| Permission caching | None; resolved on every request | Rishav | OPEN-21-19 |
-| Auth library and session transport | Not chosen | Swapnaneel, Suprava | OPEN-14, §11.2 |
-| LLM provider | Not chosen | Swapnaneel | §6.2 |
+| Domain-pack manifest and activation | Fields frozen in `app/domain_packs/manifest.py`. Versions are PEP 440 ranges; a conflict declared by either pack or an unmet dependency refuses activation; namespaces are unique and IRIs use the pack namespace; rollback re-pins an earlier published version. Multi-pack overrides stay under OPEN-05 | Swapnaneel | OPEN-03 |
+| Permission sensitivity and narrowable scopes | Reviewed per key in `permissions.yaml`. Permission sets stay at version 1 and re-seed in place in this build | Rishav | Spec §3.3 leaves per-key values open |
+| Permission caching | Decided for this build: no cache. Every decision re-resolves from current membership and grants, so revocation applies on the next decision, including mid-run for the agent. The spec item stays open for production | Rishav | OPEN-21-19 |
+| Stack gaps from task 1.1 | Raw evidence: local volume. Secrets: SSM rendered to env at deploy. Email: SMTP relay. Signing: GitHub Actions | Rishav | Delivery plan |
+| Auth and session transport | `argon2-cffi` password hashing with opaque server-side sessions in Postgres, sent as an HttpOnly cookie. Session and token handling is our own code, because packaged libraries use verification JWTs that §11.2 does not allow | Swapnaneel, Suprava | OPEN-14, §11.2 |
+| LLM provider | OpenAI, through `agent/` only; the model name comes from `LLM_MODEL` | Swapnaneel | §6.2 |
 
 ## Spec gaps found while scaffolding
 
 - §3.5 gives `platform_security_approver` a "minimum support-request metadata read", but Appendix A has no key for it. The set currently holds only `platform.support.approve`.
 - §12.2 omits sign-in, suspend-member, and mapping, authority and entity reads (plan task 1.10). These routes do not exist yet.
-- **Unresolved stack conflict:** this starter follows spec §6.2 (FastAPI). `.claude/SettleIQ_Tech_Stack.md` specifies a Node/TypeScript API with Python limited to the agent service. The team needs to pick one before backend work starts. Its choices for auth, LLM and frontend libraries also differ from the "Not chosen" rows above and from the current frontend.
+- **Backend stack settled:** the backend is FastAPI, following spec §6.2 (confirmed 2026-11-09). The Node/TypeScript API in `.claude/SettleIQ_Tech_Stack.md` is superseded. That document's frontend library choices (TanStack Router, shadcn/ui, AG Grid) still differ from the current frontend and remain open.

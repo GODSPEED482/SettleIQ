@@ -2,7 +2,7 @@
 
 ## Context
 
-SettleIQ spec v1.5 is a pre-development baseline written for a ten-day MVP. The workspace holds only the spec: no code, no repo. This plan analyzes the SDLC, splits it into the spec's six gates (G1-G6), breaks each gate into tasks, and assigns those tasks so that **all four people work in every gate**, within **3 days / 12 person-days (96 hours)**.
+SettleIQ spec v1.6 is a pre-development baseline written for a ten-day MVP. The workspace holds only the spec: no code, no repo. This plan analyzes the SDLC, splits it into the spec's six gates (G1-G6), breaks each gate into tasks, and assigns those tasks so that **all four people work in every gate**, within **3 days / 12 person-days (96 hours)**.
 
 **The main constraint.** My rough sizing of the full P0 scope is about 47 person-days, so 12 covers roughly a quarter of it. Spec §23 says the MVP is demonstrable only when all 29 Definition of Done items are true, so this build should be called a **3-day vertical slice, not the MVP**. No requirement changes, so no new spec revision is needed under §22.2. Anything not built stays `NOT STARTED` under §22.3.
 
@@ -179,7 +179,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 | Owner | Items | By |
 |---|---|---|
-| Rishav | OPEN-REL-01 (attestation identity and key custody), OPEN-21-19 (no permission cache in this build) | G1, Day 1 |
+| Rishav | OPEN-21-19 (no permission cache in this build). OPEN-REL-01 is closed by spec v1.6 §9.7. | G1, Day 1 |
 | Rahul | OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 | Day 1, first hours |
 | Swapnaneel | OPEN-03, OPEN-10 (included-in-net semantics for the fixture) | OPEN-03 Day 1; OPEN-10 before 3.3 |
 | Suprava | OPEN-14 (API conventions, auth transport, error envelope) | Day 1, first hours |

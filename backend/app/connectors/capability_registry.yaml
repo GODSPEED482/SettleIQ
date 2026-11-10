@@ -1,6 +1,7 @@
 # Canonical connector capability keys (spec 4.4). One spelling per operation.
 # A new connector adds its keys here; platform code does not change.
 
+# TODO(G1 OPEN-CAP-01 Rahul): freeze these keys and decide the compatibility alias policy.
 capabilities:
   - {key: transactions.read, kind: read}
   - {key: captures.read, kind: read}
