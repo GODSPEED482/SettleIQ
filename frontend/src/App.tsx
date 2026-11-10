@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { checkHealth } from "./api/client";
 import { TenantPicker } from "./components/TenantPicker";
+import { AcceptInvitation } from "./pages/AcceptInvitation";
 import { SignIn } from "./pages/auth/SignIn";
 import { SignUp } from "./pages/auth/SignUp";
 import { VerifyEmail } from "./pages/auth/VerifyEmail";
@@ -17,13 +18,20 @@ import { RequirePermission } from "./permissions/RequirePermission";
 import { RequireSession } from "./session/RequireSession";
 import { useSession } from "./session/SessionContext";
 
-// TODO(G1 1.12 Suprava): add the invitation-acceptance screen (POST /invitations/{token}/accept).
 export function App() {
   return (
     <Routes>
       <Route path="/sign-in" element={<SignIn />} />
       <Route path="/sign-up" element={<SignUp />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route
+        path="/invitations/accept"
+        element={
+          <RequireSession>
+            <AcceptInvitation />
+          </RequireSession>
+        }
+      />
       <Route
         path="*"
         element={
