@@ -101,7 +101,7 @@ These bind code not yet written. The spec sections hold the detail.
 - **Agent (§8):** read, recommend and validate only, with append-only investigation writes. It computes no money and creates no request, approval or execution.
 - **A case resolves only after independent readback of authoritative state,** never on API success.
 - **Plan decisions:** PB-001 follows the conditional update in §4.4.1 rather than "replay the event". Break-glass, probabilistic matching and Redis/pgvector are not built in this slice. PB-002 live refund is built, in PayPal Sandbox only, under its own `refunds.create` attestation and safety suite. On Day 3 the order is freeze the build, create Tenant A, then attest; any later code change voids the attestation. If the safety suite is not green by Day 3 hour 7, no attestation is issued and the demo stops at step 10 in SHADOW. If only the refund scope is not green, no refund attestation is issued and the demo skips steps 14-15.
-- **Draft contracts:** the error envelope and `X-Tenant-Id` are unratified defaults (listed in `README.md`). The connector manifest (OPEN-01, OPEN-CAP-01) and the source-record envelope (OPEN-04) are decided for this build; adapters follow `app/sources/conventions.py` for API reads, events and files.
+- **API contracts:** the error envelope, `X-Tenant-Id`, the session-cookie transport and `/api` as version 1 are ratified under OPEN-14 (listed in `README.md`). The connector manifest (OPEN-01, OPEN-CAP-01) and the source-record envelope (OPEN-04) are decided for this build; adapters follow `app/sources/conventions.py` for API reads, events and files.
 
 ## In-code TODOs
 

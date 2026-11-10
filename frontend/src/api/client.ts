@@ -11,7 +11,8 @@ export class ApiError extends Error {
   }
 }
 
-// TODO(G1 OPEN-14 Suprava): settle the auth transport with the 1.9 owner, then send it from here.
+// Auth transport (OPEN-14): the HttpOnly session cookie, which the browser sends on same-origin
+// requests. The client never sees or sends a token itself.
 // TODO(G1 1.11 Suprava): response.json() throws on an empty 204; handle no-content responses.
 export async function apiFetch<T>(
   path: string,
@@ -20,6 +21,7 @@ export async function apiFetch<T>(
   const { tenantId, headers, ...rest } = options;
   const response = await fetch(path, {
     ...rest,
+    credentials: "same-origin",
     headers: { ...headers, ...(tenantId ? { [TENANT_HEADER]: tenantId } : {}) },
   });
   if (!response.ok) {

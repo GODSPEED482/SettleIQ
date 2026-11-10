@@ -34,7 +34,7 @@ from app.errors import email_not_verified, missing_permission, not_found, unauth
 
 logger = logging.getLogger("settleiq.authz")
 
-# TODO(G1 OPEN-14 Suprava): ratify X-Tenant-Id as the selector for routes with no tenant path.
+# The tenant selector for routes with no {tenant_id} path, ratified under OPEN-14.
 TENANT_HEADER = "X-Tenant-Id"
 _ACCESS_ATTR = "__settleiq_access__"
 FRAMEWORK_ROUTES = {"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
