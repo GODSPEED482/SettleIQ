@@ -1,5 +1,6 @@
 """Versioned mappings and authority assertions (task 2.4, ARCH-07, AC-REC-10, AC-REC-15)."""
 
+import sys
 from uuid import UUID, uuid4
 
 import pytest
@@ -125,10 +126,37 @@ def test_unknown_terms_are_named():
 # Database
 
 
+def register_sources(member: Member) -> None:
+    with scoped_tx(member.tenant) as conn:
+        for source_id, connector in ((PAYPAL, "paypal"), (MERCHANT, "internal-merchant")):
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO data_sources (id, tenant_id, connector_id, connector_version,
+                        source_type, protocol, display_name, created_by)
+                    VALUES (:id, :tenant, :connector, '1.0.0', 'payment_provider', 'http',
+                        :name, :user)
+                    """
+                ),
+                {
+                    "id": UUID(source_id),
+                    "tenant": member.tenant,
+                    "connector": connector,
+                    "name": connector,
+                    "user": member.principal.id,
+                },
+            )
+
+
 @pytest.fixture
-def draft_member() -> tuple[Member, str]:
+def draft_member(monkeypatch) -> tuple[Member, str]:
+    # Source IDs are globally unique, so each test tenant needs its own pair. The factories
+    # below read these module names, so patching them keeps every call site unchanged.
+    monkeypatch.setattr(sys.modules[__name__], "PAYPAL", str(uuid4()))
+    monkeypatch.setattr(sys.modules[__name__], "MERCHANT", str(uuid4()))
     member = Member()
     member.activate("finops")
+    register_sources(member)
     return member, member.create_draft().json()["id"]
 
 

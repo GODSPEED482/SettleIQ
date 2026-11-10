@@ -6,9 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
 
-    # TODO(G1 1.7 Rahul): add the raw-evidence storage location.
     database_url: str
     environment: str = "development"
+    raw_evidence_dir: str = "/data/raw-evidence"
 
     app_base_url: str = "http://localhost:5173"
     session_ttl_hours: int = 24

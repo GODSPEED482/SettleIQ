@@ -1,7 +1,7 @@
-"""Generic canonical source-record envelope (spec 7.1). DRAFT under OPEN-04.
+"""Generic canonical source-record envelope (spec 7.1). Frozen under task 1.6 (OPEN-04).
 
 Domain-neutral by contract: `attributes` holds arbitrary payload, and no financial
-field may be added here (NFR-016).
+field may be added here (NFR-016). The only fields are the logical fields in §7.1.
 """
 
 from typing import Any
@@ -10,9 +10,6 @@ from uuid import UUID
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 
-# TODO(G1 OPEN-04 Rahul): settle envelope evolution, then freeze this under task 1.6.
-# TODO(G1 1.7 Rahul): persist to source_records; raw evidence is stored and hashed first, and
-# raw_evidence_id and payload_hash come from that store.
 class SourceRecordEnvelope(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

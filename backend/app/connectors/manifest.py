@@ -30,7 +30,13 @@ class DeclaredCapability(_Strict):
     parameters: dict[str, Any]
 
 
-# TODO(G1 1.6 Rahul): freeze these fields once OPEN-01 and OPEN-CAP-01 are closed.
+class CapabilityAlias(_Strict):
+    alias: str
+    canonical: str
+
+
+# Frozen under task 1.6 (spec 4.4, OPEN-01 and OPEN-CAP-01). Unsupported capabilities are
+# stated explicitly, and every capability key is canonical or a registered versioned alias.
 class ConnectorManifest(_Strict):
     connector_id: str
     version: str = Field(pattern=SEMVER)
@@ -70,15 +76,42 @@ def load_capability_registry() -> dict[str, RegisteredCapability]:
     return {item["key"]: RegisteredCapability(**item) for item in raw["capabilities"]}
 
 
+@lru_cache
+def load_capability_aliases() -> dict[str, str]:
+    """Registered legacy spellings, mapped to their canonical key. Empty unless added."""
+    raw = yaml.safe_load(REGISTRY_FILE.read_text(encoding="utf-8"))
+    aliases = raw.get("aliases", {}).get("mappings", [])
+    return {item["alias"]: item["canonical"] for item in (CapabilityAlias(**a) for a in aliases)}
+
+
+def canonical_key(
+    key: str, registry: dict[str, RegisteredCapability], aliases: dict[str, str]
+) -> str:
+    """Resolve one key to its canonical spelling, or raise if it is not registered."""
+    if key in registry:
+        return key
+    canonical = aliases.get(key)
+    if canonical is None or canonical not in registry:
+        raise ValueError(f"non-canonical key {key!r}")
+    return canonical
+
+
 def validate_manifest(
-    manifest: ConnectorManifest, registry: dict[str, RegisteredCapability]
+    manifest: ConnectorManifest,
+    registry: dict[str, RegisteredCapability],
+    aliases: dict[str, str] | None = None,
 ) -> None:
     """Reject non-canonical keys and flags that contradict the declared capabilities."""
+    aliases = load_capability_aliases() if aliases is None else aliases
     kinds = set()
     for capability in manifest.capabilities:
-        if capability.key not in registry:
-            raise ValueError(f"{manifest.connector_id}: non-canonical key {capability.key!r}")
-        kinds.add(registry[capability.key].kind)
+        try:
+            canonical = canonical_key(capability.key, registry, aliases)
+        except ValueError:
+            raise ValueError(
+                f"{manifest.connector_id}: non-canonical key {capability.key!r}"
+            ) from None
+        kinds.add(registry[canonical].kind)
     if manifest.supports_events != ("event" in kinds):
         raise ValueError(f"{manifest.connector_id}: supports_events contradicts capabilities")
     if manifest.supports_file_ingestion != ("file" in kinds):
@@ -89,9 +122,10 @@ def validate_manifest(
 
 def load_connector_manifests(directory: Path = MANIFEST_DIR) -> dict[str, ConnectorManifest]:
     registry = load_capability_registry()
+    aliases = load_capability_aliases()
     manifests = {}
     for path in sorted(directory.glob("*.yaml")):
         manifest = ConnectorManifest(**yaml.safe_load(path.read_text(encoding="utf-8")))
-        validate_manifest(manifest, registry)
+        validate_manifest(manifest, registry, aliases)
         manifests[manifest.connector_id] = manifest
     return manifests

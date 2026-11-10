@@ -1,4 +1,3 @@
-# TODO(G1 1.7 Rahul): mount raw-evidence storage on api and worker, under /data (10 GB, shared with Postgres), writable by uid 10001.
 # Production stack on the EC2 host. docker-compose.yml at the repo root is the local stack.
 #
 # Fixed project name: every release directory must drive the SAME containers/volumes.
@@ -24,6 +23,7 @@ x-python: &python
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB}
   ENVIRONMENT: ${ENVIRONMENT}
+  RAW_EVIDENCE_DIR: /data/raw-evidence
 
 services:
   proxy:
@@ -66,6 +66,8 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+    volumes:
+      - /data/raw-evidence:/data/raw-evidence
     depends_on:
       db:
         condition: service_healthy
@@ -82,6 +84,8 @@ services:
     image: ${REGISTRY}/settleiq-api:${TAG}
     command: ["uvicorn", "app.worker_api:app", "--host", "0.0.0.0", "--port", "8001"]
     environment: *backend-env
+    volumes:
+      - /data/raw-evidence:/data/raw-evidence
     depends_on:
       db:
         condition: service_healthy

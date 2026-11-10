@@ -1,9 +1,8 @@
 # Internal-merchant write adapter (spec 4.4.1). Registered separately from the PostgreSQL
-# read source, so registering that source grants no write authority.
+# read source, so registering that source grants no write authority. Frozen under task 1.6.
 
-# TODO(G1 1.6 Rahul): confirm this manifest against the frozen schema.
 connector_id: internal-merchant
-version: 0.1.0
+version: 1.0.0
 protocols: [postgresql]
 source_types: [merchant_database]
 auth_mode: database_role
