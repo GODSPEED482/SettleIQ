@@ -17,6 +17,11 @@ from app.authz.guard import TenantContext
 from app.db import tenant_tx
 from app.errors import conflict, not_found
 
+# TODO(G2 2.4 Swapnaneel): owner review of bindings, authority assertions and comparability.
+# TODO(G2 2.4 Swapnaneel): source_id is never checked. Migration 0006 predates data_sources, so
+# a binding or assertion can name a missing source. Add (tenant_id, source_id) foreign keys to
+# both tables in a new migration.
+
 TERM = r"^[a-z][a-z0-9_]*:[A-Za-z][A-Za-z0-9_]*$"
 
 

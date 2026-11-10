@@ -18,6 +18,8 @@ from app.domain_packs.registry import PackActivationError, assert_can_activate
 from app.errors import conflict, not_found, validation_failed
 from app.semantics.artifacts import Artifact, core_artifact, extension_context, pack_artifacts
 
+# TODO(G2 2.1 Swapnaneel): owner review of the composition store, pack activation and drafts.
+
 _ACTIVE_NAMESPACES_SQL = text(
     "SELECT namespace FROM tenant_domain_packs WHERE status = 'ACTIVE' ORDER BY namespace"
 )
@@ -193,6 +195,10 @@ def _extension(ctx: TenantContext, conn: Connection, graph: list[dict]) -> dict[
     return {"@context": extension_context(ctx.tenant_id, _active_namespaces(conn)), "@graph": graph}
 
 
+# TODO(G2 2.2 Swapnaneel): the view leaves out ontology_drafts.proposals, so generated proposals
+# cannot be read or reviewed. Return them with their observed or inferred basis (spec 5.7), and
+# decide whether accepting or rejecting one records its status or the studio only copies it in
+# through PATCH /ontology/drafts and POST /mappings with method accepted_proposal.
 def _draft_view(conn: Connection, row: Any) -> dict[str, Any]:
     return {
         "id": str(row.id),

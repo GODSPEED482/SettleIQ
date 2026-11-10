@@ -61,6 +61,18 @@ def validate_ontology(
     return validation.validate_draft(ctx, body.draft_id)
 
 
+# TODO(G2 2.3 Swapnaneel): take a body of draft_id, validation_run_id and confirm_publish, and
+# refuse anything but confirm_publish=true, even with ontology.publish (AC-ONTO-PUB-01).
+# TODO(G2 2.7 Rishav): in one tenant_tx, lock the tenant, reload the candidate with
+# validation.load_candidate and require the named run to have passed for that exact hash and
+# revision (AC-ONTO-PUB-02, 03). Require the draft's base_version to still be the latest version,
+# so a stale or concurrent publish fails closed and never overwrites one (AC-ONTO-PUB-05). Then
+# insert the next `ontologies` row and its `ontology_relationships`, mark the draft PUBLISHED,
+# and audit tenant, versions, hash, validation run, publisher and outcome (spec 5.7 step 6,
+# AC-ONTO-PUB-04). The new body changes the frozen contract: regenerate openapi.json, and adjust
+# test_held_permission_passes_the_gate, which accepts only 200 or 501.
+# TODO(G2 2.7 Rishav): only code keeps a PUBLISHED draft frozen; the app role can still update
+# it and add mappings or authority to it. Add a trigger in a new migration that refuses both.
 @router.post("/ontology/publish")
 def publish_ontology(ctx: TenantContext = require("ontology.publish")) -> None:
     raise not_implemented("2.7")
