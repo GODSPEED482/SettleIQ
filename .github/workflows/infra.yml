@@ -1,0 +1,44 @@
+name: infra
+
+# Runs only for a push to prod that touches infra/. Pull requests get keyless fmt and validate
+# checks from ci.yml; the AWS infra role trusts only refs/heads/prod.
+on:
+  push:
+    branches: [prod]
+    paths: ["infra/**"]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: infra-prod
+  cancel-in-progress: false # an interrupted apply leaves a held state lock
+
+env:
+  AWS_REGION: ap-south-1
+  TF_IN_AUTOMATION: "1"
+  TF_VAR_github_repo: ${{ github.repository }}
+  TF_VAR_budget_alert_email: ${{ secrets.BUDGET_ALERT_EMAIL }}
+
+defaults:
+  run:
+    working-directory: infra/envs/prod
+
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/prod'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_INFRA_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: terraform init -input=false
+      - run: terraform plan -input=false -no-color -out=tfplan
+      - run: terraform apply -input=false tfplan
