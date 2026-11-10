@@ -125,6 +125,24 @@ def test_unknown_connector_is_refused():
 
 
 @pytest.mark.db
+def test_source_binds_a_declared_protocol():
+    member = Member()
+    source = create_ok(member, protocol="csv")
+    assert source["protocol"] == "csv"
+    assert source["source_type"] == "payment_provider"
+
+
+@pytest.mark.db
+@pytest.mark.parametrize("override", [{"protocol": "ftp"}, {"source_type": "crm"}])
+def test_undeclared_protocol_or_source_type_is_refused(override):
+    member = Member()
+    response = create(member, **override)
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert member.request("GET", "/api/sources").json() == []
+
+
+@pytest.mark.db
 @pytest.mark.parametrize("field", ["status", "tenant_id", "capabilities", "created_by"])
 def test_request_cannot_set_server_owned_fields(field):
     member = Member()

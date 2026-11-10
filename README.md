@@ -101,7 +101,7 @@ The starter needed a working default for these. Each owner should confirm or cha
 |---|---|---|---|
 | Error envelope | `{"error": {"code", "message", ...}}` | Suprava | OPEN-14 |
 | Tenant selector on routes without a tenant path | `X-Tenant-Id` header | Suprava | OPEN-14 |
-| Connector manifest fields | `app/connectors/manifest.py` | Rahul | OPEN-01, OPEN-CAP-01 |
+| Connector manifest, negotiation and lifecycle | Decided for this build. Fields frozen in `app/connectors/manifest.py`; unsupported capabilities are required booleans, and rate limits and retries are typed, so an unverified provider value cannot ship. Keys are canonical (`capability_registry.yaml`); a legacy spelling loads only through a registered, versioned alias. A source binds one declared protocol and source type and snapshots the capabilities; callers negotiate by key presence, because packs reference keys without versions. A source stays pinned to its registration version: minor and patch are additive, and a different major or an older manifest fails closed. There is no upgrade route: disable and re-register | Rahul | OPEN-01, OPEN-CAP-01 |
 | Envelope evolution | Spec §7.1 fields only | Rahul | OPEN-04 |
 | Domain-pack manifest and activation | Fields frozen in `app/domain_packs/manifest.py`. Versions are PEP 440 ranges; a conflict declared by either pack or an unmet dependency refuses activation; namespaces are unique and IRIs use the pack namespace; rollback re-pins an earlier published version. Multi-pack overrides stay under OPEN-05 | Swapnaneel | OPEN-03 |
 | Permission sensitivity and narrowable scopes | Reviewed per key in `permissions.yaml`. Permission sets stay at version 1 and re-seed in place in this build | Rishav | Spec §3.3 leaves per-key values open |

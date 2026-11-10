@@ -40,7 +40,12 @@ capabilities:
         requested_status: {const: COMPLETED}
 
 rate_limit: {status: not_applicable}
-retry: {policy: idempotent_key_only}
+retry:
+  retry_on: [network]
+  honour_retry_after: false
+  backoff: exponential
+  max_attempts: 3
+  actions: idempotency_key_only
 supported_schema_versions: []
 health_signals: [database_connection]
 limits: {}

@@ -66,8 +66,13 @@ capabilities:
   - key: files.upload
     version: 1.0.0
     parameters: {}
-rate_limit: {status: unverified}
-retry: {status: unverified}
+rate_limit: {status: undisclosed}
+retry:
+  retry_on: ["429", "5xx", network]
+  honour_retry_after: true
+  backoff: exponential
+  max_attempts: 3
+  actions: idempotency_key_only
 supported_schema_versions: []
 health_signals: [oauth_token, webhook_last_received]
 limits: {}

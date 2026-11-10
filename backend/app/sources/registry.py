@@ -14,7 +14,7 @@ from sqlalchemy import text
 
 from app.audit import write_audit
 from app.authz.guard import TenantContext
-from app.connectors.manifest import load_connector_manifests
+from app.connectors.manifest import load_connector_manifests, select_binding
 from app.db import global_tx, tenant_tx
 from app.errors import not_found, validation_failed
 
@@ -34,6 +34,9 @@ _SECRET_KEY_PARTS = ("secret", "password", "token", "private_key", "api_key", "c
 
 class CreateSourceBody(_Body):
     connector_id: str = Field(min_length=1, max_length=100)
+    # Optional; must be declared by the manifest, and default to its first entry.
+    protocol: str | None = Field(default=None, min_length=1, max_length=100)
+    source_type: str | None = Field(default=None, min_length=1, max_length=100)
     display_name: str = Field(min_length=1, max_length=200)
     config: dict[str, Any] = {}
     secret_reference: str | None = Field(default=None, max_length=500)
@@ -76,6 +79,10 @@ def create_source(ctx: TenantContext, body: CreateSourceBody) -> dict[str, Any]:
     manifest = load_connector_manifests().get(body.connector_id)
     if manifest is None:
         raise validation_failed("Unknown connector.")
+    try:
+        protocol, source_type = select_binding(manifest, body.protocol, body.source_type)
+    except ValueError as error:
+        raise validation_failed(str(error)) from None
     source_id = uuid4()
     capabilities = [capability.model_dump() for capability in manifest.capabilities]
     with tenant_tx(ctx) as conn:
@@ -94,8 +101,8 @@ def create_source(ctx: TenantContext, body: CreateSourceBody) -> dict[str, Any]:
                 "tenant": ctx.tenant_id,
                 "connector": manifest.connector_id,
                 "version": manifest.version,
-                "source_type": manifest.source_types[0],
-                "protocol": manifest.protocols[0],
+                "source_type": source_type,
+                "protocol": protocol,
                 "name": body.display_name,
                 "config": json.dumps(body.config),
                 "secret": body.secret_reference,

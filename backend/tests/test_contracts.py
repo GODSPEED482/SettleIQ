@@ -10,9 +10,13 @@ from pydantic import ValidationError
 
 from app.authz.catalogue import get_catalogue
 from app.connectors.manifest import (
+    MANIFEST_DIR,
     ConnectorManifest,
+    check_source_compatible,
     load_capability_registry,
     load_connector_manifests,
+    require_capabilities,
+    select_binding,
     validate_manifest,
 )
 from app.domain_packs.manifest import AgentTool, DomainPackManifest, load_domain_packs
@@ -101,6 +105,82 @@ def test_unsupported_capability_must_be_stated():
     del data["supports_incremental"]
     with pytest.raises(ValidationError):
         ConnectorManifest(**data)
+
+
+@pytest.mark.parametrize("field", ["rate_limit", "retry"])
+def test_unverified_provider_behaviour_is_not_a_manifest_value(field):
+    data = load_connector_manifests()["paypal"].model_dump() | {field: {"status": "unverified"}}
+    with pytest.raises(ValidationError):
+        ConnectorManifest(**data)
+
+
+def test_documented_rate_limit_needs_its_figure():
+    data = load_connector_manifests()["paypal"].model_dump()
+    data["rate_limit"] = {"status": "documented"}
+    with pytest.raises(ValidationError, match="requests_per_minute"):
+        ConnectorManifest(**data)
+
+
+def test_limits_must_name_a_declared_capability():
+    data = load_connector_manifests()["internal-merchant"].model_dump()
+    data["limits"] = {"transactions.read": {"max_range_days": 31}}
+    with pytest.raises(ValidationError, match="undeclared"):
+        ConnectorManifest(**data)
+
+
+def test_duplicate_connector_id_is_rejected(tmp_path):
+    text = (MANIFEST_DIR / "paypal.yaml").read_text(encoding="utf-8")
+    (tmp_path / "a.yaml").write_text(text, encoding="utf-8")
+    (tmp_path / "b.yaml").write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicate connector_id"):
+        load_connector_manifests(tmp_path)
+
+
+def test_binding_defaults_to_the_first_declared_entry():
+    paypal = load_connector_manifests()["paypal"]
+    assert select_binding(paypal) == ("https-rest", "payment_provider")
+    assert select_binding(paypal, "webhook") == ("webhook", "payment_provider")
+
+
+@pytest.mark.parametrize(
+    ("protocol", "source_type"), [("ftp", None), (None, "merchant_database")]
+)
+def test_undeclared_binding_is_refused(protocol, source_type):
+    with pytest.raises(ValueError, match="does not support"):
+        select_binding(load_connector_manifests()["paypal"], protocol, source_type)
+
+
+def snapshot(connector_id: str) -> list[dict]:
+    manifest = load_connector_manifests()[connector_id]
+    return [capability.model_dump() for capability in manifest.capabilities]
+
+
+def test_capability_negotiation_returns_the_declared_entries():
+    found = require_capabilities(snapshot("paypal"), ["refunds.create", "captures.read"])
+    assert list(found) == ["refunds.create", "captures.read"]
+    assert found["refunds.create"]["parameters"]["required"] == [
+        "capture_id", "amount", "currency", "idempotency_key",
+    ]
+
+
+def test_capability_negotiation_names_what_is_missing():
+    with pytest.raises(ValueError, match="merchant.payment_status.correct"):
+        require_capabilities(snapshot("paypal"), ["merchant.payment_status.correct"])
+
+
+def manifest_at(version: str) -> ConnectorManifest:
+    return load_connector_manifests()["paypal"].model_copy(update={"version": version})
+
+
+@pytest.mark.parametrize("pinned", ["1.0.0", "1.1.0", "1.1.3"])
+def test_additive_manifest_versions_serve_pinned_sources(pinned):
+    check_source_compatible(pinned, manifest_at("1.1.3"))
+
+
+@pytest.mark.parametrize("pinned", ["0.9.0", "2.0.0", "1.2.0"])
+def test_incompatible_manifest_version_fails_closed(pinned):
+    with pytest.raises(ValueError, match="cannot serve"):
+        check_source_compatible(pinned, manifest_at("1.1.3"))
 
 
 def pack_data(**overrides) -> dict:
