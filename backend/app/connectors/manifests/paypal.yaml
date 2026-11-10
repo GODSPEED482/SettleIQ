@@ -2,7 +2,7 @@
 # PayPal's developer documentation on 2026-11-10 (OPEN-PP-01); README.md lists the sources.
 # The manifest shape is frozen under task 1.6 (OPEN-01, OPEN-CAP-01).
 
-# TODO(G1 4.1 Rahul): with the Sandbox app, confirm the token scopes include Transaction
+# TODO(G4 4.1 Rahul): with the Sandbox app, confirm the token scopes include Transaction
 # Search and refunds, register the webhook, and record whether Sandbox SFTP reports are enabled.
 connector_id: paypal
 version: 1.0.0
