@@ -1,4 +1,3 @@
-# TODO(G1 1.1 Rishav): owner review is done; confirm on the next push to prod that the pinned actions and rollback steps run.
 name: deploy
 
 # Runs only for a push to prod, which includes a merged PR. Keep it that way: do not add

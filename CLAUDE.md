@@ -127,7 +127,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] OPEN-REL-01: attestation identity and key custody (G1, Day 1). Decided in spec v1.6 §9.7, approved by Rishav 2026-11-09. The build is task 5.4; OPEN-REL-02 stays open.
 - [x] OPEN-21-19: no permission cache in this build (G1, Day 1). Recorded in `README.md`; `test_revoked_grant_stops_on_next_decision` is the evidence.
 - [x] 1.1 Repo, Docker Compose, CI skeleton; settle stack gaps (1.5h). Full stack run with `--profile agent`; `/readyz` added; production DNS, billing and instance checked.
-- [ ] 1.1 follow-ups that need production or an AWS decision: first run of the hardened `deploy.yml` and `infra.yml` on `prod`; off-machine backup of `infra/bootstrap/terraform.tfstate`; deactivating the apply key.
+- [ ] 1.1 follow-ups that need an AWS decision: off-machine backup of `infra/bootstrap/terraform.tfstate`; deactivating the apply key. The hardened workflows have run on `prod`: infra run 42892572082 applied after tests, deploy run 42892572374 rolled back a failed release, and deploy run 42894875467 went live.
 - [x] 1.2 Identity and tenant migrations, RLS baseline, transaction-local tenant context (2h). Reviewed; `tests/test_rls.py` passes against PostgreSQL with no skips.
 - [x] 1.3 Permission catalogue as seed data, deny-by-default route guard, CI route map, role-name ban (2.5h). Reviewed per key against §3.3 and §3.5; `test_route_guard.py`, `test_catalogue.py` and `test_code_rules.py` are the evidence.
 - [x] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). `tests/test_ownership.py` covers AC-OWNER-01, 03, 04, 05, including concurrent transfers.
