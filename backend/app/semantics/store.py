@@ -25,11 +25,11 @@ _ACTIVE_NAMESPACES_SQL = text(
 )
 
 
-def _active_namespaces(conn: Connection) -> list[str]:
+def active_namespaces(conn: Connection) -> list[str]:
     return list(conn.execute(_ACTIVE_NAMESPACES_SQL).scalars())
 
 
-def _lock_tenant(conn: Connection, tenant_id: UUID) -> None:
+def lock_tenant(conn: Connection, tenant_id: UUID) -> None:
     """Serialize activation and draft creation, so concurrent changes cannot both pass checks."""
     conn.execute(text("SELECT id FROM tenants WHERE id = :t FOR UPDATE"), {"t": tenant_id})
 
@@ -79,8 +79,8 @@ def activate_pack(ctx: TenantContext, namespace: str) -> dict[str, str]:
     if candidate is None:
         raise not_found()
     with tenant_tx(ctx) as conn:
-        _lock_tenant(conn, ctx.tenant_id)
-        active = [packs[name] for name in _active_namespaces(conn) if name in packs]
+        lock_tenant(conn, ctx.tenant_id)
+        active = [packs[name] for name in active_namespaces(conn) if name in packs]
         try:
             assert_can_activate(candidate, active)
         except PackActivationError as error:
@@ -123,8 +123,8 @@ def _dependents(namespace: str, active: list[DomainPackManifest]) -> list[str]:
 def disable_pack(ctx: TenantContext, namespace: str) -> dict[str, str]:
     packs = load_domain_packs()
     with tenant_tx(ctx) as conn:
-        _lock_tenant(conn, ctx.tenant_id)
-        names = _active_namespaces(conn)
+        lock_tenant(conn, ctx.tenant_id)
+        names = active_namespaces(conn)
         if namespace not in names:
             raise not_found()
         dependents = _dependents(namespace, [packs[name] for name in names if name in packs])
@@ -158,7 +158,7 @@ def _artifact_contents(conn: Connection, references: list[dict[str, str]]) -> li
     ]
 
 
-def _latest_version(conn: Connection) -> int:
+def latest_version(conn: Connection) -> int:
     return conn.execute(text("SELECT COALESCE(max(version), 0) FROM ontologies")).scalar_one()
 
 
@@ -185,14 +185,14 @@ def read_active_ontology(ctx: TenantContext) -> dict[str, Any]:
 
 def _composition(conn: Connection, packs: dict[str, DomainPackManifest]) -> list[Artifact]:
     artifacts = [core_artifact()]
-    for namespace in _active_namespaces(conn):
+    for namespace in active_namespaces(conn):
         if namespace in packs:
             artifacts.extend(pack_artifacts(packs[namespace]))
     return artifacts
 
 
 def _extension(ctx: TenantContext, conn: Connection, graph: list[dict]) -> dict[str, Any]:
-    return {"@context": extension_context(ctx.tenant_id, _active_namespaces(conn)), "@graph": graph}
+    return {"@context": extension_context(ctx.tenant_id, active_namespaces(conn)), "@graph": graph}
 
 
 def _draft_view(conn: Connection, row: Any) -> dict[str, Any]:
@@ -213,7 +213,7 @@ _DRAFT_COLUMNS = "id, revision, base_version, status, composition, tenant_extens
 def create_draft(ctx: TenantContext) -> dict[str, Any]:
     packs = load_domain_packs()
     with tenant_tx(ctx) as conn:
-        _lock_tenant(conn, ctx.tenant_id)
+        lock_tenant(conn, ctx.tenant_id)
         existing = conn.execute(
             text("SELECT id FROM ontology_drafts WHERE status = 'OPEN'")
         ).first()
@@ -236,7 +236,7 @@ def create_draft(ctx: TenantContext) -> dict[str, Any]:
             {
                 "id": uuid4(),
                 "tenant": ctx.tenant_id,
-                "base": _latest_version(conn),
+                "base": latest_version(conn),
                 "composition": json.dumps([artifact.reference() for artifact in composition]),
                 "extension": json.dumps(_extension(ctx, conn, [])),
                 "user": ctx.principal.id,
