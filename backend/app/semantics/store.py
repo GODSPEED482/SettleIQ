@@ -19,8 +19,6 @@ from app.errors import conflict, not_found, validation_failed
 from app.semantics import mappings
 from app.semantics.artifacts import Artifact, core_artifact, extension_context, pack_artifacts
 
-# TODO(G2 2.1 Swapnaneel): owner review of the composition store, pack activation and drafts.
-
 _ACTIVE_NAMESPACES_SQL = text(
     "SELECT namespace FROM tenant_domain_packs WHERE status = 'ACTIVE' ORDER BY namespace"
 )
