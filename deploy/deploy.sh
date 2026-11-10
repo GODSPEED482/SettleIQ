@@ -28,16 +28,19 @@ cd "$REL"
 touch "$REL" # newest mtime, so housekeeping below never prunes the live release
 
 echo "==> rendering .env from SSM $PARAM_PATH"
+# Terraform seeds every parameter with CHANGE_ME. Leave those out, so an optional value nobody
+# has set falls back to its Compose default instead of reaching the app (SMTP_PORT=CHANGE_ME
+# stopped the API from starting).
 aws ssm get-parameters-by-path --region "$REGION" --path "$PARAM_PATH" --with-decryption \
   --query 'Parameters[].[Name,Value]' --output text \
-  | awk -F'\t' '{ n = $1; sub(".*/", "", n); print n "=" $2 }' > .env
+  | awk -F'\t' '$2 != "CHANGE_ME" { n = $1; sub(".*/", "", n); print n "=" $2 }' > .env
 {
   echo "TAG=$TAG"
   echo "REGISTRY=$REGISTRY"
 } >> .env
 chmod 600 .env
 
-# Terraform seeds every parameter with CHANGE_ME; never start a database on that password.
+# A required value still on CHANGE_ME was left out above, so it fails here as unset.
 required="ENVIRONMENT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD APP_DB_PASSWORD DISPATCHER_DB_PASSWORD ACME_EMAIL"
 if grep -q '^COMPOSE_PROFILES=.*agent' .env; then
   required="$required AGENT_TOKEN_SECRET LLM_API_KEY LLM_MODEL"
@@ -64,6 +67,9 @@ else
 fi
 
 echo "==> rolling services"
+# user_data sets this up only when an instance is created. On an older host Docker creates the
+# bind mount as root, and the app (uid 10001 in compose.yaml) cannot write evidence to it.
+install -d -o 10001 -g 10001 -m 750 /data/raw-evidence
 docker compose up -d --remove-orphans --wait --wait-timeout 120
 
 echo "$TAG" > "$APP/current"
