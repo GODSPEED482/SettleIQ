@@ -79,9 +79,52 @@ class UngroundedProposal(ValueError):
 
 def load_discovered_metadata(conn: Connection) -> list[DiscoveredObject]:
     """The tenant's discovered schema and profile aggregates, with no raw rows or secrets."""
-    # TODO(G2 2.5 Rahul): return real rows from source_objects once discovery lands. Until then
-    # generation refuses with NO_DISCOVERED_METADATA rather than drafting from invented input.
-    return []
+    rows = conn.execute(
+        text(
+            """
+            SELECT o.source_id, o.object_name, o.schema_snapshot, o.profile
+            FROM source_objects o
+            JOIN data_sources s
+              ON s.tenant_id = o.tenant_id AND s.id = o.source_id
+            WHERE s.status = 'ACTIVE'
+              AND (
+                o.object_type IN ('TABLE', 'VIEW')
+                OR (
+                  o.object_type = 'CSV'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM source_objects newer
+                    WHERE newer.tenant_id = o.tenant_id
+                      AND newer.source_id = o.source_id
+                      AND newer.object_type = 'CSV'
+                      AND (newer.discovered_at, newer.id) > (o.discovered_at, o.id)
+                  )
+                )
+              )
+            ORDER BY o.source_id, o.object_name
+            """
+        )
+    ).all()
+    discovered = []
+    for row in rows:
+        snapshot = row.schema_snapshot or {}
+        profile_fields = (row.profile or {}).get("fields", {})
+        discovered.append(
+            DiscoveredObject(
+                source_id=str(row.source_id),
+                object=row.object_name,
+                fields=[
+                    DiscoveredField(
+                        **field, profile=profile_fields.get(field["name"], {})
+                    )
+                    for field in snapshot.get("fields", [])
+                ],
+                foreign_keys=[
+                    DiscoveredForeignKey(**key)
+                    for key in snapshot.get("foreign_keys", [])
+                ],
+            )
+        )
+    return discovered
 
 
 def _composition_terms(conn: Connection, composition: list[dict[str, str]]) -> list[str]:

@@ -1,0 +1,39 @@
+# Merchant PostgreSQL read source (spec 4.4). Separate from the internal-merchant write
+# adapter, so registering this read source grants no write authority. Task 2.5 discovers
+# schema and profiles only; task 3.5 adds the record-read capability.
+
+connector_id: merchant-postgres
+version: 1.0.0
+protocols: [postgresql]
+source_types: [merchant_database]
+auth_mode: database_role
+secret_reference_required: true
+
+supports_discovery: true
+supports_metadata: true
+supports_batch_extraction: false
+supports_incremental: false
+supports_events: false
+supports_file_ingestion: false
+supports_detail_lookup: false
+
+extraction_modes: []
+capabilities:
+  - key: database.schema.read
+    version: 1.0.0
+    parameters:
+      type: object
+      additionalProperties: false
+      properties:
+        schema: {type: string}
+
+rate_limit: {status: not_applicable}
+retry:
+  retry_on: [network]
+  honour_retry_after: false
+  backoff: exponential
+  max_attempts: 3
+  actions: never
+supported_schema_versions: []
+health_signals: [database_connection]
+limits: {}

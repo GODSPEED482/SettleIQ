@@ -15,6 +15,7 @@ capabilities:
   - {key: files.upload, kind: file}
   - {key: merchant.payment.read, kind: read}
   - {key: merchant.payment_status.correct, kind: action}
+  - {key: database.schema.read, kind: read}
 
 aliases:
   version: 1

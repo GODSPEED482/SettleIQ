@@ -215,6 +215,11 @@ def test_raw_evidence_is_append_only_for_the_app_role(tmp_path):
             conn.execute(text("UPDATE raw_evidence SET byte_size = 0"))
 
 
+def test_evidence_read_refuses_a_path_escape(tmp_path):
+    with pytest.raises(ValueError, match="escapes"):
+        evidence.read_bytes("../outside", tmp_path)
+
+
 # Canonical records
 
 

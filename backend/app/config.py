@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +10,8 @@ class Settings(BaseSettings):
     database_url: str
     environment: str = "development"
     raw_evidence_dir: str = "/data/raw-evidence"
+    source_discovery_timeout_seconds: int = Field(default=15, ge=1)
+    source_discovery_max_csv_rows: int = Field(default=200_000, ge=1)
 
     app_base_url: str = "http://localhost:5173"
     session_ttl_hours: int = 24

@@ -1027,7 +1027,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryResult"
+                }
               }
             }
           },
@@ -2679,6 +2681,37 @@
         ],
         "title": "CreateTenantBody"
       },
+      "DiscoveryResult": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "csv"
+            ],
+            "title": "Kind"
+          },
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/ObjectSummary"
+            },
+            "type": "array",
+            "title": "Objects"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source_id",
+          "kind",
+          "objects"
+        ],
+        "title": "DiscoveryResult"
+      },
       "EditDraftBody": {
         "properties": {
           "expected_revision": {
@@ -2976,6 +3009,30 @@
           "method"
         ],
         "title": "MappingBody"
+      },
+      "ObjectSummary": {
+        "properties": {
+          "object": {
+            "type": "string",
+            "title": "Object"
+          },
+          "object_type": {
+            "type": "string",
+            "title": "Object Type"
+          },
+          "fields": {
+            "type": "integer",
+            "title": "Fields"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "object",
+          "object_type",
+          "fields"
+        ],
+        "title": "ObjectSummary"
       },
       "PublishBody": {
         "properties": {

@@ -57,6 +57,15 @@ def _root(root: Path | None) -> Path:
     return Path(root) if root is not None else Path(get_settings().raw_evidence_dir)
 
 
+def read_bytes(storage_key: str, root: Path | None = None) -> bytes:
+    """Read an original evidence file, refusing any key that escapes the evidence root."""
+    root_path = _root(root).resolve()
+    target = (root_path / storage_key).resolve()
+    if not target.is_relative_to(root_path):
+        raise ValueError("evidence storage key escapes the evidence root")
+    return target.read_bytes()
+
+
 def _write(root: Path, storage_key: str, data: bytes) -> None:
     target = root / storage_key
     target.parent.mkdir(parents=True, exist_ok=True)
