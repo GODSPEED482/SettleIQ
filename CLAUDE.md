@@ -175,10 +175,10 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 2.2 LLM draft generator from discovered metadata, draft only (2h). Evidence in `test_generation.py`; real metadata waits on Rahul's 2.5.
 - [x] 2.3 SHACL, pack validators, hash-bound validation, `confirm_publish` (2h). Evidence in `test_validation.py` and `test_publication.py`.
 - [x] 2.4 Versioned mappings and authority assertions, including two sources to one property (1h). Evidence in `test_mappings.py`.
-- [ ] 3.1 Domain projection and exact-ID identity resolution; ambiguous candidates stay reviewable (1.5h)
-- [ ] 3.2 Property observations, resolved views, explicit authority conflicts (1.5h)
+- [x] 3.1 Domain projection and exact-ID identity resolution; ambiguous candidates stay reviewable (1.5h). Policy is data in `packs/finops/resolution.yaml`; evidence in `test_domain_projection.py`.
+- [x] 3.2 Property observations, resolved views, explicit authority conflicts (1.5h). Evidence in `test_domain_observations.py`.
 - [ ] 3.3 Finance engine: both reconciliation scopes, settlement calculation, decimal-safe money (2h). Starter: `Money` type built.
-- [ ] 3.4 Version-pinned `domain_runs`, case lifecycle (1h)
+- [x] 3.4 Version-pinned `domain_runs`, case lifecycle (1h). Adds `GET /api/domain-runs` and `GET /api/entity-resolution` for 3.9; evidence in `test_domain_runs.py` and `test_case_lifecycle.py`.
 - [ ] 3.10 `DUPLICATE_CAPTURE` detection and fixture: two distinct successful captures for one intended order; equal amounts alone never qualify (1.5h)
 - [ ] 4.6 PayPal field mappings and capture-completion authority (1h)
 - [ ] 5.7 AI orchestrator: 6 tools, POL-08 permission intersection, durable tool trace (3h). Starter: tool registry declared; agent service, dispatcher, tokens and tool API stubbed; migration not started.

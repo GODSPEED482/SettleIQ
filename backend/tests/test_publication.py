@@ -171,7 +171,7 @@ def test_publish_stores_pack_and_tenant_relationships(finance_draft):
                     "rdfs:range": "finops:Customer"}
     edited = member.edit(draft, [relationship]).json()
     body = publish(member, edited).json()
-    assert body["relationships"] == 12
+    assert body["relationships"] == 13
     with scoped_tx(member.tenant) as conn:
         rows = {
             row.iri: row
@@ -179,7 +179,7 @@ def test_publish_stores_pack_and_tenant_relationships(finance_draft):
                 text("SELECT iri, domain_iri, range_iri, definition FROM ontology_relationships")
             )
         }
-    assert len(rows) == 12
+    assert len(rows) == 13
     capture = rows["urn:settleiq:pack:finops#generatesCapture"]
     assert capture.domain_iri == "urn:settleiq:pack:finops#Payment"
     assert capture.range_iri == "urn:settleiq:pack:finops#Capture"

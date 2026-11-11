@@ -69,7 +69,7 @@ def url(route: dict, tenant: UUID = TENANT) -> str:
     path = route["path"].replace("{tenant_id}", str(tenant))
     for name in ("token", "invitation_id", "user_id", "source_id", "case_id", "decision_id",
                  "investigation_id", "playbook_id", "request_id", "execution_id", "audit_id",
-                 "draft_id", "job_id", "mapping_id", "assertion_id", "entity_id"):
+                 "draft_id", "job_id", "mapping_id", "assertion_id", "entity_id", "run_id"):
         path = path.replace(f"{{{name}}}", str(uuid4()))
     return path
 
