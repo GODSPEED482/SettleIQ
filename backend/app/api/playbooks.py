@@ -19,14 +19,6 @@ router = APIRouter(prefix="/api", tags=["playbooks"])
 # plus AC-PP-08 and the PB-002 parts of AC-PLY-08. If the safety suite is not green by Day 3
 # hour 7, no attestation is issued and the demo stops at step 10 in SHADOW.
 
-# TODO(G5 5.1 Rishav): migration 0016 adds playbook_requests, policy_decisions (stage REQUEST
-# or EXECUTION, immutable), playbook_approvals (referencing the request and its REQUEST-stage
-# decision), playbook_executions (own id, referencing the request and both decisions),
-# execution_grants and execution_action_attempts (spec 6.3, 9.3, 9.4). Composite foreign keys
-# on (tenant_id, id) so a cross-tenant reference fails; approval_id is nullable only when the
-# REQUEST-stage decision says approval is not required, enforced by constraint or trigger
-# (AC-PLY-11). Decisions, approvals and attempts are append-only (SELECT, INSERT); every table
-# gets enable_tenant_rls and an explicit GRANT. Keep test_rls.py green.
 # TODO(G5 5.12 Suprava): the safety suite, as tests that fail CI: AC-MERCH-01..07 against the
 # 5.5 adapter, AC-AUTHZ-06/08/15/16/17 (Worker-only keys, grant binding, SHADOW, POL-14,
 # humans refused by the Worker), and AC-PLY-08..11 against these routes and the 5.1 tables.
