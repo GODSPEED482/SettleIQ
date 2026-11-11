@@ -29,9 +29,6 @@ def create_source(
     return registry.create_source(ctx, body)
 
 
-# TODO(G2 2.6 Rahul): for CSV sources, discover the header, inferred types and the same profile
-# into a source_objects row of object_type CSV, so generation sees one shape for both. Read the
-# stored raw-evidence copy; the upload route itself is task 3.6.
 @router.post("/sources/{source_id}/discover")
 def discover_source(
     source_id: str, ctx: TenantContext = require("source.discover", scope=SOURCE)

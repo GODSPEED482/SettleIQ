@@ -150,7 +150,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.6 Freeze connector manifest, capability keys and source envelope (1h). Evidence in `test_contracts.py`.
 - [x] 1.7 Source registry, `source_records`, raw evidence store with hashing (3h). Evidence in `test_sources.py`.
 - [x] 2.5 PostgreSQL schema discovery and profiling (2h). Evidence in `test_discovery.py`, `test_profiling.py` and `test_secrets.py`; the merchant read source uses `env:SOURCE_SECRET_*` references until 4.5.
-- [ ] 2.6 CSV metadata discovery (1h)
+- [x] 2.6 CSV metadata discovery (1h). Evidence in `test_discovery.py`; discovery reads the hash-checked raw-evidence copy, and the upload route stays with 3.6.
 - [ ] 3.5 Merchant PostgreSQL read and normalization (1h)
 - [ ] 3.6 Bank CSV and BRR parser on the shared pipeline, with provenance mode (2h)
 - [ ] 4.2 OAuth, capture details, Transaction Search backfill, adapter manifest (2h). Starter: manifest draft exists.

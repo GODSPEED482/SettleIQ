@@ -8,7 +8,11 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 
+from app.config import get_settings
 from app.db import scoped_tx
+from app.semantics import generation
+from app.sources import evidence
+from app.sources.evidence import RetrievalContext
 from tests.test_semantics_store import Member
 from tests.test_sources import create_ok
 
@@ -266,3 +270,128 @@ def test_generation_drafts_from_discovered_metadata(discovered):
     assert fields["note"]["nullable"] is True
     assert fields["currency"]["profile"]["currency_distribution"] == {"USD": 3, "EUR": 1}
     assert "PAY-1" not in str(payload)
+
+
+# CSV files (2.6)
+
+BANK_CSV = (
+    b"txn_id,booked_on,amount,currency,status,memo\n"
+    b"T-1,2026-11-01,10.00,USD,BOOKED,first\n"
+    b"T-2,2026-11-02,25.50,USD,BOOKED,\n"
+    b"T-3,2026-11-03,-4.25,EUR,PENDING,third\n"
+    b"T-3,2026-11-04,99.99,USD,BOOKED,\n"
+)
+
+
+@pytest.fixture
+def evidence_root(tmp_path, monkeypatch):
+    monkeypatch.setenv("RAW_EVIDENCE_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    yield tmp_path
+    get_settings.cache_clear()
+
+
+def csv_source(member: Member) -> dict:
+    return create_ok(member, connector_id="tenant-csv", display_name="Bank files", config={})
+
+
+def upload(member: Member, source_id: str, data: bytes = BANK_CSV, name: str = "bank.csv"):
+    with scoped_tx(member.tenant) as conn:
+        return evidence.store_bytes(
+            conn,
+            tenant_id=member.tenant,
+            source_id=UUID(source_id),
+            data=data,
+            evidence_type="FILE",
+            content_type="text/csv; charset=utf-8",
+            retrieval_context=RetrievalContext(provenance="tenant_file", file_name=name),
+        )
+
+
+@pytest.mark.db
+def test_csv_discovery_reads_the_header_and_infers_types(evidence_root):
+    member = Member()
+    source = csv_source(member)
+    stored = upload(member, source["id"])
+    response = discover(member, source["id"])
+    assert response.status_code == 200, response.text
+    name = f"bank.csv@{stored.content_hash[:16]}"
+    assert [item["object_name"] for item in response.json()["objects"]] == [name]
+    found = stored_objects(member, source["id"])[name]
+    assert found["object_type"] == "CSV"
+    columns = {column["name"]: column for column in found["schema_snapshot"]["columns"]}
+    assert list(columns) == ["txn_id", "booked_on", "amount", "currency", "status", "memo"]
+    assert {name: column["datatype"] for name, column in columns.items()} == {
+        "txn_id": "string",
+        "booked_on": "date",
+        "amount": "decimal",
+        "currency": "string",
+        "status": "string",
+        "memo": "string",
+    }
+    assert columns["memo"]["nullable"] is True
+    assert columns["booked_on"]["unique"] is True
+    assert found["schema_snapshot"]["file"]["content_hash"] == stored.content_hash
+
+
+@pytest.mark.db
+def test_csv_profile_has_the_same_shape(evidence_root):
+    member = Member()
+    source = csv_source(member)
+    upload(member, source["id"])
+    discover(member, source["id"])
+    (found,) = stored_objects(member, source["id"]).values()
+    columns = found["profile"]["columns"]
+    assert found["profile"]["row_count"] == 4
+    assert columns["txn_id"]["duplicate_identifiers"] == 1
+    assert columns["amount"]["min"] == "-4.25"
+    assert columns["amount"]["max"] == "99.99"
+    assert columns["currency"]["currency_distribution"] == {"USD": 3, "EUR": 1}
+    assert columns["status"]["status_distribution"] == {"BOOKED": 3, "PENDING": 1}
+    assert columns["booked_on"]["earliest"] == "2026-11-01"
+    assert columns["memo"]["null_count"] == 2
+    assert "first" not in json.dumps(found["profile"])
+
+
+@pytest.mark.db
+def test_tampered_file_fails_closed(evidence_root):
+    member = Member()
+    source = csv_source(member)
+    stored = upload(member, source["id"])
+    (evidence_root / stored.storage_key).write_bytes(b"txn_id\nforged\n")
+    response = discover(member, source["id"])
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "EVIDENCE_INTEGRITY"
+    assert stored_objects(member, source["id"]) == {}
+
+
+@pytest.mark.db
+def test_csv_source_without_files_is_refused(evidence_root):
+    member = Member()
+    response = discover(member, csv_source(member)["id"])
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "NO_SOURCE_FILES"
+
+
+@pytest.mark.db
+def test_csv_header_must_name_distinct_columns(evidence_root):
+    member = Member()
+    source = csv_source(member)
+    upload(member, source["id"], b"id,id\n1,2\n")
+    response = discover(member, source["id"])
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CSV_HEADER_INVALID"
+
+
+@pytest.mark.db
+def test_generation_sees_csv_objects(evidence_root):
+    member = Member()
+    source = csv_source(member)
+    upload(member, source["id"])
+    discover(member, source["id"])
+    with scoped_tx(member.tenant) as conn:
+        (found,) = generation.load_discovered_metadata(conn)
+    assert found.source_id == source["id"]
+    assert found.object.startswith("bank.csv@")
+    assert [field.name for field in found.fields][:3] == ["txn_id", "booked_on", "amount"]
+    assert found.foreign_keys == []

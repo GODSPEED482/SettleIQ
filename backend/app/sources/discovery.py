@@ -6,9 +6,12 @@ Adapters only describe structure; deciding what a field means is generation's jo
 
 Only a connector whose manifest declares `supports_discovery` is discovered. A PostgreSQL
 source is read through its own read-only connection, opened outside any tenant transaction,
-so a slow source never holds a platform transaction open.
+so a slow source never holds a platform transaction open. A CSV source is discovered from the
+stored raw-evidence copy of each file, checked against its hash, never from an upload.
 """
 
+import csv
+import io
 import json
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -26,8 +29,8 @@ from app.authz.guard import TenantContext
 from app.connectors.manifest import load_connector_manifests
 from app.db import tenant_tx
 from app.errors import conflict, not_found
-from app.sources import profiling
-from app.sources.conventions import ObjectType
+from app.sources import evidence, profiling
+from app.sources.conventions import ObjectType, file_object_name
 from app.sources.profiling import ColumnSpec
 from app.sources.secrets import resolve_secret
 
@@ -71,6 +74,10 @@ def discover(ctx: TenantContext, source_id: str) -> dict[str, Any]:
         raise not_found() from None
     with tenant_tx(ctx) as conn:
         source = _load_source(conn, source_uuid)
+    if source.protocol == "csv":
+        with tenant_tx(ctx) as conn:
+            _load_source(conn, source_uuid)
+            return _record(conn, ctx, source_uuid, discover_csv(conn, source_uuid))
     if source.protocol == "postgresql":
         objects = discover_postgres(resolve_secret(source.secret_reference), source.config)
     else:
@@ -280,3 +287,99 @@ def discover_postgres(secret: str, config: dict[str, Any]) -> list[DiscoveredObj
     finally:
         engine.dispose()
     return discovered
+
+
+# CSV files
+
+CSV_CONTENT_TYPES = ("text/csv", "application/csv")
+
+
+def _csv_rows(data: bytes) -> tuple[list[str], list[list[str]], str]:
+    try:
+        decoded = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise conflict("CSV_UNREADABLE", "A file is not UTF-8 encoded CSV.") from None
+    try:
+        delimiter = csv.Sniffer().sniff(decoded[:4096], delimiters=",;	|").delimiter
+    except csv.Error:
+        delimiter = ","
+    reader = csv.reader(io.StringIO(decoded), delimiter=delimiter)
+    header = [name.strip() for name in next(reader, [])]
+    if not header or "" in header or len(set(header)) != len(header):
+        raise conflict("CSV_HEADER_INVALID", "A file needs a header of distinct, named columns.")
+    width = len(header)
+    rows = [(row + [""] * width)[:width] for row in reader if any(cell.strip() for cell in row)]
+    return header, rows, delimiter
+
+
+def _csv_object(name: str, content_hash: str, size: int, data: bytes) -> DiscoveredObject:
+    header, rows, delimiter = _csv_rows(data)
+    sample = rows[: profiling.SAMPLE_ROWS]
+    datatypes = [profiling.infer_datatype(row[i] for row in sample) for i in range(len(header))]
+    typed = [
+        [profiling.coerce(cell, datatype) for cell, datatype in zip(row, datatypes, strict=True)]
+        for row in sample
+    ]
+    specs = [
+        ColumnSpec(column, datatype, identifier=profiling.looks_like_identifier(column))
+        for column, datatype in zip(header, datatypes, strict=True)
+    ]
+    profile = profiling.profile(specs, typed, row_count=len(rows))
+    columns = []
+    for index, column in enumerate(header):
+        values = [row[index] for row in typed]
+        present = [value for value in values if value is not None]
+        columns.append(
+            {
+                "name": column,
+                "type": "text",
+                "datatype": datatypes[index],
+                "nullable": len(present) < len(values),
+                "primary_key": False,
+                "unique": bool(present) and len(set(present)) == len(values),
+            }
+        )
+    snapshot = {
+        "columns": columns,
+        "primary_key": [],
+        "foreign_keys": [],
+        "unique_constraints": [],
+        "indexes": [],
+        # A file declares no keys; uniqueness and nullability are what the sample shows.
+        "inferred_from": "sample",
+        "file": {
+            "name": name,
+            "content_hash": content_hash,
+            "byte_size": size,
+            "delimiter": delimiter,
+        },
+    }
+    return DiscoveredObject(
+        file_object_name(name, content_hash), "CSV", snapshot, profile, checksum=content_hash
+    )
+
+
+def discover_csv(conn: Connection, source_id: UUID) -> list[DiscoveredObject]:
+    """One CSV object per distinct stored file (app/sources/conventions.py)."""
+    files = conn.execute(
+        text(
+            """
+            SELECT id, content_hash, byte_size, retrieval_context FROM raw_evidence
+            WHERE source_id = :source AND evidence_type IN ('FILE', 'REPORT')
+              AND split_part(lower(content_type), ';', 1) = ANY(:types)
+            ORDER BY received_at, id
+            """
+        ),
+        {"source": source_id, "types": list(CSV_CONTENT_TYPES)},
+    ).all()
+    if not files:
+        raise conflict("NO_SOURCE_FILES", "Upload a file to this source before discovering it.")
+    return [
+        _csv_object(
+            (item.retrieval_context or {}).get("file_name") or "file",
+            item.content_hash,
+            item.byte_size,
+            evidence.read_verified(conn, item.id),
+        )
+        for item in files
+    ]
