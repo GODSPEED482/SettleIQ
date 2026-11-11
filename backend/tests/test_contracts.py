@@ -63,6 +63,8 @@ def test_merchant_read_source_is_separate_from_the_write_adapter():
     read_source = load_connector_manifests()["merchant-postgres"]
     assert read_source.protocols == ["postgresql"]
     assert read_source.supports_discovery and read_source.supports_metadata
+    assert read_source.supports_batch_extraction
+    assert read_source.extraction_modes == ["batch"]
     assert "merchant.payment_status.correct" not in keys_of(read_source)
     assert read_source.retry.actions == "never"
 

@@ -10,8 +10,6 @@ so a slow source never holds a platform transaction open. A CSV source is discov
 stored raw-evidence copy of each file, checked against its hash, never from an upload.
 """
 
-import csv
-import io
 import json
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -19,10 +17,8 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Connection, create_engine, inspect, text
-from sqlalchemy.engine import make_url
-from sqlalchemy.exc import ArgumentError, SQLAlchemyError
-from sqlalchemy.pool import NullPool
+from sqlalchemy import Connection, inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.audit import write_audit
 from app.authz.guard import TenantContext
@@ -31,11 +27,10 @@ from app.db import tenant_tx
 from app.errors import conflict, not_found
 from app.sources import evidence, profiling
 from app.sources.conventions import ObjectType, file_object_name
+from app.sources.csv_files import CSV_CONTENT_TYPES, read_csv
+from app.sources.postgres import read_only_engine
 from app.sources.profiling import ColumnSpec
 from app.sources.secrets import resolve_secret
-
-STATEMENT_TIMEOUT_MS = 30_000
-CONNECT_TIMEOUT_S = 10
 
 
 @dataclass(frozen=True)
@@ -169,16 +164,6 @@ def _native_type(column_type: Any, conn: Connection) -> str:
         return type(column_type).__name__
 
 
-def _engine_url(secret: str) -> Any:
-    try:
-        url = make_url(secret)
-    except ArgumentError:
-        raise conflict("SOURCE_UNREACHABLE", "The source could not be reached.") from None
-    if url.get_backend_name() != "postgresql":
-        raise conflict("SOURCE_UNREACHABLE", "The source could not be reached.")
-    return url.set(drivername="postgresql+psycopg")
-
-
 def _table_snapshot(conn: Connection, schema: str, name: str) -> dict[str, Any]:
     inspector = inspect(conn)
     columns = inspector.get_columns(name, schema)
@@ -254,17 +239,7 @@ def _profile_table(conn: Connection, schema: str, name: str, snapshot: dict[str,
 def discover_postgres(secret: str, config: dict[str, Any]) -> list[DiscoveredObject]:
     """Tables and views of one schema, read in a read-only transaction."""
     schema = config.get("schema") or "public"
-    engine = create_engine(
-        _engine_url(secret),
-        poolclass=NullPool,
-        connect_args={
-            "connect_timeout": CONNECT_TIMEOUT_S,
-            "options": (
-                "-c default_transaction_read_only=on "
-                f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"
-            ),
-        },
-    )
+    engine = read_only_engine(secret)
     try:
         with engine.connect() as conn:
             inspector = inspect(conn)
@@ -291,29 +266,9 @@ def discover_postgres(secret: str, config: dict[str, Any]) -> list[DiscoveredObj
 
 # CSV files
 
-CSV_CONTENT_TYPES = ("text/csv", "application/csv")
-
-
-def _csv_rows(data: bytes) -> tuple[list[str], list[list[str]], str]:
-    try:
-        decoded = data.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        raise conflict("CSV_UNREADABLE", "A file is not UTF-8 encoded CSV.") from None
-    try:
-        delimiter = csv.Sniffer().sniff(decoded[:4096], delimiters=",;	|").delimiter
-    except csv.Error:
-        delimiter = ","
-    reader = csv.reader(io.StringIO(decoded), delimiter=delimiter)
-    header = [name.strip() for name in next(reader, [])]
-    if not header or "" in header or len(set(header)) != len(header):
-        raise conflict("CSV_HEADER_INVALID", "A file needs a header of distinct, named columns.")
-    width = len(header)
-    rows = [(row + [""] * width)[:width] for row in reader if any(cell.strip() for cell in row)]
-    return header, rows, delimiter
-
 
 def _csv_object(name: str, content_hash: str, size: int, data: bytes) -> DiscoveredObject:
-    header, rows, delimiter = _csv_rows(data)
+    header, rows, delimiter = read_csv(data)
     sample = rows[: profiling.SAMPLE_ROWS]
     datatypes = [profiling.infer_datatype(row[i] for row in sample) for i in range(len(header))]
     typed = [

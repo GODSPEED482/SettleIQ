@@ -1,8 +1,7 @@
 # Merchant PostgreSQL read source (spec 4.4.1). Kept apart from the internal-merchant write
 # adapter, so registering this source grants no write authority. Discovery reads schema
-# metadata and profile aggregates only (AC-ONT-01, AC-ONT-02).
-# TODO(G3 3.5 Rahul): declare record reads: set supports_batch_extraction and add the batch
-# extraction mode, and keep test_contracts.py green.
+# metadata and profile aggregates only (AC-ONT-01, AC-ONT-02). Record reads are a batch
+# extraction of the discovered tables into canonical source records (AC-REC-01, AC-REC-02).
 
 connector_id: merchant-postgres
 version: 1.0.0
@@ -13,13 +12,13 @@ secret_reference_required: true
 
 supports_discovery: true
 supports_metadata: true
-supports_batch_extraction: false
+supports_batch_extraction: true
 supports_incremental: false
 supports_events: false
 supports_file_ingestion: false
 supports_detail_lookup: false
 
-extraction_modes: []
+extraction_modes: [batch]
 capabilities: []
 
 rate_limit: {status: not_applicable}

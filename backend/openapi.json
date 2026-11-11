@@ -1071,7 +1071,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Sync Source Api Sources  Source Id  Sync Post"
+                }
               }
             }
           },
@@ -1106,12 +1110,26 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_source_file_api_sources__source_id__files_post"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Upload Source File Api Sources  Source Id  Files Post"
+                }
               }
             }
           },
@@ -2591,6 +2609,29 @@
           "verification_method"
         ],
         "title": "AuthorityBody"
+      },
+      "Body_upload_source_file_api_sources__source_id__files_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "BANK_CSV",
+              "BRR"
+            ],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "kind"
+        ],
+        "title": "Body_upload_source_file_api_sources__source_id__files_post"
       },
       "CreateSourceBody": {
         "properties": {
