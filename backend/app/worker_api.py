@@ -15,8 +15,12 @@ router = APIRouter(tags=["internal"])
 # closed (AC-AUTHZ-08). Re-check the exact-scope mode and POL-14, including this container's
 # own image digest (spec 9.7.6 check 5). Persist each attempt before the side effect, with
 # tenant, sequence, idempotency key, connector, action, target, evidence, status and outcome
-# (AC-PLY-10). Then VERIFYING: re-read through merchant.payment.read under outcome.verify and
+# (AC-PLY-10). The action is app.connectors.internal_merchant.correct_payment_status with the
+# execution's idempotency key; record its outcome and evidence hash on the attempt, and a
+# STALE_STATE or TARGET_UNRESOLVED outcome returns the case to HUMAN_REVIEW (AC-MERCH-02). Then
+# VERIFYING: re-read through read_payment (merchant.payment.read) under outcome.verify and
 # resolve the case only when it reads COMPLETED. API success is never resolution (AC-PLY-06).
+# The worker service needs SOURCE_SECRET_MERCHANT_WRITE (or a managed: reference) to run it.
 # TODO(G5 5.15 Rahul): the refunds.create path on the same grant and attempt rules. An
 # ambiguous outcome (timeout, network drop, 5xx) goes to OUTCOME_UNKNOWN and is settled by
 # refunds.read and captures.read, never by a retry under a new key; a retry reuses the same

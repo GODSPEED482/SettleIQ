@@ -27,11 +27,13 @@ router = APIRouter(prefix="/api", tags=["playbooks"])
 # REQUEST-stage decision says approval is not required, enforced by constraint or trigger
 # (AC-PLY-11). Decisions, approvals and attempts are append-only (SELECT, INSERT); every table
 # gets enable_tenant_rls and an explicit GRANT. Keep test_rls.py green.
-# TODO(G5 5.12 Suprava): the safety suite, as tests that fail CI: AC-MERCH-01..07 against the
-# 5.5 adapter, AC-AUTHZ-06/08/15/16/17 (Worker-only keys, grant binding, SHADOW, POL-14,
-# humans refused by the Worker), and AC-PLY-08..11 against these routes and the 5.1 tables.
-# Declare its categories in packaged data (spec 9.7.2) so 5.4 can refuse an empty one, and
-# trace each criterion in the acceptance sheet (6.5).
+# TODO(G5 5.12 Suprava): the rest of the safety suite, as tests that fail CI. The adapter-level
+# AC-MERCH-01..07 tests are in test_internal_merchant.py; still to add are the grant, LIVE-scope
+# and case parts of AC-MERCH-01/02 (after 5.6), the AC-MERCH-07 attestation scope (after 5.4),
+# AC-AUTHZ-06/08/15/16/17 (Worker-only keys, grant binding, SHADOW, POL-14, humans refused by
+# the Worker), and AC-PLY-08..11 against these routes and the 5.1 tables. Declare its categories
+# in packaged data (spec 9.7.2) so 5.4 can refuse an empty one, and trace each criterion in the
+# acceptance sheet (6.5).
 
 
 # TODO(G5 5.2 Rishav): a human with playbook.request creates the request for one case; the body
