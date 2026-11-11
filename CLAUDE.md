@@ -149,7 +149,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [ ] 4.1 **First task on Day 1:** Sandbox app, public HTTPS tunnel, verify provider access (1.5h)
 - [x] 1.6 Freeze connector manifest, capability keys and source envelope (1h). Evidence in `test_contracts.py`.
 - [x] 1.7 Source registry, `source_records`, raw evidence store with hashing (3h). Evidence in `test_sources.py`.
-- [ ] 2.5 PostgreSQL schema discovery and profiling (2h)
+- [x] 2.5 PostgreSQL schema discovery and profiling (2h). Evidence in `test_discovery.py`, `test_profiling.py` and `test_secrets.py`; the merchant read source uses `env:SOURCE_SECRET_*` references until 4.5.
 - [ ] 2.6 CSV metadata discovery (1h)
 - [ ] 3.5 Merchant PostgreSQL read and normalization (1h)
 - [ ] 3.6 Bank CSV and BRR parser on the shared pipeline, with provenance mode (2h)
