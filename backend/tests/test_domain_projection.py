@@ -4,13 +4,15 @@ AC-REC-03 exact identifiers resolve; AC-REC-06 ambiguity stays reviewable; AC-RE
 only through recorded decisions.
 """
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
 
 from app.db import scoped_tx
-from tests.domain_fixture import FinanceTenant
+from app.domain.inputs import Record, RunInputs, object_keys
+from tests.domain_fixture import IDENTIFIER, FinanceTenant
 from tests.support import grant_set
 from tests.test_semantics_store import Member
 
@@ -225,3 +227,64 @@ def test_another_tenants_entities_and_decisions_are_404(pending):
     )
     assert response.status_code == 404
     assert decisions(member, id=decision.id)[0].status == "PENDING_REVIEW"
+
+
+# Which mappings a file row answers to
+
+
+def record(object_name: str, record_type: str) -> Record:
+    return Record(uuid4(), SOURCE, object_name, record_type, {}, uuid4(), "0" * 64, None,
+                  datetime(2026, 3, 1, tzinfo=UTC))
+
+
+def inputs(*external_objects: str) -> RunInputs:
+    mappings = [{"id": name, "source_id": str(SOURCE), "external_object": name}
+                for name in external_objects]
+    return RunInputs(None, uuid4(), 1, "0" * 64, mappings, [], None, [], datetime.now(UTC))
+
+
+SOURCE = uuid4()
+MARCH = record("march.csv@0123456789abcdef", "paypal:file/BRR")
+
+
+def test_a_file_row_answers_to_its_object_its_file_and_its_report_kind():
+    assert object_keys(MARCH) == ["march.csv@0123456789abcdef", "march.csv", "BRR"]
+
+
+def test_a_table_row_answers_only_to_its_table():
+    assert object_keys(record("payments", "merchant:table/public.payments")) == ["payments"]
+
+
+@pytest.mark.parametrize(
+    ("available", "chosen"),
+    [
+        (["BRR"], "BRR"),
+        (["BRR", "march.csv"], "march.csv"),
+        (["BRR", "march.csv", "march.csv@0123456789abcdef"], "march.csv@0123456789abcdef"),
+        (["BANK_CSV", "april.csv"], None),
+    ],
+)
+def test_the_most_specific_mapping_wins(available, chosen):
+    found = [m["external_object"] for m in inputs(*available).mappings_for(MARCH)]
+    assert found == ([chosen] if chosen else [])
+
+
+def test_another_sources_mapping_never_applies():
+    other = inputs("BRR")
+    other.mappings[0]["source_id"] = str(uuid4())
+    assert other.mappings_for(MARCH) == []
+
+
+def test_a_report_kind_mapping_covers_every_upload_of_that_kind():
+    kind_binding = ("report", "BRR", "finops:SettlementEntry", [
+        ("$['Transaction ID']", "finops:providerReference", IDENTIFIER),
+    ])
+    member = FinanceTenant(extra_bindings=[kind_binding])
+    march = member.upload_row("report", "march.csv", "BRR", {"Transaction ID": "TX-1"})
+    april = member.upload_row("report", "april.csv", "BRR", {"Transaction ID": "TX-2"})
+    bank = member.upload_row("report", "april.csv", "BANK_CSV", {"Transaction ID": "TX-3"})
+    member.run()
+    keys = [e["canonical_key"] for e in member.entities("finops:SettlementEntry")]
+    assert keys == ["finops:providerReference=TX-1", "finops:providerReference=TX-2"]
+    assert len(links(member, march)) == len(links(member, april)) == 1
+    assert decisions(member, source_record_id=bank) == []  # no BANK_CSV mapping: preserved

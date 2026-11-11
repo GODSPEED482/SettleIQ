@@ -5,6 +5,7 @@ Records go through `store_bytes` and `persist_record`, so every observation trac
 hash-checked raw evidence. Until 3.5 and 3.6 land, this is the only ingestion path.
 """
 
+import hashlib
 import json
 import tempfile
 from datetime import UTC, datetime
@@ -166,6 +167,33 @@ class FinanceTenant(Member):
                 source_object_id=object_id, external_id=external_id or str(uuid4()),
                 record_type=f"test:{obj}", attributes=attributes, raw_evidence_id=ref.id,
                 occurred_at=datetime(2026, 3, 1, tzinfo=UTC),
+                observed_at=datetime(2026, 3, 1, 0, 0, 1, tzinfo=UTC),
+                payload_hash=ref.content_hash, connector_version="1.0.0", mapping_version=None,
+            ))
+
+    def upload_row(self, source: str, file_name: str, kind: str,
+                   attributes: dict[str, Any]) -> UUID:
+        """A row of an uploaded file, named and typed the way file_ingest.py stores it."""
+        data = json.dumps(attributes, sort_keys=True).encode()
+        source_id = self.sources[source]
+        file_hash = hashlib.sha256(file_name.encode()).hexdigest()
+        with scoped_tx(self.tenant) as conn:
+            ref = evidence.store_bytes(
+                conn, tenant_id=self.tenant, source_id=source_id, data=data,
+                evidence_type="REPORT", content_type="text/csv",
+                retrieval_context=RetrievalContext(provenance="synthetic_reference"),
+                root=EVIDENCE_ROOT,
+            )
+            object_id = conventions.ensure_object(
+                conn, tenant_id=self.tenant, source_id=source_id,
+                object_name=conventions.file_object_name(file_name, file_hash),
+                object_type="CSV", checksum=file_hash,
+            )
+            return records.persist_record(conn, SourceRecordEnvelope(
+                id=uuid4(), tenant_id=self.tenant, source_id=source_id,
+                source_object_id=object_id, external_id=str(uuid4()),
+                record_type=conventions.file_record_type(f"test-{source}", kind),
+                attributes=attributes, raw_evidence_id=ref.id, occurred_at=None,
                 observed_at=datetime(2026, 3, 1, 0, 0, 1, tzinfo=UTC),
                 payload_hash=ref.content_hash, connector_version="1.0.0", mapping_version=None,
             ))
