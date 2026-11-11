@@ -293,6 +293,8 @@ span.status {
 .status-closed,
 .status-approved,
 .status-allow,
+.status-allow_pending_preconditions,
+.status-live,
 .status-execution_created {
   color: #2e7d4f;
 }
@@ -318,6 +320,7 @@ span.status {
 .status-action_pending,
 .status-running,
 .status-needs_approval,
+.status-shadow,
 .status-policy_blocked,
 .status-grant_issued,
 .status-executing,
@@ -640,4 +643,17 @@ code.hash {
 tr.highlight td {
   background: var(--panel);
   outline: 1px solid var(--accent);
+}
+
+.mode-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.audit-refs li {
+  margin-bottom: 6px;
 }

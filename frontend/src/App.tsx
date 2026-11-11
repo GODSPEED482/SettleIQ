@@ -11,6 +11,7 @@ import { CreateTenant } from "./pages/CreateTenant";
 import { Investigations } from "./pages/investigations/Investigations";
 import { OntologyStudio } from "./pages/OntologyStudio";
 import { DomainOperations } from "./pages/operations/DomainOperations";
+import { PlaybookRequests } from "./pages/playbooks/PlaybookRequests";
 import { SourceManagement } from "./pages/sources/SourceManagement";
 import { TeamManagement } from "./pages/team/TeamManagement";
 import { WORKSPACES } from "./pages/workspaces";
@@ -112,16 +113,9 @@ function Shell() {
                     <SourceManagement />
                   ) : workspace.path === "/investigations" ? (
                     <Investigations />
+                  ) : workspace.path === "/playbooks" ? (
+                    <PlaybookRequests />
                   ) : (
-                    // TODO(G5 5.11 Suprava): replace the /playbooks placeholder: requests with
-                    // their lifecycle state, the REQUEST- and EXECUTION-stage decisions, the
-                    // approval if any, the execution, its attempts, readback verification and
-                    // audit links. Approve and reject are gated on playbook.approve and
-                    // playbook.reject, and hidden from the requester (POL-01). Show the exact
-                    // scope's mode (SHADOW or LIVE) beside the provider environment (Sandbox).
-                    // TODO(G5 5.16 Suprava): PB-002 request and approval views show the duplicate
-                    // proof: both capture IDs, the order linkage, currency and amount, and that
-                    // no refund or hold exists, so an approver decides on evidence.
                     <Workspace workspace={workspace} />
                   )}
                 </RequirePermission>

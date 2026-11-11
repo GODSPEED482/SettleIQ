@@ -50,7 +50,7 @@ export function Investigations({ pollMs = POLL_MS }: { pollMs?: number }) {
     let current = true;
     api
       .cases()
-      .then((list) => current && setCases(list.filter((item) => INVESTIGABLE.includes(item.status))))
+      .then((list) => current && setCases(list.filter((c) => INVESTIGABLE.includes(c.status))))
       .catch((caught) => current && setError(messageOf(caught)));
     return () => {
       current = false;
