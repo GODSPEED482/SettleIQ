@@ -180,7 +180,7 @@ def put_credentials(ctx: TenantContext, source_id: str, body: CredentialBody) ->
     The audit row names the source only: neither the reference nor the value is recorded.
     """
     source_uuid = _source_uuid(source_id)
-    if not is_resolvable(body.secret_reference):
+    if not is_resolvable(ctx.tenant_id, body.secret_reference):
         raise conflict("SECRET_UNRESOLVED", "The source's secret reference cannot be resolved.")
     with tenant_tx(ctx) as conn:
         previous = conn.execute(

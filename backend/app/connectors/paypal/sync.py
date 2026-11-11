@@ -56,7 +56,7 @@ def sync_paypal(
     source: Any,
     client: PayPalClient | None = None,
 ) -> dict[str, Any]:
-    secret_val = resolve_secret(source.secret_reference)
+    secret_val = resolve_secret(ctx.tenant_id, source.secret_reference)
     if client is None:
         client_id, client_secret = _parse_credentials(secret_val)
         client = PayPalClient(client_id, client_secret)

@@ -41,19 +41,23 @@ aws ssm get-parameters-by-path --region "$REGION" --path "$PARAM_PATH" --with-de
 chmod 600 .env
 
 echo "==> rendering source secrets from SSM ${PARAM_PATH}/source"
-# One file per parameter, read by `managed:<NAME>` source secret references
-# (backend/app/sources/secrets.py). Containers cannot reach the instance role, so the host renders
-# them, readable only by the app user. Values are never printed.
+# One file per parameter, source-secrets/<tenant_id>/<NAME>, read by a `managed:<NAME>` reference
+# on that tenant's sources only (backend/app/sources/secrets.py). Containers cannot reach the
+# instance role, so the host renders them, readable only by the app user. Values are never printed.
 # Rendered afresh each run, so a deleted parameter does not linger.
 rm -rf source-secrets
 install -d -o 10001 -g 10001 -m 500 source-secrets
-aws ssm get-parameters-by-path --region "$REGION" --path "${PARAM_PATH%/}/source" --with-decryption \
-  --query 'Parameters[].[Name,Value]' --output text \
+uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+aws ssm get-parameters-by-path --region "$REGION" --path "${PARAM_PATH%/}/source" --recursive \
+  --with-decryption --query 'Parameters[].[Name,Value]' --output text \
   | while IFS=$'\t' read -r name value; do
-      name="${name##*/}"
-      # The names secrets.py accepts: upper case, digits and underscores, so never a path.
-      [[ "$name" =~ ^[A-Z][A-Z0-9_]{0,99}$ ]] || continue
+      name="${name#"${PARAM_PATH%/}/source/"}"
+      # A tenant ID, then a name secrets.py accepts: upper case, digits and underscores. Anything
+      # else, including the flat layout from before tenant namespacing, is skipped.
+      [[ "$name" =~ ^$uuid/[A-Z][A-Z0-9_]{0,99}$ ]] || continue
       [ "$value" != "CHANGE_ME" ] || continue
+      [ -d "source-secrets/${name%/*}" ] \
+        || install -d -o 10001 -g 10001 -m 500 "source-secrets/${name%/*}"
       install -o 10001 -g 10001 -m 400 /dev/null "source-secrets/$name"
       printf '%s' "$value" > "source-secrets/$name"
     done

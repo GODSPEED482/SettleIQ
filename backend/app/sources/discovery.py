@@ -74,7 +74,8 @@ def discover(ctx: TenantContext, source_id: str) -> dict[str, Any]:
             _load_source(conn, source_uuid)
             return _record(conn, ctx, source_uuid, discover_csv(conn, source_uuid))
     if source.protocol == "postgresql":
-        objects = discover_postgres(resolve_secret(source.secret_reference), source.config)
+        secret = resolve_secret(ctx.tenant_id, source.secret_reference)
+        objects = discover_postgres(secret, source.config)
     else:
         raise conflict("DISCOVERY_UNSUPPORTED", "This connector does not support discovery.")
     with tenant_tx(ctx) as conn:

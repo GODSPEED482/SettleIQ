@@ -231,7 +231,7 @@ def sync(ctx: TenantContext, source_id: str) -> dict[str, Any]:
             from app.connectors.paypal.sync import sync_paypal
             return sync_paypal(ctx, source)
         tables = _tables(conn, source_uuid, source.config or {})
-    secret = resolve_secret(source.secret_reference)
+    secret = resolve_secret(ctx.tenant_id, source.secret_reference)
     reads = _read(secret, tables)
     with tenant_tx(ctx) as conn:
         source = _load_source(conn, source_uuid)

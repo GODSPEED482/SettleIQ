@@ -137,7 +137,7 @@ Rules for values:
 - Each value must fit on one line; base64-encode multi-line values.
 - `APP_DB_PASSWORD` is applied once, when migration 0001 creates the role. Changing it later needs `ALTER ROLE` as well.
 
-**Open for task 4.5 (secret references).** Containers cannot reach the instance role, because the IMDS hop limit is 1 by design. So the API cannot read or write Parameter Store at runtime with the current setup. Storing tenant PayPal credentials needs a decision: either a narrowly scoped credential for the API, or a different secret backend.
+**Source secrets (spec v1.7 §11.3).** Each tenant's source secrets live at `/settleiq/prod/source/<tenant_id>/<NAME>`. `deploy.sh` renders them to `source-secrets/<tenant_id>/<NAME>`, where a `managed:<NAME>` reference on that tenant's sources reads them, and skips any parameter outside that layout. Production refuses `env:` references. Containers cannot reach the instance role, because the IMDS hop limit is 1 by design, so the API cannot read or write Parameter Store at runtime. That is why a new tenant secret needs a redeploy, and why tenant self-service credential intake (AC-PP-14) is waiting on OPEN-PP-03: either a narrowly scoped write credential for the API, limited to `/source/*`, or a different secret backend.
 
 ## 7. Database
 

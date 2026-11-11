@@ -1,4 +1,4 @@
-"""Gate 4 exit: AC-WEBHOOK-01 and AC-PP-03/04/05/06/10 (delivery plan G4, spec 10.4, 21).
+"""Gate 4 exit: AC-WEBHOOK-01 and AC-PP-03/04/05/06/10/13 (delivery plan G4, spec 10.4, 21).
 
 The exit asks for these with a real Sandbox `PAYMENT.CAPTURE.COMPLETED` event. Here the event
 has the shape PayPal Sandbox delivers, is signed with PayPal's algorithm (transmission ID, time,
@@ -67,6 +67,12 @@ TRACE = {
         "test_sources::test_a_reference_at_registration_needs_the_credential_key",
         "test_sources::test_registration_cannot_carry_webhook_configuration",
     ],
+    "AC-PP-13": [
+        "test_source_credentials::test_a_reference_names_a_secret_in_its_own_tenant_only",
+        "test_secrets::test_a_tenant_cannot_reach_another_tenants_secret",
+        "test_secrets::test_the_same_name_is_a_different_secret_in_each_tenant",
+        "test_secrets::test_production_refuses_the_shared_environment",
+    ],
 }
 
 
@@ -78,7 +84,7 @@ def test_every_traced_test_exists(criterion):
 
 
 def test_every_exit_criterion_is_traced():
-    expected = {"AC-WEBHOOK-01"} | {f"AC-PP-{n:02}" for n in (3, 4, 5, 6, 10)}
+    expected = {"AC-WEBHOOK-01"} | {f"AC-PP-{n:02}" for n in (3, 4, 5, 6, 10, 13)}
     assert set(TRACE) == expected
 
 

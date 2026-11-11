@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import text
 
+from app.config import get_settings
 from app.db import scoped_tx
 from app.sources import registry
 from tests.support import Actor, add_member, grant_set
@@ -162,6 +163,41 @@ def test_another_tenants_source_is_not_found(owner, source):
     unknown = {"id": str(uuid4())}
     assert stranger.put(credentials(unknown), {"secret_reference": REFERENCE}).status_code == 404
     assert stored_reference(owner.tenant, source["id"]) is None
+
+
+@pytest.fixture
+def managed_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOURCE_SECRET_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    yield tmp_path
+    get_settings.cache_clear()
+
+
+def test_a_reference_names_a_secret_in_its_own_tenant_only(owner, source, managed_dir):
+    (managed_dir / str(owner.tenant)).mkdir()
+    (managed_dir / str(owner.tenant) / "PAYPAL_SANDBOX").write_text(SECRET, encoding="utf-8")
+    reference = {"secret_reference": "managed:PAYPAL_SANDBOX"}
+
+    other = Member()
+    other_source = create_ok(other)
+    stranger = Integrator(other.tenant)
+    refused = stranger.put(credentials(other_source), reference)
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "SECRET_UNRESOLVED"
+    assert stored_reference(other.tenant, other_source["id"]) is None
+
+    # Even stored without the route's check, the reference resolves in the source's tenant only.
+    with scoped_tx(other.tenant) as conn:
+        conn.execute(
+            text("UPDATE data_sources SET secret_reference = :r WHERE id = :id"),
+            {"r": reference["secret_reference"], "id": UUID(other_source["id"])},
+        )
+    sync = stranger.request("POST", f"/api/sources/{other_source['id']}/sync", tenant=other.tenant)
+    assert sync.status_code == 409, sync.text
+    assert sync.json()["error"]["code"] == "SECRET_UNRESOLVED"
+
+    accepted = Integrator(owner.tenant).put(credentials(source), reference)
+    assert accepted.status_code == 200, accepted.text
 
 
 # Webhook registration

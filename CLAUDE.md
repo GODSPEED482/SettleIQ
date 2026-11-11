@@ -6,7 +6,7 @@ SettleIQ is a multi-tenant, ontology-driven business operations platform; Financ
 
 ## Source documents
 
-- `SettleIQ_Authoritative_Specification_v1.6.md` is the sole normative reference. It is 1,591 lines, so grep for the ID you need (`POL-09`, `AC-MERCH-05`, `§9.3`). Requirement changes need a new integrated revision (§22.2), not a sidecar note.
+- `SettleIQ_Authoritative_Specification_v1.7.md` is the sole normative reference. It is 1,615 lines, so grep for the ID you need (`POL-09`, `AC-MERCH-05`, `§9.3`). Requirement changes need a new integrated revision (§22.2), not a sidecar note.
 - `.claude/SettleIQ_3-Day_Delivery_Plan.md` is the delivery plan. It scopes a 3-day vertical slice, not the MVP. Task numbers such as `1.9` in code and stubs refer to it.
 - `.claude/SettleIQ_Tech_Stack.md` is the earlier stack and tooling proposal. Its Node/TypeScript backend is superseded; see below.
 
@@ -134,6 +134,8 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h). Evidence in `test_publication.py` and `test_mappings.py`.
 - [x] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h). Migration 0011; evidence in `test_rls.py` (domain section), traced under AC-TEN-02.
 - [x] 4.5 Secret references; credential and webhook routes limited to Integration Admin (2h). `env:` and `managed:` references (the second rendered from SSM by `deploy/deploy.sh`); evidence in `test_source_credentials.py` (AC-PP-10 both sides) and `test_secrets.py`.
+- [ ] 4.5 follow-up: tenant-namespaced secret references (spec v1.7 §11.3, AC-PP-13). Built 2026-11-11, awaiting Rishav's review: `managed:<NAME>` resolves under `<SOURCE_SECRET_DIR>/<tenant_id>/`, rendered from SSM `/source/<tenant_id>/<NAME>`, and production refuses `env:`. Evidence in `test_secrets.py` and `test_source_credentials.py` (`test_a_reference_names_a_secret_in_its_own_tenant_only`). Any SSM parameter still at the flat `/source/<NAME>` path must move under its tenant before the next deploy.
+- [ ] Write-only PayPal credential intake for tenants beyond the demo (spec v1.7 §11.3, AC-PP-14). Not in this slice; blocked on OPEN-PP-03 (how the API writes to the secret manager).
 - [ ] 5.1 Request, decision, approval, execution, grant and attempt tables with the full FK chain (2h)
 - [ ] 5.2 Two-stage policy gateway, POL-01, single-use grant issuance (2h)
 - [ ] 5.3 Exact-scope execution mode, SHADOW by default (1h)
