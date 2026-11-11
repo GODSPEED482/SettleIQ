@@ -13,6 +13,7 @@ from sqlalchemy import Connection
 
 from app.connectors.manifest import load_capability_registry, load_connector_manifests
 from app.domain_packs.manifest import load_domain_packs
+from app.domain_packs.playbooks import Playbook
 from app.errors import validation_failed
 from app.semantics.store import active_namespaces
 
@@ -55,6 +56,16 @@ def exact_scope(conn: Connection, tenant_id: UUID, body: ScopeBody) -> ExactScop
         raise validation_failed("The connector does not declare this action capability.")
     return ExactScope(tenant_id, pack.namespace, pack.version, connector.connector_id,
                       body.action_capability)
+
+
+def playbook_scope(conn: Connection, tenant_id: UUID, playbook: Playbook) -> ExactScope:
+    """The one exact scope a playbook's action runs under. Each playbook names its own connector
+    and capability, so PB-001 and PB-002 never share a mode or an attestation."""
+    action = playbook.definition.action
+    return exact_scope(conn, tenant_id, ScopeBody(
+        domain_pack_id=playbook.pack.namespace, connector_id=action.connector_id,
+        action_capability=action.capability,
+    ))
 
 
 def declared_scopes(conn: Connection, tenant_id: UUID) -> list[ExactScope]:

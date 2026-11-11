@@ -562,6 +562,28 @@ def test_a_capability_outside_the_certified_scope_is_denied(tenant):
 
 
 @db
+def test_neither_capabilitys_attestation_authorizes_the_other_or_another_tenant(tenant):
+    """AC-REL-12, both directions, through the stored-row path the LIVE switch uses."""
+    publish_state()
+    refund = attestation_payload(tenant)
+    merchant = attestation_payload(tenant)
+    merchant["certified_scopes"][0] |= {"connector_id": "internal-merchant",
+                                        "capability": "merchant.payment_status.correct"}
+    merchant_scope = scope_for(tenant, connector_id="internal-merchant",
+                               action_capability="merchant.payment_status.correct")
+    assert denial(tenant, signed(refund), merchant_scope) == "CAPABILITY_MEMBERSHIP"
+    assert denial(tenant, signed(merchant)) == "CAPABILITY_MEMBERSHIP"
+    import_attestation(signed(refund))
+    with scoped_tx(tenant) as conn:
+        assert verifier.verify(conn, scope_for(tenant)).allowed is True
+        assert verifier.verify(conn, merchant_scope).allowed is False
+    other = Member()
+    other.activate("finops")
+    with scoped_tx(other.tenant) as conn:
+        assert verifier.verify(conn, scope_for(other.tenant)).allowed is False
+
+
+@db
 def test_the_packaged_empty_suites_deny(tenant, monkeypatch):
     publish_state()
     data = signed(attestation_payload(tenant))

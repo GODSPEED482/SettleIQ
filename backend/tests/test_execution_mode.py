@@ -11,8 +11,9 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.db import scoped_tx
+from app.domain_packs.playbooks import get_playbooks
 from app.execution.mode import resolve_mode
-from app.execution.scope import ExactScope
+from app.execution.scope import ExactScope, playbook_scope
 from app.release import verifier
 from app.release.verifier import Verdict
 from tests.support import add_member, grant_set, make_user
@@ -165,6 +166,53 @@ def test_an_attestation_for_one_scope_does_not_switch_another(owner, attested):
     response = put(owner, REFUND, "LIVE")
     assert response.status_code == 403
     assert response.json()["error"]["check"] == "CAPABILITY_MEMBERSHIP"
+
+
+# AC-EXEC-MODE-03: PB-001's merchant correction and PB-002's refund are independent (task 5.14)
+
+
+@pytest.fixture
+def both_attested(monkeypatch) -> dict[str, UUID]:
+    """A verifier with a separate attestation per capability, as POL-14 issues them."""
+    attestations = {MERCHANT["action_capability"]: uuid4(), REFUND["action_capability"]: uuid4()}
+
+    def verify(conn, scope):
+        return Verdict(True, None, attestations[scope.action_capability])
+
+    monkeypatch.setattr(verifier, "verify", verify)
+    return attestations
+
+
+def test_each_playbook_runs_under_its_own_scope(owner):
+    playbooks = get_playbooks()
+    with scoped_tx(owner.tenant) as conn:
+        pb001 = playbook_scope(conn, owner.tenant, playbooks["finops:PB-001"])
+        pb002 = playbook_scope(conn, owner.tenant, playbooks["finops:PB-002"])
+    assert pb001 == scope_of(owner.tenant, MERCHANT)
+    assert pb002 == scope_of(owner.tenant, REFUND)
+
+
+@pytest.mark.parametrize(("switched", "other"), [(MERCHANT, REFUND), (REFUND, MERCHANT)])
+def test_switching_one_scope_live_leaves_the_other_unchanged(owner, both_attested, switched,
+                                                             other):
+    response = put(owner, switched, "LIVE")
+    assert response.status_code == 200, response.text
+    assert response.json()["attestation_id"] == str(
+        both_attested[switched["action_capability"]])
+    assert mode_of(owner.tenant, switched) == "LIVE"
+    assert mode_of(owner.tenant, other) == "SHADOW"
+
+
+@pytest.mark.parametrize(("returned", "other"), [(MERCHANT, REFUND), (REFUND, MERCHANT)])
+def test_returning_one_scope_to_shadow_leaves_the_other_live(owner, both_attested, returned,
+                                                             other):
+    assert put(owner, MERCHANT, "LIVE").status_code == 200
+    assert put(owner, REFUND, "LIVE").status_code == 200
+    assert put(owner, returned, "SHADOW").status_code == 200
+    assert mode_of(owner.tenant, returned) == "SHADOW"
+    with scoped_tx(owner.tenant) as conn:
+        kept = resolve_mode(conn, scope_of(owner.tenant, other))
+    assert (kept.mode, kept.attestation_id) == ("LIVE", both_attested[other["action_capability"]])
 
 
 def test_only_execution_mode_manage_may_switch(owner):

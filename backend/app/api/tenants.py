@@ -87,9 +87,6 @@ def transfer_ownership(
     return ownership.transfer_ownership(ctx, body.new_owner_user_id)
 
 
-# TODO(G5 5.14 Rishav): the PayPal refunds.create scope is independent of PB-001's
-# merchant.payment_status.correct scope: switching one leaves the other unchanged, proved for
-# both directions (AC-EXEC-MODE-03). POL-14 is checked per capability.
 @router.put("/execution-mode")
 def set_execution_mode(
     body: mode.ModeBody, ctx: TenantContext = require("execution_mode.manage")
