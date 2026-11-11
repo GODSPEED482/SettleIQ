@@ -151,8 +151,8 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.7 Source registry, `source_records`, raw evidence store with hashing (3h). Evidence in `test_sources.py`.
 - [x] 2.5 PostgreSQL schema discovery and profiling (2h). Evidence in `test_discovery.py`, `test_profiling.py` and `test_secrets.py`; the merchant read source uses `env:SOURCE_SECRET_*` references until 4.5.
 - [x] 2.6 CSV metadata discovery (1h). Evidence in `test_discovery.py`; discovery reads the hash-checked raw-evidence copy, and the upload route stays with 3.6.
-- [ ] 3.5 Merchant PostgreSQL read and normalization (1h)
-- [ ] 3.6 Bank CSV and BRR parser on the shared pipeline, with provenance mode (2h)
+- [x] 3.5 Merchant PostgreSQL read and normalization (1h). Evidence in `test_sync.py`; reads discovered tables only, preserves every column and decimal precision, and never writes to the merchant.
+- [x] 3.6 Bank CSV and BRR parser on the shared pipeline, with provenance mode (2h). Evidence in `test_ingestion.py`; provider reports, SYNTHETIC fixtures and tenant files share one path, with provenance on the raw evidence.
 - [ ] 4.2 OAuth, capture details, Transaction Search backfill, adapter manifest (2h). Starter: manifest draft exists.
 - [ ] 4.3 Webhook route: signature check, trusted source lookup, tenant derivation, inbox, dedupe (3h)
 - [ ] 4.4 Async processing, retry, replay and dead-letter state (1.5h)

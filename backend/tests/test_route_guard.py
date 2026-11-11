@@ -373,10 +373,12 @@ def test_unverified_identity_is_rejected():
 
 
 def test_scope_narrowed_grant_only_reaches_its_scope():
-    client = client_for(FakeGateway([GrantRow("source.sync", "ALLOW", Scope("source", "a"))]))
+    client = client_for(
+        FakeGateway([GrantRow("source.credential.manage", "ALLOW", Scope("source", "a"))])
+    )
     headers = {TENANT_HEADER: str(TENANT)}
-    assert client.post("/api/sources/a/sync", headers=headers).status_code == 501
-    assert client.post("/api/sources/b/sync", headers=headers).status_code == 403
+    assert client.put("/api/sources/a/credentials", headers=headers).status_code == 501
+    assert client.put("/api/sources/b/credentials", headers=headers).status_code == 403
 
 
 def test_grant_with_undeclared_scope_type_grants_nothing():
