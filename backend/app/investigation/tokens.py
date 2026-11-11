@@ -18,6 +18,8 @@ class DelegatedToken:
     expires_at: datetime
 
 
+# TODO(G5 5.7 Swapnaneel): sign and verify these with a key only the backend holds; a token
+# names identity only, and the tool API resolves POL-08 afresh on each call.
 def mint_token(token: DelegatedToken) -> str:
     raise NotImplementedError("5.7")
 

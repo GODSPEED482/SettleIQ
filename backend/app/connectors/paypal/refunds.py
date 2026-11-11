@@ -75,6 +75,9 @@ def create_refund(
     return data, raw_bytes
 
 
+# TODO(G5 5.15 Rahul): before refunding, prove from refunds.read and captures.read that the
+# target capture has no existing refund (spec 9.2). The Worker calls create_refund only under
+# a grant for the exact capture and amount the approval named.
 def read_refund(
     client: PayPalClient,
     *,

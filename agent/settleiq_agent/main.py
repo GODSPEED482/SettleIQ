@@ -36,6 +36,8 @@ def get_drafter() -> Drafter:
         raise HTTPException(status_code=503, detail=str(error)) from None
 
 
+# TODO(G5 5.7 Swapnaneel): run run_investigation with a ToolClient bound to the request's
+# token and return its output; the dispatcher validates it.
 @app.post("/run")
 def run(request: RunRequest) -> dict:
     """Run one investigation and return untrusted output for the dispatcher to validate."""

@@ -19,6 +19,11 @@ class InvestigationStarted(BaseModel):
     status: Literal["RUNNING"]
 
 
+# TODO(G5 5.7 Swapnaneel): migration 0017 adds investigations and investigation_tool_calls,
+# append-only, with a write-once terminal trigger on the investigation (see CLAUDE.md: never
+# an empty placeholder migration). Write the RUNNING row and an INVESTIGATION agent_jobs row in
+# one transaction and return 202. Each stored result and trace carries tenant, case, invoker,
+# model, prompt and tool versions, evidence references and outcome (AC-INV-01).
 @router.post(
     "/agent/investigate/{case_id}", status_code=202, response_model=InvestigationStarted
 )
@@ -29,6 +34,9 @@ def start_investigation(
     raise not_implemented("5.7")
 
 
+# TODO(G5 5.7 Swapnaneel): read the investigation with its validated result, PROPOSED
+# classification and tool trace. Evidence IDs resolve independently of the model's text
+# (AC-AI-04).
 @router.get("/investigations/{investigation_id}")
 def read_investigation(
     investigation_id: str, ctx: TenantContext = require("investigation.read")

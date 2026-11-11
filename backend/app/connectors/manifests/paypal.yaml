@@ -47,6 +47,11 @@ capabilities:
       required: [refund_id]
       properties:
         refund_id: {type: string}
+  # TODO(G5 5.17 Suprava): the refund safety suite for this capability, in the categories spec
+  # 9.7.2 requires (authorization, tenant isolation, transitions, idempotency, concurrency and
+  # stale state, failure recovery, SHADOW side-effect prevention, post-action verification).
+  # It covers AC-PP-08, AC-PLY-02 (equal amounts alone never make PB-002 executable), the
+  # PB-002 parts of AC-PLY-08 and AC-EXEC-MODE-03. No category may be empty.
   - key: refunds.create
     version: 1.0.0
     parameters:

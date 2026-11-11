@@ -25,6 +25,10 @@ def validate_platform(app: FastAPI) -> None:
     build_tool_registry(packs, catalogue)
 
 
+# TODO(G5 5.4 Rishav): generate the capability manifest from registered implementations
+# (id, version, domain, connector, contract version, kind, dependencies, entrypoint and SHA-256
+# of its packaged source), package it in the image, and fail startup when it and the
+# registered implementations differ (spec 9.7.1, AC-REL-01).
 def finish_app(app: FastAPI) -> FastAPI:
     install_error_handlers(app)
     validate_platform(app)

@@ -16,6 +16,12 @@ from app.investigation.tools import build_tool_registry
 TOOL_PREFIX = "/internal/agent-tools"
 
 
+# TODO(G5 5.7 Swapnaneel): implement the six tools the plan budgets (those the PB-001 and
+# PB-002 cases need) behind these generated routes; the rest stay 501. Each call verifies the
+# delegated token, checks tenant, case and evidence scope server-side, returns only what that
+# scope allows (AC-AI-01, AC-AI-05), and appends an investigation_tool_calls row with redacted
+# inputs and outputs, the permission checked and the evidence IDs returned. No tool runs SQL
+# text or reaches a provider (AC-AI-03).
 def _add_tool_route(router: APIRouter, tool: AgentTool) -> None:
     def run_tool(ctx: TenantContext = require(tool.permission)) -> None:
         raise not_implemented("5.7")

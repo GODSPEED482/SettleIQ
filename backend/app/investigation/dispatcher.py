@@ -171,6 +171,9 @@ def run_job(job: ClaimedJob) -> None:
     try:
         if job.kind != "ONTOLOGY_DRAFT":
             # Investigations join this queue under task 5.7.
+            # TODO(G5 5.7 Swapnaneel): for an INVESTIGATION job, mint the delegated token,
+            # call the agent's /run, validate the output with response.py (5.8) and make the
+            # single terminal write; a refused output is FAILED, never stored as a result.
             raise JobFailed("UNSUPPORTED_JOB_KIND")
         _complete_draft(job, _proposals_for(job))
     except JobFailed as failure:

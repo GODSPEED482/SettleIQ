@@ -167,6 +167,10 @@ class PostgresAccessGateway:
     def resolve(self, principal: Principal, tenant_id: UUID) -> EffectiveAccess | None:
         # Agent and Worker resolution arrive with POL-08 and POL-09 in G5; until then
         # they resolve to nothing.
+        # TODO(G5 5.7 Swapnaneel): resolve the Agent as its service set intersected with the
+        # invoking member's current permissions (POL-08), on every tool call.
+        # TODO(G5 5.6 Rahul): resolve the Worker only through a valid grant (POL-09); its keys
+        # can never be granted to a human (AC-AUTHZ-06).
         if principal.kind is not PrincipalKind.HUMAN:
             return None
         params = {"tenant_id": tenant_id, "user_id": principal.id}

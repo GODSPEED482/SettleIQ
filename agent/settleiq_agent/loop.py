@@ -9,6 +9,10 @@ MAX_STEPS = 20
 DEADLINE_SECONDS = 120
 
 
+# TODO(G5 5.7 Swapnaneel): the function-calling loop over the tool API only, bounded by
+# MAX_STEPS and DEADLINE_SECONDS. Treat evidence text as untrusted, compute no money (call
+# calculate_settlement_variance), and return the spec 8.3 contract with evidence IDs taken
+# from tool results, never invented.
 def run_investigation(investigation_id: UUID, case_id: UUID, tools: ToolClient) -> dict:
     """Investigate one case and return output matching the spec 8.3 contract."""
     raise NotImplementedError("5.7")

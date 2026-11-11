@@ -31,6 +31,11 @@ class AgentResponse(_Strict):
     missing_evidence: list[str]
 
 
+# TODO(G5 5.8 Swapnaneel): freeze this schema against spec 8.3 and AC-AI-02: classification is
+# a case type the active pack registers, recommended_playbook an eligible template ID, and no
+# request, approval or execution ID can appear (AC-AGENT-02). Refuse any evidence ID that no
+# tool returned in this investigation. Keep the prohibited-tool check in tools.py failing
+# startup (AC-AGENT-01).
 def check_evidence_references(response: AgentResponse, returned_ids: set[UUID]) -> None:
     """Refuse any evidence ID that no tool returned during this investigation."""
     raise NotImplementedError("5.8")

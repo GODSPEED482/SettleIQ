@@ -87,11 +87,23 @@ def transfer_ownership(
     return ownership.transfer_ownership(ctx, body.new_owner_user_id)
 
 
+# TODO(G5 5.3 Rishav): set one exact scope (domain_pack_id, connector_id, action_capability)
+# to SHADOW or LIVE; the tenant comes from the context. Reject an omitted, wildcard or
+# ambiguous field (AC-EXEC-MODE-02). An absent row resolves to SHADOW with no inheritance
+# (AC-EXEC-MODE-01). LIVE needs a valid POL-14 attestation for that exact scope (5.4) and
+# records its attestation ID; SHADOW never does. Audit every switch.
+# TODO(G5 5.14 Rishav): the PayPal refunds.create scope is independent of PB-001's
+# merchant.payment_status.correct scope: switching one leaves the other unchanged, proved for
+# both directions (AC-EXEC-MODE-03). POL-14 is checked per capability.
 @router.put("/execution-mode")
 def set_execution_mode(ctx: TenantContext = require("execution_mode.manage")) -> None:
     raise not_implemented("5.3")
 
 
+# TODO(G5 5.4 Rishav): report each exact scope's mode and whether its attestation passes the
+# ten runtime checks in spec 9.7.6, with the failing check named. The same verifier runs at
+# the LIVE switch and at every grant; the running image digest comes from the runtime-identity
+# service, never a header or environment variable (AC-REL-09).
 @router.get("/execution-readiness")
 def execution_readiness(ctx: TenantContext = require("execution.read")) -> None:
     raise not_implemented("5.4")

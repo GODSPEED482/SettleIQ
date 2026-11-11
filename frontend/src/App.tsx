@@ -110,6 +110,21 @@ function Shell() {
                   ) : workspace.path === "/sources" ? (
                     <SourceManagement />
                   ) : (
+                    // TODO(G5 5.10 Suprava): replace the /investigations placeholder: start an
+                    // investigation from a case (case.investigate), show it RUNNING until the
+                    // terminal write, then the validated result: likely cause, PROPOSED
+                    // classification, evidence links that open the stored evidence, qualitative
+                    // confidence, missing evidence and the recommended playbook, plus the tool
+                    // trace. Nothing here creates a request.
+                    // TODO(G5 5.11 Suprava): replace the /playbooks placeholder: requests with
+                    // their lifecycle state, the REQUEST- and EXECUTION-stage decisions, the
+                    // approval if any, the execution, its attempts, readback verification and
+                    // audit links. Approve and reject are gated on playbook.approve and
+                    // playbook.reject, and hidden from the requester (POL-01). Show the exact
+                    // scope's mode (SHADOW or LIVE) beside the provider environment (Sandbox).
+                    // TODO(G5 5.16 Suprava): PB-002 request and approval views show the duplicate
+                    // proof: both capture IDs, the order linkage, currency and amount, and that
+                    // no refund or hold exists, so an approver decides on evidence.
                     <Workspace workspace={workspace} />
                   )}
                 </RequirePermission>

@@ -136,12 +136,23 @@ connector_action_capabilities:
   - refunds.create
 
 playbook_templates:
+  # TODO(G5 5.9 Swapnaneel): the PB-001 definition (spec 9.1, 9.2): trigger STATUS_MISMATCH,
+  # required evidence (PayPal capture authoritatively COMPLETED from a verified event or
+  # captures.read, merchant payment PENDING, amount, currency and order agreeing), the single
+  # PENDING -> COMPLETED transition, approval policy from tenant data (REQUIRED for the demo),
+  # idempotency strategy, failure path and verification by merchant.payment.read. Follows
+  # spec 4.4.1, not "replay the event".
   - id: PB-001
     title: Payment-state recovery
     executable: true
     definition: null
     connector_action_capabilities: [merchant.payment_status.correct]
     capability_dependencies: [merchant.payment.read]
+  # TODO(G5 5.13 Swapnaneel): the PB-002 definition and its recommendation: two distinct
+  # successful captures for one intended order, original versus duplicate identified, currency
+  # and amount verified, no existing refund on the target and no pending dispute or hold.
+  # Equal amounts alone are never proof (AC-PLY-02). Approval is always REQUIRED with an
+  # approver other than the requester. Verification reads refunds.read and captures.read.
   - id: PB-002
     title: Duplicate-capture refund
     executable: true

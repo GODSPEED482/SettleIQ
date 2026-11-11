@@ -12,6 +12,9 @@ import {
   type TriageInput,
 } from "./types";
 
+// TODO(G5 5.11 Suprava): on case review, "Create playbook request" (playbook.request) for the
+// recommended playbook. Send only the case and the playbook's declared parameters, never
+// approval, decision or execution fields (spec 12.1); the backend decides the rest.
 const STATUSES: CaseStatus[] = [
   "OPEN",
   "INVESTIGATING",
