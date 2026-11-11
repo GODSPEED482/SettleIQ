@@ -128,7 +128,18 @@ Checked against PayPal's developer documentation on 2026-11-10. `app/connectors/
 | Webhooks: any non-2xx response is redelivered up to 25 times over 3 days, then marked Failed (resend from the dashboard). Verify by CRC32 signature or the verify-signature endpoint | [Webhooks](https://developer.paypal.com/api/rest/webhooks/) |
 | SFTP reports need PayPal support to enable report access, and transaction reports need a separate subscription; setup can take 48 hours. Sandbox host is `reports.sandbox.paypal.com`. A Sandbox app does not by itself provide a Balance Report, so plan on the §10.3.1 SYNTHETIC/REFERENCE fixture (task 3.8) | [Access SFTP reports](https://developer.paypal.com/reports/access) |
 
-Verified with Sandbox app (task 4.1): client-credentials token scopes confirmed for Transaction Search (`https://uri.paypal.com/services/reporting/search/read`) and refunds (`https://uri.paypal.com/services/payments/refund`). Webhook registration for `PAYMENT.CAPTURE.COMPLETED` and refunds verified against `/api/webhooks/paypal/{source_id}` via tunnel. Sandbox SFTP reports require manual support provisioning, confirming reliance on the §10.3.1 SYNTHETIC/REFERENCE fixture (task 3.8). Verification script added at `scripts/verify_paypal_sandbox.py`. Duplicate capture setup recorded in `backend/packs/finops/fixtures/duplicate_capture_sandbox.py` (task 4.9).
+Verified with Sandbox app (task 4.1): client-credentials token scopes confirmed for Transaction Search (`https://uri.paypal.com/services/reporting/search/read`) and refunds (`https://uri.paypal.com/services/payments/refund`). PayPal accepted a webhook registration for `PAYMENT.CAPTURE.COMPLETED` and refunds pointing at `/api/webhooks/paypal/{source_id}` via tunnel; that run used a placeholder source ID, and until task 4.8 the backend could not verify a genuine PayPal signature (`cryptography` was missing), so no Sandbox delivery had yet been accepted end to end. See "G4 live exit step" below. Sandbox SFTP reports require manual support provisioning, confirming reliance on the §10.3.1 SYNTHETIC/REFERENCE fixture (task 3.8). Verification script added at `scripts/verify_paypal_sandbox.py`. Duplicate capture setup recorded in `backend/packs/finops/fixtures/duplicate_capture_sandbox.py` (task 4.9).
+
+### G4 live exit step
+
+`backend/tests/test_g4_exit.py` proves AC-WEBHOOK-01 and AC-PP-03/04/05/06/10 with a Sandbox-shaped `PAYMENT.CAPTURE.COMPLETED` signed by PayPal's algorithm, through the public route, the processor and the run it triggers. What only a live delivery adds is PayPal's own certificate and transport. To check that, with the stack up (`docker compose up --build`, which now includes the `webhooks` processor):
+
+1. Expose the API: `cloudflared tunnel --url http://localhost:8000` (or ngrok), giving `https://<tunnel>`.
+2. In SettleIQ, as Integration Admin, register a PayPal source and store its credential reference. Have the merchant database hold a `pending` payment whose order reference is, say, `ORD-LIVE-1`, synced into the tenant.
+3. Register PayPal's side and note the returned webhook ID: `python scripts/verify_paypal_sandbox.py --tunnel-url https://<tunnel> --source-id <source id>`.
+4. On the source's card, register that webhook ID with `PAYMENT.CAPTURE.COMPLETED`. Ingress trusts only this registration.
+5. Make Sandbox emit the event: `python scripts/verify_paypal_sandbox.py --live-capture ORD-LIVE-1`. Without card processing on the app it prints a buyer approval link; approve it, then run `--capture-order <order id>`.
+6. Pass: the source's **Webhook events** panel shows the event `PROCESSED` (a `400` in the tunnel log means the signature was refused, with the reason in `platform_security_ingress_logs`), and Domain Operations shows a `STATUS_MISMATCH` case expecting `COMPLETED` against the `PENDING` payment.
 
 ## Spec gaps found while scaffolding
 

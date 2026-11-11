@@ -100,6 +100,20 @@ services:
       start_period: 20s
     networks: [backend]
 
+  # Drains the webhook inbox apart from receipt and starts the reconciliation runs PayPal
+  # events trigger (task 4.4, AC-PP-05). No port.
+  webhooks:
+    <<: *python
+    image: ${REGISTRY}/settleiq-api:${TAG}
+    command: ["python", "-m", "app.webhooks.run"]
+    environment: *backend-env
+    volumes:
+      - /data/raw-evidence:/data/raw-evidence
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+
   # Ontology generation needs these; investigations are stubs until task 5.7. Enable them with
   # COMPOSE_PROFILES=agent in SSM.
   agent-tools:

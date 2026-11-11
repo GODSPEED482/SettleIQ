@@ -76,6 +76,18 @@ services:
         condition: service_completed_successfully
     networks: [backend]
 
+  # Drains the webhook inbox apart from receipt (task 4.4). No port.
+  webhooks:
+    build: ./backend
+    command: python -m app.webhooks.run
+    environment: *backend-env
+    volumes:
+      - raw_evidence:/data/raw-evidence
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [backend]
+
   agent-tools:
     profiles: [agent]
     build: ./backend

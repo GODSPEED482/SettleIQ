@@ -3,6 +3,9 @@
 
 Usage:
     python scripts/verify_paypal_sandbox.py [--client-id ID] [--client-secret SECRET] [--tunnel-url URL]
+        [--source-id SOURCE_ID]
+    python scripts/verify_paypal_sandbox.py --live-capture ORDER_REF   # G4 live exit step
+    python scripts/verify_paypal_sandbox.py --capture-order ORDER_ID   # after buyer approval
 
 Checks:
 1. Authenticates against https://api-m.sandbox.paypal.com/v1/oauth2/token
@@ -29,7 +32,12 @@ REQUIRED_SCOPES = [
 ]
 
 
-def verify_sandbox(client_id: str, client_secret: str, tunnel_url: str | None = None) -> dict:
+def verify_sandbox(
+    client_id: str,
+    client_secret: str,
+    tunnel_url: str | None = None,
+    source_id: str = "00000000-0000-0000-0000-000000000001",
+) -> dict:
     print(f"Connecting to PayPal Sandbox ({SANDBOX_HOST})...")
     basic_auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
     headers = {
@@ -65,7 +73,7 @@ def verify_sandbox(client_id: str, client_secret: str, tunnel_url: str | None = 
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
             }
-            target_url = f"{tunnel_url.rstrip('/')}/api/webhooks/paypal/00000000-0000-0000-0000-000000000001"
+            target_url = f"{tunnel_url.rstrip('/')}/api/webhooks/paypal/{source_id}"
             wh_payload = {
                 "url": target_url,
                 "event_types": [
@@ -92,11 +100,100 @@ def verify_sandbox(client_id: str, client_secret: str, tunnel_url: str | None = 
     }
 
 
+def _bearer(client: httpx.Client, client_id: str, client_secret: str) -> dict[str, str]:
+    basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    resp = client.post(
+        "/v1/oauth2/token",
+        headers={"Authorization": f"Basic {basic}"},
+        data={"grant_type": "client_credentials"},
+    )
+    resp.raise_for_status()
+    return {"Authorization": f"Bearer {resp.json()['access_token']}", "Content-Type": "application/json"}
+
+
+def _capture(client: httpx.Client, headers: dict[str, str], order_id: str) -> dict | None:
+    resp = client.post(
+        f"/v2/checkout/orders/{order_id}/capture",
+        headers=headers | {"PayPal-Request-Id": f"settleiq-capture-{order_id}"},
+    )
+    if resp.status_code not in (200, 201):
+        print(f"NOTICE: capture of {order_id} returned {resp.status_code}: {resp.text}")
+        return None
+    capture = resp.json()["purchase_units"][0]["payments"]["captures"][0]
+    print(f"SUCCESS: capture {capture['id']} is {capture['status']} (order {order_id}).")
+    print("PayPal now sends PAYMENT.CAPTURE.COMPLETED to every webhook subscribed to it.")
+    return capture
+
+
+def live_capture(client_id: str, client_secret: str, order_ref: str) -> dict | None:
+    """G4 live exit step: make PayPal Sandbox emit a real PAYMENT.CAPTURE.COMPLETED.
+
+    Creates a USD 100.00 order whose invoice_id is `order_ref`, so the event reconciles against
+    a merchant row with that order reference, then captures it. A Sandbox card captures at
+    once where the app has card processing; otherwise the buyer approval link is printed and
+    `--capture-order` finishes the capture after approval.
+    """
+    with httpx.Client(base_url=f"https://{SANDBOX_HOST}", timeout=30.0) as client:
+        headers = _bearer(client, client_id, client_secret)
+        order = {
+            "intent": "CAPTURE",
+            "purchase_units": [{
+                "reference_id": order_ref,
+                "invoice_id": order_ref,
+                "custom_id": order_ref,
+                "amount": {"currency_code": "USD", "value": "100.00"},
+            }],
+            "payment_source": {"card": {
+                "number": "4111111111111111", "expiry": "2030-12",
+                "security_code": "123", "name": "SettleIQ Sandbox",
+            }},
+        }
+        resp = client.post(
+            "/v2/checkout/orders", json=order,
+            headers=headers | {"PayPal-Request-Id": f"settleiq-order-{order_ref}"},
+        )
+        if resp.status_code not in (200, 201):
+            # Without card processing, fall back to a buyer-approved PayPal checkout.
+            del order["payment_source"]
+            resp = client.post(
+                "/v2/checkout/orders", json=order,
+                headers=headers | {"PayPal-Request-Id": f"settleiq-order-wallet-{order_ref}"},
+            )
+            resp.raise_for_status()
+        created = resp.json()
+        print(f"Order {created['id']} is {created['status']}.")
+        if created["status"] == "COMPLETED":
+            capture = created["purchase_units"][0]["payments"]["captures"][0]
+            print(f"SUCCESS: capture {capture['id']} is {capture['status']}.")
+            return capture
+        if created["status"] == "APPROVED":
+            return _capture(client, headers, created["id"])
+        approve = next(
+            (link["href"] for link in created.get("links", [])
+             if link["rel"] in ("approve", "payer-action")),
+            None,
+        )
+        print(f"Approve as a Sandbox buyer: {approve}")
+        print(f"Then run: --capture-order {created['id']}")
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Verify PayPal Sandbox access and scopes.")
     parser.add_argument("--client-id", default=os.environ.get("PAYPAL_SANDBOX_CLIENT_ID"))
     parser.add_argument("--client-secret", default=os.environ.get("PAYPAL_SANDBOX_CLIENT_SECRET"))
     parser.add_argument("--tunnel-url", default=os.environ.get("PAYPAL_WEBHOOK_TUNNEL_URL"))
+    parser.add_argument(
+        "--source-id",
+        default="00000000-0000-0000-0000-000000000001",
+        help="registered PayPal source the webhook should deliver to",
+    )
+    parser.add_argument(
+        "--live-capture",
+        metavar="ORDER_REF",
+        help="create and capture a Sandbox order with this invoice_id (G4 live exit step)",
+    )
+    parser.add_argument("--capture-order", metavar="ORDER_ID", help="capture an approved order")
     args = parser.parse_args()
 
     if not args.client_id or not args.client_secret:
@@ -104,7 +201,15 @@ def main():
         print("Set them in environment or pass via flags to run against live PayPal Sandbox.")
         sys.exit(0)
 
-    result = verify_sandbox(args.client_id, args.client_secret, args.tunnel_url)
+    if args.capture_order:
+        with httpx.Client(base_url=f"https://{SANDBOX_HOST}", timeout=30.0) as client:
+            headers = _bearer(client, args.client_id, args.client_secret)
+            sys.exit(0 if _capture(client, headers, args.capture_order) else 1)
+    if args.live_capture:
+        live_capture(args.client_id, args.client_secret, args.live_capture)
+        return
+
+    result = verify_sandbox(args.client_id, args.client_secret, args.tunnel_url, args.source_id)
     if not result.get("success"):
         sys.exit(1)
 
