@@ -73,6 +73,7 @@ def test_settlement_batch_and_entry_are_distinct():
         ("refundsCapture", FINOPS.Refund, FINOPS.Capture),
         ("settledThrough", FINOPS.SettlementBatch, FINOPS.BankTransaction),
         ("recordedIn", FINOPS.FinancialEntry, CORE.DataSource),
+        ("forOrder", FINOPS.FinancialEntry, FINOPS.Order),
     ],
 )
 def test_relationships_carry_domain_and_range(name, domain, range_):
@@ -84,7 +85,7 @@ def test_relationships_carry_domain_and_range(name, domain, range_):
 def test_every_relationship_has_a_declared_domain_and_range():
     graph = finops_graph()
     properties = list(graph.subjects(RDF.type, OWL.ObjectProperty))
-    assert len(properties) == 11
+    assert len(properties) == 12
     for prop in properties:
         assert graph.value(prop, RDFS.domain) is not None
         assert graph.value(prop, RDFS.range) is not None

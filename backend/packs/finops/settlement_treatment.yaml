@@ -1,0 +1,36 @@
+# OPEN-10, decided for this build: how each provider report entry counts toward the reported
+# net (spec 7.4, 10.3.1). Entries are classified by PayPal transaction event code. A specific
+# code wins over its family. Amounts are signed as reported: credits positive, debits negative.
+#
+#   Expected Net = Captures - Refunds - Fees - Chargebacks + Adjustments
+#
+# is the sum of each included entry's net. When the report gives a net amount, that net already
+# includes the entry's fee, so the fee is never subtracted again (AC-REC-07). Without a net, the
+# entry contributes gross + fee, so the fee (a debit) is subtracted exactly once.
+#
+# An entry whose sign contradicts its category, or whose code is not listed, is excluded and
+# reported as unclassified rather than guessed. The 3.8 fixture manifest states each row's
+# treatment from this table.
+
+version: "1"
+categories:
+  CAPTURE: {included: true, sign: positive}
+  REFUND: {included: true, sign: negative}
+  FEE: {included: true, sign: negative}
+  CHARGEBACK: {included: true, sign: negative}
+  ADJUSTMENT: {included: true, sign: any}
+  EXCLUDED: {included: false, sign: any}
+codes:
+  T1201: CHARGEBACK
+families:
+  T00: CAPTURE       # payments received
+  T01: FEE           # fees not tied to a payment row
+  T02: EXCLUDED      # currency conversion; cross-currency is never compared (AC-REC-15)
+  T03: EXCLUDED      # bank deposit into the PayPal balance
+  T04: EXCLUDED      # withdrawal to the bank: this is the bank credit side, not the net
+  T11: REFUND        # reversals, including T1107 payment refund
+  T12: ADJUSTMENT    # adjustments other than T1201 chargeback
+  T13: EXCLUDED      # authorizations move no funds
+  T15: EXCLUDED      # holds and releases for disputes or investigations
+  T19: ADJUSTMENT    # account corrections
+  T21: EXCLUDED      # reserves and releases

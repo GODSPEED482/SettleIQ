@@ -132,7 +132,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). `tests/test_ownership.py` covers AC-OWNER-01, 03, 04, 05, including concurrent transfers.
 - [x] 1.5 Invitation backend: hashed single-use tokens, matching-email acceptance (1.5h). `tests/test_invitations.py` covers AC-IAM-02 to 06, 08, 09, 10, AC-OWNER-02, AC-AUTHZ-05, 09, 18.
 - [x] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h). Evidence in `test_publication.py` and `test_mappings.py`.
-- [ ] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h)
+- [x] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h). Migration 0011; evidence in `test_rls.py` (domain section), traced under AC-TEN-02.
 - [ ] 4.5 Secret references; credential and webhook routes limited to Integration Admin (2h)
 - [ ] 5.1 Request, decision, approval, execution, grant and attempt tables with the full FK chain (2h)
 - [ ] 5.2 Two-stage policy gateway, POL-01, single-use grant issuance (2h)
@@ -167,7 +167,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 ### Swapnaneel Ray: Semantics, Domain and AI (leads G2, G3; demo Domain Operator, also holds an Approver grant for the POL-01 denial)
 
 - [x] OPEN-03 (Day 1). Recorded in `README.md`; activation rules are tested in `test_contracts.py`.
-- [ ] OPEN-10: included-in-net semantics for the fixture (before 3.3; not a G1 item)
+- [x] OPEN-10: included-in-net semantics for the fixture (before 3.3; not a G1 item). Recorded in `README.md`; the table is `packs/finops/settlement_treatment.yaml` and `test_settlement.py` is the evidence.
 - [x] 1.8 Freeze domain-pack manifest (0.5h). Evidence in `test_contracts.py`.
 - [x] 1.9 Registration, email verification, email sending, atomic tenant creation (2.5h). Evidence in `test_identity.py`.
 - [x] 1.9 follow-up: configure an SMTP relay and confirm a real email arrives. Brevo is configured locally, and a real test email arrived on 2026-11-10. Production still needs its SMTP values in `.env.production`.
@@ -175,11 +175,11 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 2.2 LLM draft generator from discovered metadata, draft only (2h). Evidence in `test_generation.py`; real metadata waits on Rahul's 2.5.
 - [x] 2.3 SHACL, pack validators, hash-bound validation, `confirm_publish` (2h). Evidence in `test_validation.py` and `test_publication.py`.
 - [x] 2.4 Versioned mappings and authority assertions, including two sources to one property (1h). Evidence in `test_mappings.py`.
-- [ ] 3.1 Domain projection and exact-ID identity resolution; ambiguous candidates stay reviewable (1.5h)
-- [ ] 3.2 Property observations, resolved views, explicit authority conflicts (1.5h)
-- [ ] 3.3 Finance engine: both reconciliation scopes, settlement calculation, decimal-safe money (2h). Starter: `Money` type built.
-- [ ] 3.4 Version-pinned `domain_runs`, case lifecycle (1h)
-- [ ] 3.10 `DUPLICATE_CAPTURE` detection and fixture: two distinct successful captures for one intended order; equal amounts alone never qualify (1.5h)
+- [x] 3.1 Domain projection and exact-ID identity resolution; ambiguous candidates stay reviewable (1.5h). Policy is data in `packs/finops/resolution.yaml`; evidence in `test_domain_projection.py`.
+- [x] 3.2 Property observations, resolved views, explicit authority conflicts (1.5h). Evidence in `test_domain_observations.py`.
+- [x] 3.3 Finance engine: both reconciliation scopes, settlement calculation, decimal-safe money (2h). `packs/finops/engine.py` over the OPEN-10 calculation; evidence in `test_reconciliation.py` and `test_settlement.py`, which also cover the G3 exit criteria.
+- [x] 3.4 Version-pinned `domain_runs`, case lifecycle (1h). Adds `GET /api/domain-runs` and `GET /api/entity-resolution` for 3.9; evidence in `test_domain_runs.py` and `test_case_lifecycle.py`.
+- [x] 3.10 `DUPLICATE_CAPTURE` detection and fixture: two distinct successful captures for one intended order; equal amounts alone never qualify (1.5h). Fixture `seed_reconciliation` in `tests/domain_fixture.py`; evidence in `test_reconciliation.py`.
 - [ ] 4.6 PayPal field mappings and capture-completion authority (1h)
 - [ ] 5.7 AI orchestrator: 6 tools, POL-08 permission intersection, durable tool trace (3h). Starter: tool registry declared; agent service, dispatcher, tokens and tool API stubbed; migration not started.
 - [ ] 5.8 Agent response schema and prohibited-tool registry check (1h). Starter: prohibited-tool check built; draft response schema, evidence check stubbed.
