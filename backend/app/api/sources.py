@@ -1,11 +1,13 @@
 """Connector capabilities and the source registry (spec 4.4, 12.2)."""
 
-from fastapi import APIRouter
+from typing import Annotated, Literal
+
+from fastapi import APIRouter, File, Form, UploadFile
 
 from app.authz.guard import TenantContext, require
 from app.connectors.manifest import load_capability_registry
 from app.errors import not_implemented
-from app.sources import discovery, registry
+from app.sources import discovery, file_ingest, merchant_read, registry
 
 router = APIRouter(prefix="/api", tags=["sources"])
 
@@ -37,15 +39,20 @@ def discover_source(
 
 
 @router.post("/sources/{source_id}/sync")
-def sync_source(source_id: str, ctx: TenantContext = require("source.sync", scope=SOURCE)) -> None:
-    raise not_implemented("3.5")
+def sync_source(
+    source_id: str, ctx: TenantContext = require("source.sync", scope=SOURCE)
+) -> dict:
+    return merchant_read.sync(ctx, source_id)
 
 
 @router.post("/sources/{source_id}/files")
-def upload_source_file(
-    source_id: str, ctx: TenantContext = require("source.file.upload", scope=SOURCE)
-) -> None:
-    raise not_implemented("3.6")
+async def upload_source_file(
+    source_id: str,
+    file: Annotated[UploadFile, File()],
+    kind: Annotated[Literal["BANK_CSV", "BRR"], Form()],
+    ctx: TenantContext = require("source.file.upload", scope=SOURCE),
+) -> dict:
+    return file_ingest.ingest(ctx, source_id, await file.read(), file.filename or "file", kind)
 
 
 @router.put("/sources/{source_id}/credentials")

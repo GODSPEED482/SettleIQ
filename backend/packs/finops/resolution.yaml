@@ -1,0 +1,28 @@
+# Financial Operations exact-ID identity policy (spec 7.2, AC-REC-03, AC-REC-06).
+#
+# identities: the properties whose exact, normalized value identifies an entity of each class.
+# A record matches an existing entity only through one of these values. A record whose values
+# point at two or more entities is never attached: its decision waits for review.
+#
+# derived: a record bound to the first class also evidences the listed classes, identified by
+# the same record's values. Each settlement report row names the batch it belongs to.
+#
+# relationships: runtime instances between entities whose observed values of `via` are equal.
+# A subject whose value matches two or more objects is left unlinked, never attached to one.
+
+id: finops.exact_id
+version: "1"
+identities:
+  finops:Order: [finops:orderReference, finops:providerReference]
+  finops:Capture: [finops:providerReference]
+  finops:Refund: [finops:providerReference]
+  finops:SettlementEntry: [finops:providerReference]
+  finops:SettlementBatch: [finops:settlementReference]
+  finops:BankTransaction: [finops:providerReference]
+derived:
+  finops:SettlementEntry: [finops:SettlementBatch]
+relationships:
+  - {subject: finops:Capture, predicate: finops:forOrder, object: finops:Order, via: finops:orderReference}
+  - {subject: finops:Refund, predicate: finops:forOrder, object: finops:Order, via: finops:orderReference}
+  - {subject: finops:SettlementEntry, predicate: finops:includedInSettlement, object: finops:SettlementBatch, via: finops:settlementReference}
+  - {subject: finops:SettlementBatch, predicate: finops:settledThrough, object: finops:BankTransaction, via: finops:settlementReference}

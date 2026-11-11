@@ -93,7 +93,8 @@ class DomainPackManifest(_Strict):
 
     def files(self) -> list[str]:
         declared = [item.path for item in [*self.ontology_definitions, *self.shacl_shapes]]
-        return declared + [t.definition for t in self.playbook_templates if t.definition]
+        definitions = [t.definition for t in self.playbook_templates if t.definition]
+        return declared + definitions + self.test_fixtures
 
     def _check_entrypoints(self) -> None:
         prefix = f"packs.{self.package}."

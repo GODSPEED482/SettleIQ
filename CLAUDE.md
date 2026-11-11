@@ -106,12 +106,12 @@ These bind code not yet written. The spec sections hold the detail.
 
 ## In-code TODOs
 
-Gate 1 is closed: every `TODO(G1 ...)` marker has been removed and its checklist items are ticked. Later gates mark work where it happens, as `TODO(G<n> <task> <owner>): ...`. `<task>` is a plan task number (`2.7`), an OPEN item (`OPEN-10`) or `exit`; `<owner>` is the first name from the checklist below. "Owner review" TODOs mark starter code that its owner has yet to review.
+Gates 1 and 2 are closed: every `TODO(G1 ...)` and `TODO(G2 ...)` marker has been removed and their checklist items are ticked. Later gates mark work where it happens, as `TODO(G<n> <task> <owner>): ...`. `<task>` is a plan task number (`2.7`), an OPEN item (`OPEN-10`) or `exit`; `<owner>` is the first name from the checklist below. "Owner review" TODOs mark starter code that its owner has yet to review.
 
 ```
-git grep "TODO(G2 "              # all of Gate 2
-git grep "TODO(G2 .* Rahul)"     # one person
-git grep "TODO(G2 2.7 "          # one task
+git grep "TODO(G3 "              # all of Gate 3
+git grep "TODO(G3 .* Rahul)"     # one person
+git grep "TODO(G3 3.6 "          # one task
 ```
 
 Delete a TODO in the same change that completes it. The checklist below stays the record of what is done. Keep permission-set names out of frontend TODOs: the role-name ban matches quoted names in comments too.
@@ -132,7 +132,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.4 Owner pointer, atomic ownership transfer, `audit_logs` (1.5h). `tests/test_ownership.py` covers AC-OWNER-01, 03, 04, 05, including concurrent transfers.
 - [x] 1.5 Invitation backend: hashed single-use tokens, matching-email acceptance (1.5h). `tests/test_invitations.py` covers AC-IAM-02 to 06, 08, 09, 10, AC-OWNER-02, AC-AUTHZ-05, 09, 18.
 - [x] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h). Evidence in `test_publication.py` and `test_mappings.py`.
-- [ ] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h)
+- [x] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h). Migration 0011; evidence in `test_rls.py` (domain section), traced under AC-TEN-02.
 - [ ] 4.5 Secret references; credential and webhook routes limited to Integration Admin (2h)
 - [ ] 5.1 Request, decision, approval, execution, grant and attempt tables with the full FK chain (2h)
 - [ ] 5.2 Two-stage policy gateway, POL-01, single-use grant issuance (2h)
@@ -151,8 +151,8 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.7 Source registry, `source_records`, raw evidence store with hashing (3h). Evidence in `test_sources.py`.
 - [x] 2.5 PostgreSQL schema discovery and profiling (2h). Evidence in `test_discovery.py`, `test_profiling.py` and `test_secrets.py`; the merchant read source uses `env:SOURCE_SECRET_*` references until 4.5.
 - [x] 2.6 CSV metadata discovery (1h). Evidence in `test_discovery.py`; discovery reads the hash-checked raw-evidence copy, and the upload route stays with 3.6.
-- [ ] 3.5 Merchant PostgreSQL read and normalization (1h)
-- [ ] 3.6 Bank CSV and BRR parser on the shared pipeline, with provenance mode (2h)
+- [x] 3.5 Merchant PostgreSQL read and normalization (1h). Evidence in `test_sync.py`; reads discovered tables only, preserves every column and decimal precision, and never writes to the merchant.
+- [x] 3.6 Bank CSV and BRR parser on the shared pipeline, with provenance mode (2h). Evidence in `test_ingestion.py`; provider reports, SYNTHETIC fixtures and tenant files share one path, with provenance on the raw evidence.
 - [ ] 4.2 OAuth, capture details, Transaction Search backfill, adapter manifest (2h). Starter: manifest draft exists.
 - [ ] 4.3 Webhook route: signature check, trusted source lookup, tenant derivation, inbox, dedupe (3h)
 - [ ] 4.4 Async processing, retry, replay and dead-letter state (1.5h)
@@ -167,7 +167,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 ### Swapnaneel Ray: Semantics, Domain and AI (leads G2, G3; demo Domain Operator, also holds an Approver grant for the POL-01 denial)
 
 - [x] OPEN-03 (Day 1). Recorded in `README.md`; activation rules are tested in `test_contracts.py`.
-- [ ] OPEN-10: included-in-net semantics for the fixture (before 3.3; not a G1 item)
+- [x] OPEN-10: included-in-net semantics for the fixture (before 3.3; not a G1 item). Recorded in `README.md`; the table is `packs/finops/settlement_treatment.yaml` and `test_settlement.py` is the evidence.
 - [x] 1.8 Freeze domain-pack manifest (0.5h). Evidence in `test_contracts.py`.
 - [x] 1.9 Registration, email verification, email sending, atomic tenant creation (2.5h). Evidence in `test_identity.py`.
 - [x] 1.9 follow-up: configure an SMTP relay and confirm a real email arrives. Brevo is configured locally, and a real test email arrived on 2026-11-10. Production still needs its SMTP values in `.env.production`.
@@ -175,11 +175,11 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 2.2 LLM draft generator from discovered metadata, draft only (2h). Evidence in `test_generation.py`; real metadata waits on Rahul's 2.5.
 - [x] 2.3 SHACL, pack validators, hash-bound validation, `confirm_publish` (2h). Evidence in `test_validation.py` and `test_publication.py`.
 - [x] 2.4 Versioned mappings and authority assertions, including two sources to one property (1h). Evidence in `test_mappings.py`.
-- [ ] 3.1 Domain projection and exact-ID identity resolution; ambiguous candidates stay reviewable (1.5h)
-- [ ] 3.2 Property observations, resolved views, explicit authority conflicts (1.5h)
-- [ ] 3.3 Finance engine: both reconciliation scopes, settlement calculation, decimal-safe money (2h). Starter: `Money` type built.
-- [ ] 3.4 Version-pinned `domain_runs`, case lifecycle (1h)
-- [ ] 3.10 `DUPLICATE_CAPTURE` detection and fixture: two distinct successful captures for one intended order; equal amounts alone never qualify (1.5h)
+- [x] 3.1 Domain projection and exact-ID identity resolution; ambiguous candidates stay reviewable (1.5h). Policy is data in `packs/finops/resolution.yaml`; evidence in `test_domain_projection.py`.
+- [x] 3.2 Property observations, resolved views, explicit authority conflicts (1.5h). Evidence in `test_domain_observations.py`.
+- [x] 3.3 Finance engine: both reconciliation scopes, settlement calculation, decimal-safe money (2h). `packs/finops/engine.py` over the OPEN-10 calculation; evidence in `test_reconciliation.py` and `test_settlement.py`, which also cover the G3 exit criteria.
+- [x] 3.4 Version-pinned `domain_runs`, case lifecycle (1h). Adds `GET /api/domain-runs` and `GET /api/entity-resolution` for 3.9; evidence in `test_domain_runs.py` and `test_case_lifecycle.py`.
+- [x] 3.10 `DUPLICATE_CAPTURE` detection and fixture: two distinct successful captures for one intended order; equal amounts alone never qualify (1.5h). Fixture `seed_reconciliation` in `tests/domain_fixture.py`; evidence in `test_reconciliation.py`.
 - [ ] 4.6 PayPal field mappings and capture-completion authority (1h)
 - [ ] 5.7 AI orchestrator: 6 tools, POL-08 permission intersection, durable tool trace (3h). Starter: tool registry declared; agent service, dispatcher, tokens and tool API stubbed; migration not started.
 - [ ] 5.8 Agent response schema and prohibited-tool registry check (1h). Starter: prohibited-tool check built; draft response schema, evidence check stubbed.
@@ -198,8 +198,8 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 2.8 Ontology Studio graph in React Flow, view and edit relationships (2.5h). Evidence in `studio.test.tsx` and `graph.test.ts`.
 - [x] 2.9 Binding and authority editors (1.5h). Evidence in `bindings.test.tsx`.
 - [x] 2.10 Publish confirmation showing candidate hash and validation run (1h). Evidence in `publish.test.tsx`; draft reads carry the candidate hash (`test_mappings.py`).
-- [ ] 3.8 SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum (1h)
-- [ ] 3.9 Domain Operations screens: cases, observations, resolved values (2h)
+- [x] 3.8 SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum (1h). `packs/finops/fixtures/`, listed in the finops manifest; evidence in `test_brr_fixture.py` (checksum, parser, balances, OPEN-10 treatment per row, upload as `synthetic_reference`).
+- [x] 3.9 Domain Operations screens: cases, observations, resolved values (2h). Runs with pinned versions, cases with triage and reopen, entities with observations and resolved values, identity review; case and observation reads now carry evidence provenance for the SYNTHETIC/REFERENCE label. Evidence in `operations.test.tsx`, `test_domain_observations.py`, `test_reconciliation.py` and `test_case_lifecycle.py`.
 - [ ] 4.7 Source Management screens, including credential status and SYNTHETIC label (1.5h)
 - [ ] 4.8 Failure tests: invalid signature, duplicate and out-of-order events (0.5h)
 - [ ] 5.10 Investigation screens (1.5h)

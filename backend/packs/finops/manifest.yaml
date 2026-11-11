@@ -2,7 +2,7 @@
 
 namespace: finops
 package: finops
-version: 0.1.0
+version: 0.2.0
 compatible_platform_versions: ">=0.1.0,<1.0.0"
 dependencies: []
 conflicts: []
@@ -14,8 +14,11 @@ mapping_hints: []
 validators:
   - {id: finops.settlement_cardinality, entrypoint: "packs.finops.validators:check_settlement_cardinality"}
   - {id: finops.required_terms, entrypoint: "packs.finops.validators:check_required_terms"}
-entity_resolution_policies: []
-domain_engine: null
+# The exact-ID policy is data in resolution.yaml; the entrypoint only returns it.
+entity_resolution_policies:
+  - {id: finops.exact_id, entrypoint: "packs.finops.resolution:exact_id_policy"}
+# Both reconciliation scopes, the OPEN-10 settlement calculation and duplicate captures.
+domain_engine: {id: finops.engine, entrypoint: "packs.finops.engine:run"}
 
 case_types:
   - {code: TXN_MISSING, default_severity: high}
@@ -54,4 +57,7 @@ playbook_templates:
     title: Settlement / chargeback workflow
     executable: false
 
-test_fixtures: []
+# The SYNTHETIC/REFERENCE BRR fixture (spec 10.3.1, task 3.8). Paths are relative to this pack.
+test_fixtures:
+  - fixtures/SYNTHETIC_REFERENCE_balance_report_v1.csv
+  - fixtures/SYNTHETIC_REFERENCE_balance_report_v1.manifest.yaml

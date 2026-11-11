@@ -1,3 +1,5 @@
 * text=auto eol=lf
+# Fixture checksums are over LF bytes.
+*.csv text eol=lf
 *.png binary
 *.jpg binary
