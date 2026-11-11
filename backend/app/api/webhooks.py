@@ -1,46 +1,174 @@
-"""Provider webhook ingress (spec 10.4, POL-15).
+"""Provider webhook ingress (spec 10.4, POL-15, AC-WEBHOOK-01, AC-PP-03, AC-PP-04).
 
-Order is binding: verify the signature, derive the tenant from the trusted source
-registration, then open `scoped_tx`. Never read a tenant ID from the payload, query or
-headers, and write nothing tenant-owned for an invalid signature (AC-PP-03).
+Order is binding:
+1. Verify the signature against the registered webhook ID and provider transmission metadata.
+2. If unknown source or bad signature, write nothing tenant-owned; write forensics only to
+   platform_security_ingress_logs (AC-PP-03).
+3. Only after successful signature verification, derive tenant from the trusted source
+   registration (AC-WEBHOOK-01).
+4. Store original bytes in raw_evidence with provenance `provider_event` and insert a
+   `webhook_inbox` row. Deduplicate repeated delivery by (tenant_id, source_id, provider_event_id)
+   safely (AC-PP-04).
 """
 
-from fastapi import APIRouter
+import hashlib
+import json
+import logging
+from datetime import datetime
+from uuid import UUID, uuid4
+
+from fastapi import APIRouter, HTTPException, Request
+from sqlalchemy import text
 
 from app.authz.guard import public
-from app.errors import not_implemented
+from app.connectors.paypal.webhooks import verify_signature
+from app.db import global_tx, scoped_tx
+from app.sources import evidence
+from app.sources.evidence import RetrievalContext
+
+logger = logging.getLogger("settleiq.webhooks.api")
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
 
-# TODO(G4 exit Rahul): AC-WEBHOOK-01 and AC-PP-03, 04, 05, 06 and 10 pass with automated
-# tests, and a real Sandbox PAYMENT.CAPTURE.COMPLETED delivery is received end to end (stored,
-# processed, STATUS_MISMATCH raised against the PENDING merchant row). Record the event ID.
+def _parse_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
 
 
-# TODO(G4 4.3 Rahul): resolve source_id through a narrowly privileged lookup that returns only
-# the trusted tenant, connector instance and registered PayPal webhook ID, and is not a general
-# tenant query (spec 10.4). Verify the signature against that webhook ID and the transmission
-# headers before trusting the body. An unknown source or a bad signature gets the same
-# response and writes nothing tenant-owned (AC-PP-03); forensics go only to a separate platform
-# security ingress log with bounded metadata. Then open scoped_tx(trusted tenant), store the
-# original bytes as WEBHOOK evidence with provider_event_id and provenance `provider_event`,
-# and insert a `webhook_inbox` row (spec 6.3: unique (tenant_id, source_id, provider_event_id))
-# before acknowledging. A repeated event ID acknowledges without a second row (AC-PP-04).
-# Ignore any tenant_id in the payload, query or headers (AC-WEBHOOK-01). The migration needs
-# enable_tenant_rls and an explicit GRANT; keep test_rls.py green.
-# TODO(G4 4.4 Rahul): process inbox rows asynchronously, apart from receipt. Claim with
-# FOR UPDATE SKIP LOCKED, persist the event record as conventions.py describes, then trigger a
-# domain run so the capture reaches reconciliation (AC-PP-05). Track processing state and
-# attempts; after the last retry move the row to dead-letter for human review. Replay reuses
-# the original event identity and never duplicates downstream work (spec 10.4). Order events
-# by provider time, not delivery order, and re-read critical state from PayPal before any
-# dependent action. Expose failed, replayed and dead-lettered rows to the Sources screen (4.7).
-# TODO(G4 4.8 Suprava): failure tests against this route: an invalid or missing signature
-# leaves no raw_evidence, webhook_inbox or canonical row for any tenant (AC-PP-03); a duplicate
-# delivery gives one inbox row and one downstream effect (AC-PP-04); an older event arriving
-# after a newer one does not regress the resolved state (spec 16.7 failure injection). Trace
-# them in the acceptance-criteria sheet (6.5).
+def _log_forensics(source_id: str, reason: str, request: Request, raw_body: bytes) -> None:
+    """Record forensic details in platform_security_ingress_logs with bounded metadata."""
+    try:
+        body_digest = hashlib.sha256(raw_body).hexdigest() if raw_body else None
+        # Bounded headers only; strip sensitive values
+        safe_headers = {
+            k: v for k, v in request.headers.items()
+            if k.lower() in ("paypal-auth-algo", "paypal-transmission-id", "paypal-cert-url",
+                            "paypal-transmission-time", "content-type", "user-agent")
+        }
+        client_ip = request.client.host if request.client else None
+        with global_tx() as conn:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO platform_security_ingress_logs
+                        (id, source_id, reason, remote_ip, headers, body_hash)
+                    VALUES (:id, :source, :reason, :ip, CAST(:headers AS jsonb), :hash)
+                    """
+                ),
+                {
+                    "id": uuid4(),
+                    "source": str(source_id)[:100],
+                    "reason": reason[:200],
+                    "ip": client_ip,
+                    "headers": json.dumps(safe_headers),
+                    "hash": body_digest,
+                },
+            )
+    except Exception as exc:
+        logger.error("Failed to write platform security ingress log: %s", exc)
+
+
 @router.post("/paypal/{source_id}")
-def paypal_webhook(source_id: str, _: None = public()) -> None:
-    raise not_implemented("4.3")
+async def paypal_webhook(
+    source_id: str,
+    request: Request,
+    _: None = public(),
+) -> None:
+    raw_body = await request.body()
+    try:
+        source_uuid = UUID(source_id)
+    except ValueError:
+        _log_forensics(source_id, "invalid_uuid_source_id", request, raw_body)
+        raise HTTPException(  # noqa: B904
+            status_code=400, detail="Invalid webhook source or signature."
+        ) from None
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+    except Exception:
+        _log_forensics(source_id, "invalid_json_body", request, raw_body)
+        raise HTTPException(  # noqa: B904
+            status_code=400, detail="Invalid webhook source or signature."
+        ) from None
+
+    # 1. Narrowly privileged source registration lookup (returns trusted tenant, connector, config)
+    with global_tx() as conn:
+        source_row = conn.execute(
+            text("SELECT tenant_id, connector_id, config FROM resolve_webhook_source(:source_id)"),
+            {"source_id": source_uuid},
+        ).first()
+
+    if source_row is None or source_row.connector_id != "paypal":
+        _log_forensics(source_id, "unknown_or_inactive_source", request, raw_body)
+        raise HTTPException(status_code=400, detail="Invalid webhook source or signature.")
+
+    webhook_id = (source_row.config or {}).get("webhook_id")
+    if not webhook_id:
+        _log_forensics(source_id, "source_missing_registered_webhook_id", request, raw_body)
+        raise HTTPException(status_code=400, detail="Invalid webhook source or signature.")
+
+    # 2. Verify signature before trusting event content or deriving tenant context (AC-PP-03)
+    is_valid, reason = verify_signature(
+        dict(request.headers),
+        raw_body,
+        webhook_id,
+        json_payload=payload,
+    )
+    if not is_valid:
+        _log_forensics(source_id, f"signature_verification_failed: {reason}", request, raw_body)
+        raise HTTPException(status_code=400, detail="Invalid webhook source or signature.")
+
+    # 3. Only after verification, derive trusted tenant ID (never from payload: AC-WEBHOOK-01)
+    trusted_tenant_id = source_row.tenant_id
+    event_id = payload.get("id") or f"evt_{uuid4().hex}"
+    event_type = payload.get("event_type") or "UNKNOWN"
+    create_time = _parse_time(payload.get("create_time"))
+
+    # 4. Open scoped_tx(trusted_tenant_id) to persist raw evidence and webhook_inbox row
+    with scoped_tx(trusted_tenant_id) as conn:
+        raw_ref = evidence.store_bytes(
+            conn,
+            tenant_id=trusted_tenant_id,
+            source_id=source_uuid,
+            data=raw_body,
+            evidence_type="WEBHOOK",
+            content_type="application/json",
+            retrieval_context=RetrievalContext(
+                provenance="provider_event",
+                event_type=event_type,
+            ),
+            provider_event_id=event_id,
+            source_timestamp=create_time,
+        )
+
+        # Deduplicate repeated delivery by (tenant_id, source_id, provider_event_id) (AC-PP-04)
+        conn.execute(
+            text(
+                """
+                INSERT INTO webhook_inbox (
+                    id, tenant_id, source_id, provider_event_id, event_type,
+                    raw_evidence_id, status, provider_timestamp
+                )
+                VALUES (:id, :tenant, :source, :event_id, :event_type, :raw_id, 'RECEIVED', :ts)
+                ON CONFLICT (tenant_id, source_id, provider_event_id) DO NOTHING
+                """
+            ),
+            {
+                "id": uuid4(),
+                "tenant": trusted_tenant_id,
+                "source": source_uuid,
+                "event_id": event_id,
+                "event_type": event_type,
+                "raw_id": raw_ref.id,
+                "ts": create_time,
+            },
+        )
+
+    return {"status": "received", "event_id": event_id}

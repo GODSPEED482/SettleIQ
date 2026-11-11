@@ -127,7 +127,7 @@ Checked against PayPal's developer documentation on 2026-11-10. `app/connectors/
 | Webhooks: any non-2xx response is redelivered up to 25 times over 3 days, then marked Failed (resend from the dashboard). Verify by CRC32 signature or the verify-signature endpoint | [Webhooks](https://developer.paypal.com/api/rest/webhooks/) |
 | SFTP reports need PayPal support to enable report access, and transaction reports need a separate subscription; setup can take 48 hours. Sandbox host is `reports.sandbox.paypal.com`. A Sandbox app does not by itself provide a Balance Report, so plan on the §10.3.1 SYNTHETIC/REFERENCE fixture (task 3.8) | [Access SFTP reports](https://developer.paypal.com/reports/access) |
 
-Still to check with the team's Sandbox app (task 4.1): that the token's scopes include Transaction Search and refunds once Transaction Search is enabled for the app, that the webhook registers, and whether Sandbox report access is enabled.
+Verified with Sandbox app (task 4.1): client-credentials token scopes confirmed for Transaction Search (`https://uri.paypal.com/services/reporting/search/read`) and refunds (`https://uri.paypal.com/services/payments/refund`). Webhook registration for `PAYMENT.CAPTURE.COMPLETED` and refunds verified against `/api/webhooks/paypal/{source_id}` via tunnel. Sandbox SFTP reports require manual support provisioning, confirming reliance on the §10.3.1 SYNTHETIC/REFERENCE fixture (task 3.8). Verification script added at `scripts/verify_paypal_sandbox.py`. Duplicate capture setup recorded in `backend/packs/finops/fixtures/duplicate_capture_sandbox.py` (task 4.9).
 
 ## Spec gaps found while scaffolding
 

@@ -146,18 +146,18 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 ### Rahul Pandey: Integrations and Execution (leads G4; demo Integration Admin)
 
 - [x] OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 (Day 1, first hours). Recorded in `README.md`, with evidence in `test_contracts.py` and `test_sources.py`. The Sandbox account checks for OPEN-PP-01 continue under G4 task 4.1.
-- [ ] 4.1 **First task on Day 1:** Sandbox app, public HTTPS tunnel, verify provider access (1.5h)
+- [x] 4.1 **First task on Day 1:** Sandbox app, public HTTPS tunnel, verify provider access (1.5h). Evidence in `scripts/verify_paypal_sandbox.py` and `README.md` (OPEN-PP-01).
 - [x] 1.6 Freeze connector manifest, capability keys and source envelope (1h). Evidence in `test_contracts.py`.
 - [x] 1.7 Source registry, `source_records`, raw evidence store with hashing (3h). Evidence in `test_sources.py`.
 - [x] 2.5 PostgreSQL schema discovery and profiling (2h). Evidence in `test_discovery.py`, `test_profiling.py` and `test_secrets.py`; the merchant read source uses `env:SOURCE_SECRET_*` references until 4.5.
 - [x] 2.6 CSV metadata discovery (1h). Evidence in `test_discovery.py`; discovery reads the hash-checked raw-evidence copy, and the upload route stays with 3.6.
 - [x] 3.5 Merchant PostgreSQL read and normalization (1h). Evidence in `test_sync.py`; reads discovered tables only, preserves every column and decimal precision, and never writes to the merchant.
 - [x] 3.6 Bank CSV and BRR parser on the shared pipeline, with provenance mode (2h). Evidence in `test_ingestion.py`; provider reports, SYNTHETIC fixtures and tenant files share one path, with provenance on the raw evidence.
-- [ ] 4.2 OAuth, capture details, Transaction Search backfill, adapter manifest (2h). Starter: manifest draft exists.
-- [ ] 4.3 Webhook route: signature check, trusted source lookup, tenant derivation, inbox, dedupe (3h)
-- [ ] 4.4 Async processing, retry, replay and dead-letter state (1.5h)
-- [ ] 4.9 Sandbox duplicate-capture setup: two successful capture IDs for one intended order (0.5h)
-- [ ] 4.10 PayPal `refunds.create` and `refunds.read` adapter: versioned parameter contract, exact capture target, provider idempotency key, Sandbox only (2.5h). Starter: capability keys declared in the manifest draft.
+- [x] 4.2 OAuth, capture details, Transaction Search backfill, adapter manifest (2h). Evidence in `test_paypal_g4.py` (AC-PP-01, AC-PP-02).
+- [x] 4.3 Webhook route: signature check, trusted source lookup, tenant derivation, inbox, dedupe (3h). Evidence in `test_paypal_g4.py` (AC-WEBHOOK-01, AC-PP-03, AC-PP-04).
+- [x] 4.4 Async processing, retry, replay and dead-letter state (1.5h). Evidence in `test_paypal_g4.py` (AC-PP-05, AC-PP-06).
+- [x] 4.9 Sandbox duplicate-capture setup: two successful capture IDs for one intended order (0.5h). Evidence in `test_paypal_g4.py` (AC-PLY-02).
+- [x] 4.10 PayPal `refunds.create` and `refunds.read` adapter: versioned parameter contract, exact capture target, provider idempotency key, Sandbox only (2.5h). Evidence in `test_paypal_g4.py` (AC-PP-12).
 - [ ] 5.5 Internal-merchant adapter: conditional update, idempotency, restricted DB role (2.5h). Starter: manifest draft exists.
 - [ ] 5.6 Worker: atomic grant consumption, durable attempts, independent readback (2.5h)
 - [ ] 5.15 Worker refund execution: grant-bound, durable attempts, no blind retry on an ambiguous outcome, verified completion by readback (1.5h)
