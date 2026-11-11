@@ -16,8 +16,9 @@ from app.db import tenant_tx
 from app.domain_packs.manifest import DomainPackManifest, load_domain_packs
 from app.domain_packs.registry import PackActivationError, assert_can_activate
 from app.errors import conflict, not_found, validation_failed
-from app.semantics import mappings
+from app.semantics import mappings, validation
 from app.semantics.artifacts import Artifact, core_artifact, extension_context, pack_artifacts
+from app.semantics.hashing import content_hash
 
 _ACTIVE_NAMESPACES_SQL = text(
     "SELECT namespace FROM tenant_domain_packs WHERE status = 'ACTIVE' ORDER BY namespace"
@@ -195,11 +196,20 @@ def _extension(ctx: TenantContext, conn: Connection, graph: list[dict]) -> dict[
 
 
 def _draft_view(conn: Connection, row: Any) -> dict[str, Any]:
+    # The hash a validation run must match to publish. A binding or authority change moves it
+    # without a new revision, so a client compares this rather than the revision alone.
+    candidate = validation.candidate_content(
+        row.composition,
+        row.tenant_extension,
+        mappings.current_mappings(conn, row.id),
+        mappings.current_authority(conn, row.id),
+    )
     return {
         "id": str(row.id),
         "revision": row.revision,
         "base_version": row.base_version,
         "status": row.status,
+        "content_hash": content_hash(candidate),
         "artifacts": _artifact_contents(conn, row.composition),
         "tenant_extension": row.tenant_extension,
         "proposals": row.proposals,

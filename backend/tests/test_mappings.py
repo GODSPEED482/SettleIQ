@@ -485,3 +485,19 @@ def test_other_tenants_cannot_use_or_see_a_draft(draft_member):
     assert save(other, mapping(draft)).status_code == 404
     assert listed(other, draft) == []
     assert other.request("POST", f"/api/mappings/{created['id']}/retire").status_code == 404
+
+
+def open_draft(member: Member) -> dict:
+    return member.request("GET", "/api/ontology/drafts/open").json()
+
+
+@pytest.mark.db
+def test_draft_reads_carry_the_hash_a_validation_run_must_match(draft_member):
+    member, draft = draft_member
+    before = open_draft(member)
+    assert before["content_hash"] == validate(member, draft)["content_hash"]
+    assert save(member, mapping(draft)).status_code == 201
+    after = open_draft(member)
+    assert after["revision"] == before["revision"]
+    assert after["content_hash"] != before["content_hash"]
+    assert after["content_hash"] == validate(member, draft)["content_hash"]
