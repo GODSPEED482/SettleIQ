@@ -184,7 +184,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 3.4 Version-pinned `domain_runs`, case lifecycle (1h). Adds `GET /api/domain-runs` and `GET /api/entity-resolution` for 3.9; evidence in `test_domain_runs.py` and `test_case_lifecycle.py`.
 - [x] 3.10 `DUPLICATE_CAPTURE` detection and fixture: two distinct successful captures for one intended order; equal amounts alone never qualify (1.5h). Fixture `seed_reconciliation` in `tests/domain_fixture.py`; evidence in `test_reconciliation.py`.
 - [x] 4.6 PayPal field mappings and capture-completion authority (1h). Typed `mapping_hints` in `packs/finops/manifest.yaml`, applied with `hint_bodies`; event records match mappings by event type. Evidence in `test_paypal_mappings.py` (AC-PP-06 from a `PAYMENT.CAPTURE.COMPLETED` event), `test_contracts.py` and `test_domain_projection.py`.
-- [ ] 5.7 AI orchestrator: 6 tools, POL-08 permission intersection, durable tool trace (3h). Starter: tool registry declared; agent service, dispatcher, tokens and tool API stubbed; migration not started.
+- [ ] 5.7 AI orchestrator: all 11 registry tools (spec 8.2), POL-08 permission intersection, durable tool trace (3h). Starter: tool registry declared; agent service, dispatcher, tokens and tool API stubbed; migration not started.
 - [ ] 5.8 Agent response schema and prohibited-tool registry check (1h). Starter: prohibited-tool check built; draft response schema, evidence check stubbed.
 - [ ] 5.9 PB-001 definition and the request-lifecycle state machine (1h)
 - [ ] 5.13 PB-002 definition and agent recommendation: duplicate proof, currency and amount, no prior refund or hold, always-required independent approval (1h)

@@ -160,7 +160,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 | 5.4 | Signed POL-14 attestation job, checked at LIVE switch and at grant issue | Rishav | 2 |
 | 5.5 | Internal-merchant adapter: conditional update, idempotency, restricted DB role | Rahul | 2.5 |
 | 5.6 | Worker: atomic grant consumption, durable attempts, independent readback | Rahul | 2.5 |
-| 5.7 | AI orchestrator: 6 tools, POL-08 permission intersection, durable tool trace | Swapnaneel | 3 |
+| 5.7 | AI orchestrator: all 11 registry tools (spec 8.2), POL-08 permission intersection, durable tool trace | Swapnaneel | 3 |
 | 5.8 | Agent response schema and prohibited-tool registry check | Swapnaneel | 1 |
 | 5.9 | PB-001 definition and the request-lifecycle state machine | Swapnaneel | 1 |
 | 5.10 | Investigation screens | Suprava | 1.5 |

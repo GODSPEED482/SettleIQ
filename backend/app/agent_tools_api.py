@@ -16,12 +16,23 @@ from app.investigation.tools import build_tool_registry
 TOOL_PREFIX = "/internal/agent-tools"
 
 
-# TODO(G5 5.7 Swapnaneel): implement the six tools the plan budgets (those the PB-001 and
-# PB-002 cases need) behind these generated routes; the rest stay 501. Each call verifies the
-# delegated token, checks tenant, case and evidence scope server-side, returns only what that
-# scope allows (AC-AI-01, AC-AI-05), and appends an investigation_tool_calls row with redacted
-# inputs and outputs, the permission checked and the evidence IDs returned. No tool runs SQL
-# text or reaches a provider (AC-AI-03).
+# TODO(G5 5.7 Swapnaneel): implement all 11 registry tools behind these generated routes, with
+# the boundaries in spec 8.2:
+# - get_ontology_context: the active, pinned tenant composition only;
+# - get_source_authority: the exact fact and entity scope;
+# - get_source_records: tenant and invoking-member scope;
+# - trace_domain_relationships: registered domain relationships only;
+# - get_case_evidence: raw payload excerpts also need evidence.raw.read;
+# - get_property_observations: keep provenance and value and time metadata;
+# - get_entity_resolution_trace: the candidate and evidence trace;
+# - classify_domain_case: a taxonomy the active pack registers, stored as PROPOSED only;
+# - recommend_playbook: eligible templates only;
+# - validate_playbook: a dry run with no side effects;
+# - calculate_settlement_variance (finops pack): packs/finops/settlement.py, not LLM arithmetic.
+# Each call verifies the delegated token, checks tenant, case and evidence scope server-side,
+# returns only what that scope allows (AC-AI-01, AC-AI-05), and appends an
+# investigation_tool_calls row with redacted inputs and outputs, the permission checked and the
+# evidence IDs returned. No tool runs SQL text or reaches a provider (AC-AI-03).
 def _add_tool_route(router: APIRouter, tool: AgentTool) -> None:
     def run_tool(ctx: TenantContext = require(tool.permission)) -> None:
         raise not_implemented("5.7")
