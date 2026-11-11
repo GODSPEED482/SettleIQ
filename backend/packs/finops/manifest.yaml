@@ -136,16 +136,11 @@ connector_action_capabilities:
   - refunds.create
 
 playbook_templates:
-  # TODO(G5 5.9 Swapnaneel): the PB-001 definition (spec 9.1, 9.2): trigger STATUS_MISMATCH,
-  # required evidence (PayPal capture authoritatively COMPLETED from a verified event or
-  # captures.read, merchant payment PENDING, amount, currency and order agreeing), the single
-  # PENDING -> COMPLETED transition, approval policy from tenant data (REQUIRED for the demo),
-  # idempotency strategy, failure path and verification by merchant.payment.read. Follows
-  # spec 4.4.1, not "replay the event".
+  # Definitions are data under playbook_definitions/; preconditions are in playbooks.py.
   - id: PB-001
     title: Payment-state recovery
     executable: true
-    definition: null
+    definition: playbook_definitions/pb-001.yaml
     connector_action_capabilities: [merchant.payment_status.correct]
     capability_dependencies: [merchant.payment.read]
   # TODO(G5 5.13 Swapnaneel): the PB-002 definition and its recommendation: two distinct

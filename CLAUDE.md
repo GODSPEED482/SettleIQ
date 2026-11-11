@@ -186,7 +186,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 4.6 PayPal field mappings and capture-completion authority (1h). Typed `mapping_hints` in `packs/finops/manifest.yaml`, applied with `hint_bodies`; event records match mappings by event type. Evidence in `test_paypal_mappings.py` (AC-PP-06 from a `PAYMENT.CAPTURE.COMPLETED` event), `test_contracts.py` and `test_domain_projection.py`.
 - [ ] 5.7 AI orchestrator: all 11 registry tools (spec 8.2), POL-08 permission intersection, durable tool trace (5h). Starter: tool registry declared; agent service, dispatcher, tokens and tool API stubbed; migration not started.
 - [ ] 5.8 Agent response schema and prohibited-tool registry check (1h). Starter: prohibited-tool check built; draft response schema, evidence check stubbed.
-- [ ] 5.9 PB-001 definition and the request-lifecycle state machine (1h)
+- [x] 5.9 PB-001 definition and the request-lifecycle state machine (1h). Definition schema in `app/domain_packs/playbooks.py`, validated at startup; PB-001 is `packs/finops/playbook_definitions/pb-001.yaml` with preconditions in `packs/finops/playbooks.py`, read from a case evidence snapshot (`app/playbooks/evidence.py`); the machine is `app/playbooks/lifecycle.py`. Evidence in `test_playbook_definitions.py` and `test_request_lifecycle.py` (Python and trigger agree; PB-001 eligible on a real COMPLETED event against a PENDING merchant row).
 - [ ] 5.13 PB-002 definition and agent recommendation: duplicate proof, currency and amount, no prior refund or hold, always-required independent approval (1h)
 - [ ] 6.1 SaaS pack: manifest, one validator, renewal/invoice fixture (1.5h). Starter: manifest stub exists.
 - [ ] 6.7 Full team rehearsal (0.5h)

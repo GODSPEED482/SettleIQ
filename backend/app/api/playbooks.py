@@ -32,11 +32,6 @@ router = APIRouter(prefix="/api", tags=["playbooks"])
 # ALLOW_PENDING_PRECONDITIONS; PB-002 always NEEDS_APPROVAL, AC-PLY-08) and the case moved to
 # ACTION_PENDING (spec 9.3). A repeated tenant-scoped idempotency key returns the prior request
 # (AC-PLY-04). Adjust test_held_permission_passes_the_gate and the 501 check.
-# TODO(G5 5.9 Swapnaneel): the request-lifecycle state machine this route starts (spec 9.3):
-# CREATED -> REQUEST_POLICY_EVALUATED -> NEEDS_APPROVAL -> APPROVED -> PRECONDITIONS_VALIDATED
-# -> EXECUTION_POLICY_ALLOWED -> EXECUTION_CREATED, with the NOT_REQUIRED shortcut and the
-# terminal DENIED, REJECTED, EXPIRED and CANCELLED states. A terminal state returns the case to
-# HUMAN_REVIEW. Keep it apart from case and execution state.
 @router.post("/playbooks/{playbook_id}/requests")
 def create_playbook_request(
     playbook_id: str,
