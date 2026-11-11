@@ -149,7 +149,9 @@ def load_playbooks(
             if not template.executable:
                 continue
             if template.definition is None:
-                continue
+                raise PlaybookDefinitionError(
+                    f"{pack.namespace}:{template.id} is executable but has no definition"
+                )
             path = directory / pack.package / template.definition
             definition = PlaybookDefinition(**yaml.safe_load(path.read_text(encoding="utf-8")))
             _check(pack, template, definition)

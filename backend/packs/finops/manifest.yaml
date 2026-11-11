@@ -143,15 +143,10 @@ playbook_templates:
     definition: playbook_definitions/pb-001.yaml
     connector_action_capabilities: [merchant.payment_status.correct]
     capability_dependencies: [merchant.payment.read]
-  # TODO(G5 5.13 Swapnaneel): the PB-002 definition and its recommendation: two distinct
-  # successful captures for one intended order, original versus duplicate identified, currency
-  # and amount verified, no existing refund on the target and no pending dispute or hold.
-  # Equal amounts alone are never proof (AC-PLY-02). Approval is always REQUIRED with an
-  # approver other than the requester. Verification reads refunds.read and captures.read.
   - id: PB-002
     title: Duplicate-capture refund
     executable: true
-    definition: null
+    definition: playbook_definitions/pb-002.yaml
     connector_action_capabilities: [refunds.create]
     capability_dependencies: [refunds.read, captures.read]
   - id: PB-003
