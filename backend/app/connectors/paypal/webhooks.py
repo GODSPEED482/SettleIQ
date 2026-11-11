@@ -3,6 +3,9 @@
 Verifies incoming transmission metadata before trusting event content or deriving tenant
 context. An invalid or missing signature is rejected before tenant derivation; no tenant
 evidence or inbox row is written.
+
+There is no test bypass: tests sign events with PayPal's algorithm against their own
+certificate (tests/paypal_signing.py), so the production path is the one under test.
 """
 
 import base64
@@ -13,15 +16,9 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
-
-try:
-    from cryptography import x509
-    from cryptography.exceptions import InvalidSignature
-    from cryptography.hazmat.primitives import hashes
-    from cryptography.hazmat.primitives.asymmetric import padding
-    _HAS_CRYPTOGRAPHY = True
-except ImportError:
-    _HAS_CRYPTOGRAPHY = False
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 
 from app.connectors.paypal.client import PayPalClient
 
@@ -61,6 +58,14 @@ def _get_cert(cert_url: str) -> Any:
     return cert
 
 
+def signed_message(
+    transmission_id: str, transmission_time: str, webhook_id: str, raw_body: bytes
+) -> bytes:
+    """The string PayPal signs: transmission ID, time, webhook ID and the body's CRC32."""
+    crc = binascii.crc32(raw_body) & 0xFFFFFFFF
+    return f"{transmission_id}|{transmission_time}|{webhook_id}|{crc}".encode()
+
+
 def _verify_crypto(
     *,
     auth_algo: str,
@@ -72,23 +77,16 @@ def _verify_crypto(
     raw_body: bytes,
 ) -> bool:
     """Locally verify signature using PayPal transmission algorithm, cert and CRC32."""
-    if not _HAS_CRYPTOGRAPHY:
+    if auth_algo.upper() != "SHA256WITHRSA":
+        logger.warning("Unsupported auth algo: %s", auth_algo)
         return False
     try:
-        # Check algorithm (default SHA256withRSA)
-        if "SHA256" not in auth_algo.upper() or "RSA" not in auth_algo.upper():
-            logger.warning("Unsupported auth algo: %s", auth_algo)
-            return False
-
-        crc = binascii.crc32(raw_body) & 0xFFFFFFFF
-        message = f"{transmission_id}|{transmission_time}|{webhook_id}|{crc}".encode()
-        sig = base64.b64decode(transmission_sig)
-
-        cert = _get_cert(cert_url)
-        public_key = cert.public_key()
+        message = signed_message(transmission_id, transmission_time, webhook_id, raw_body)
+        sig = base64.b64decode(transmission_sig, validate=True)
+        public_key = _get_cert(cert_url).public_key()
         public_key.verify(sig, message, padding.PKCS1v15(), hashes.SHA256())
         return True
-    except (InvalidSignature, Exception) as exc:
+    except Exception as exc:
         logger.debug("Local signature verification failed: %s", exc)
         return False
 
@@ -115,13 +113,7 @@ def verify_signature(
     transmission_sig = normalized_headers["paypal-transmission-sig"]
     transmission_time = normalized_headers["paypal-transmission-time"]
 
-    # 1. Test bypass hook for deterministic testing
-    if normalized_headers.get("x-settleiq-test-sig") == "valid":
-        return True, "valid_test_signature"
-    if normalized_headers.get("x-settleiq-test-sig") == "invalid":
-        return False, "invalid_test_signature"
-
-    # 2. If PayPal client is provided, try provider API verification
+    # 1. If PayPal client is provided, try provider API verification
     if client is not None and json_payload is not None:
         try:
             ok = client.verify_webhook_signature(
@@ -138,7 +130,7 @@ def verify_signature(
         except Exception as exc:
             logger.debug("PayPal API verification attempt failed: %s", exc)
 
-    # 3. Local cryptographic verification
+    # 2. Local cryptographic verification
     ok = _verify_crypto(
         auth_algo=auth_algo,
         transmission_id=transmission_id,

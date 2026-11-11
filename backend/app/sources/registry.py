@@ -16,8 +16,10 @@ from app.audit import write_audit
 from app.authz.guard import TenantContext
 from app.connectors.manifest import load_connector_manifests, select_binding
 from app.db import global_tx, tenant_tx
-from app.errors import conflict, not_found, validation_failed
+from app.errors import conflict, missing_permission, not_found, validation_failed
 from app.sources.secrets import is_resolvable
+
+CREDENTIAL_KEY = "source.credential.manage"
 
 _SOURCE_COLUMNS = (
     "id, connector_id, connector_version, source_type, protocol, display_name, config, "
@@ -31,6 +33,7 @@ class _Body(BaseModel):
 
 
 _SECRET_KEY_PARTS = ("secret", "password", "token", "private_key", "api_key", "credential")
+_WEBHOOK_KEYS = ("webhook", "webhook_id")
 
 
 class CreateSourceBody(_Body):
@@ -48,6 +51,9 @@ class CreateSourceBody(_Body):
         for key in value:
             if any(part in key.lower() for part in _SECRET_KEY_PARTS):
                 raise ValueError("Configuration holds no secret values; use secret_reference.")
+            # Webhook ingress trusts this configuration, so only source.webhook.manage sets it.
+            if key.lower() in _WEBHOOK_KEYS:
+                raise ValueError("Register webhooks through the source's webhooks route.")
         return value
 
 
@@ -80,6 +86,10 @@ def create_source(ctx: TenantContext, body: CreateSourceBody) -> dict[str, Any]:
     manifest = load_connector_manifests().get(body.connector_id)
     if manifest is None:
         raise validation_failed("Unknown connector.")
+    # A reference given at registration is a credential operation like PUT credentials, so
+    # source.create alone does not cover it (AC-PP-10).
+    if body.secret_reference is not None and not ctx.access.permits(CREDENTIAL_KEY):
+        raise missing_permission(CREDENTIAL_KEY)
     try:
         protocol, source_type = select_binding(manifest, body.protocol, body.source_type)
     except ValueError as error:

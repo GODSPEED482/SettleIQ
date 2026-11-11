@@ -23,7 +23,7 @@ from sqlalchemy import text
 from app.authz.guard import public
 from app.connectors.paypal.webhooks import verify_signature
 from app.db import global_tx, scoped_tx
-from app.sources import evidence
+from app.sources import evidence, registry
 from app.sources.evidence import RetrievalContext
 
 logger = logging.getLogger("settleiq.webhooks.api")
@@ -99,17 +99,13 @@ async def paypal_webhook(
         ) from None
 
     # 1. Narrowly privileged source registration lookup (returns trusted tenant, connector, config)
-    with global_tx() as conn:
-        source_row = conn.execute(
-            text("SELECT tenant_id, connector_id, config FROM resolve_webhook_source(:source_id)"),
-            {"source_id": source_uuid},
-        ).first()
-
-    if source_row is None or source_row.connector_id != "paypal":
+    source_row = registry.webhook_source(source_uuid)
+    if source_row is None or source_row["connector_id"] != "paypal":
         _log_forensics(source_id, "unknown_or_inactive_source", request, raw_body)
         raise HTTPException(status_code=400, detail="Invalid webhook source or signature.")
 
-    webhook_id = (source_row.config or {}).get("webhook_id")
+    # Only what PUT /api/sources/{id}/webhooks registered (source.webhook.manage, AC-PP-10).
+    webhook_id = ((source_row["config"] or {}).get("webhook") or {}).get("webhook_id")
     if not webhook_id:
         _log_forensics(source_id, "source_missing_registered_webhook_id", request, raw_body)
         raise HTTPException(status_code=400, detail="Invalid webhook source or signature.")
@@ -126,7 +122,7 @@ async def paypal_webhook(
         raise HTTPException(status_code=400, detail="Invalid webhook source or signature.")
 
     # 3. Only after verification, derive trusted tenant ID (never from payload: AC-WEBHOOK-01)
-    trusted_tenant_id = source_row.tenant_id
+    trusted_tenant_id = source_row["tenant_id"]
     event_id = payload.get("id") or f"evt_{uuid4().hex}"
     event_type = payload.get("event_type") or "UNKNOWN"
     create_time = _parse_time(payload.get("create_time"))

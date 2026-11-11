@@ -31,7 +31,6 @@ from app.connectors.paypal.refunds import create_refund, read_refund
 from app.db import global_tx, scoped_tx
 from app.errors import ApiError
 from app.main import app
-from app.sources import conventions
 from app.webhooks.processor import (
     claim_and_process_pending_webhooks,
 )
@@ -39,6 +38,7 @@ from packs.finops.fixtures.duplicate_capture_sandbox import (
     get_duplicate_capture_fixture,
     verify_duplicate_proof,
 )
+from tests.paypal_signing import register_webhook
 from tests.test_ingestion import evidence_root  # noqa: F401
 from tests.test_semantics_store import Member
 
@@ -162,23 +162,24 @@ def test_ac_pp_10_permission_sets_catalogue():
 
 
 @pytest.fixture
-def db_member(evidence_root):  # noqa: F811
+def db_member(evidence_root, paypal_signer):  # noqa: F811
     # Ingress writes raw evidence; keep it under tmp_path, not the deployment RAW_EVIDENCE_DIR.
     return Member("PayPal-Test-Tenant")
 
 
-def _create_paypal_source(member: Member, webhook_id: str = "WH-SANDBOX-01") -> UUID:
+WEBHOOK_ID = "WH-SANDBOX-01"
+
+
+def _create_paypal_source(member: Member, webhook_id: str = WEBHOOK_ID) -> UUID:
     resp = member.request(
         "POST",
         "/api/sources",
-        json={
-            "connector_id": PAYPAL,
-            "display_name": "PayPal Sandbox Test",
-            "config": {"webhook_id": webhook_id},
-        },
+        json={"connector_id": PAYPAL, "display_name": "PayPal Sandbox Test"},
     )
     assert resp.status_code == 201, resp.text
-    return UUID(resp.json()["id"])
+    source_id = UUID(resp.json()["id"])
+    register_webhook(member, source_id, webhook_id)
+    return source_id
 
 
 @pytest.mark.db
@@ -186,11 +187,10 @@ def test_ac_pp_03_invalid_signature_leaves_no_tenant_row(db_member):
     source_id = _create_paypal_source(db_member)
     client = TestClient(app)
 
-    # Missing / invalid signature headers
+    # No PayPal transmission headers at all
     resp = client.post(
         f"/api/webhooks/paypal/{source_id}",
         json={"id": "EVT-BAD-SIG", "event_type": "PAYMENT.CAPTURE.COMPLETED"},
-        headers={"x-settleiq-test-sig": "invalid"},
     )
     assert resp.status_code == 400
 
@@ -219,20 +219,11 @@ def test_ac_pp_03_invalid_signature_leaves_no_tenant_row(db_member):
 
 
 @pytest.mark.db
-def test_ac_webhook_01_trusted_source_ignores_payload_and_header_tenant(db_member):
+def test_ac_webhook_01_trusted_source_ignores_payload_and_header_tenant(db_member, paypal_signer):
     source_id = _create_paypal_source(db_member)
     client = TestClient(app)
     malicious_tenant = str(uuid4())
 
-    valid_headers = {
-        "paypal-auth-algo": "SHA256withRSA",
-        "paypal-transmission-id": "trans-1",
-        "paypal-cert-url": "https://api.sandbox.paypal.com/cert",
-        "paypal-transmission-sig": "sig",
-        "paypal-transmission-time": "2026-11-10T12:00:00Z",
-        "x-settleiq-test-sig": "valid",
-        TENANT_HEADER: malicious_tenant,  # Attacker header
-    }
     payload = {
         "id": "EVT-TRUST-01",
         "event_type": "PAYMENT.CAPTURE.COMPLETED",
@@ -241,10 +232,12 @@ def test_ac_webhook_01_trusted_source_ignores_payload_and_header_tenant(db_membe
         "resource": {"id": "CAP-TRUST-01", "status": "COMPLETED"},
     }
 
-    resp = client.post(
-        f"/api/webhooks/paypal/{source_id}",
-        json=payload,
-        headers=valid_headers,
+    resp = paypal_signer.deliver(
+        client,
+        source_id,
+        payload,
+        WEBHOOK_ID,
+        extra_headers={TENANT_HEADER: malicious_tenant},  # Attacker header
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "received"
@@ -262,18 +255,10 @@ def test_ac_webhook_01_trusted_source_ignores_payload_and_header_tenant(db_membe
 
 
 @pytest.mark.db
-def test_ac_pp_04_duplicate_webhook_deduplication(db_member):
+def test_ac_pp_04_duplicate_webhook_deduplication(db_member, paypal_signer):
     source_id = _create_paypal_source(db_member)
     client = TestClient(app)
 
-    valid_headers = {
-        "paypal-auth-algo": "SHA256withRSA",
-        "paypal-transmission-id": "trans-dup",
-        "paypal-cert-url": "https://api.sandbox.paypal.com/cert",
-        "paypal-transmission-sig": "sig",
-        "paypal-transmission-time": "2026-11-10T12:00:00Z",
-        "x-settleiq-test-sig": "valid",
-    }
     payload = {
         "id": "EVT-DUP-01",
         "event_type": "PAYMENT.CAPTURE.COMPLETED",
@@ -281,12 +266,10 @@ def test_ac_pp_04_duplicate_webhook_deduplication(db_member):
         "resource": {"id": "CAP-DUP-01", "status": "COMPLETED"},
     }
 
-    # First delivery
-    resp1 = client.post(f"/api/webhooks/paypal/{source_id}", json=payload, headers=valid_headers)
+    # First delivery, then PayPal's redelivery of the same event with a new transmission
+    resp1 = paypal_signer.deliver(client, source_id, payload, WEBHOOK_ID)
     assert resp1.status_code == 200
-
-    # Second (duplicate) delivery
-    resp2 = client.post(f"/api/webhooks/paypal/{source_id}", json=payload, headers=valid_headers)
+    resp2 = paypal_signer.deliver(client, source_id, payload, WEBHOOK_ID)
     assert resp2.status_code == 200
 
     # Exactly 1 row in webhook_inbox
@@ -299,45 +282,10 @@ def test_ac_pp_04_duplicate_webhook_deduplication(db_member):
 
 
 @pytest.mark.db
-def test_ac_pp_05_and_06_capture_completed_triggers_reconciliation(db_member):
-    # Activate FinOps pack for tenant
-    db_member.activate("finops")
+def test_ac_pp_05_capture_completed_is_processed_into_a_source_record(db_member, paypal_signer):
     source_id = _create_paypal_source(db_member)
     client = TestClient(app)
 
-    # 1. Insert merchant order and payment with PENDING status
-    merchant_src = UUID(
-        db_member.request(
-            "POST",
-            "/api/sources",
-            json={"connector_id": "merchant-postgres", "display_name": "Merchant DB"},
-        ).json()["id"]
-    )
-    with scoped_tx(db_member.tenant) as conn:
-        conventions.ensure_object(
-            conn,
-            tenant_id=db_member.tenant,
-            source_id=merchant_src,
-            object_name="payments",
-            object_type="TABLE",
-        )
-        conventions.ensure_object(
-            conn,
-            tenant_id=db_member.tenant,
-            source_id=merchant_src,
-            object_name="raw_dummy",
-            object_type="TABLE",
-        )
-
-    # 2. Ingest PAYMENT.CAPTURE.COMPLETED webhook
-    headers = {
-        "paypal-auth-algo": "SHA256withRSA",
-        "paypal-transmission-id": "trans-e2e",
-        "paypal-cert-url": "https://api.sandbox.paypal.com/cert",
-        "paypal-transmission-sig": "sig",
-        "paypal-transmission-time": "2026-11-10T14:00:00Z",
-        "x-settleiq-test-sig": "valid",
-    }
     payload = {
         "id": "EVT-CAPTURE-COMPLETED-E2E-01",
         "event_type": "PAYMENT.CAPTURE.COMPLETED",
@@ -349,15 +297,13 @@ def test_ac_pp_05_and_06_capture_completed_triggers_reconciliation(db_member):
             "custom_id": "ORD-E2E-01",
         },
     }
-    resp = client.post(f"/api/webhooks/paypal/{source_id}", json=payload, headers=headers)
+    resp = paypal_signer.deliver(client, source_id, payload, WEBHOOK_ID)
     assert resp.status_code == 200
 
-    # 3. Process inbox queue asynchronously
-    results = claim_and_process_pending_webhooks(limit=10)
-    assert len(results) >= 1
+    # Process inbox queue asynchronously
+    results = claim_and_process_pending_webhooks(limit=1000)
     assert any(r["status"] == "PROCESSED" for r in results)
 
-    # 4. Verify canonical source record was persisted
     with scoped_tx(db_member.tenant) as conn:
         inbox_row = conn.execute(
             text("SELECT status, processed_at FROM webhook_inbox WHERE provider_event_id = :evt"),

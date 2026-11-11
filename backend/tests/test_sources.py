@@ -13,6 +13,7 @@ from app.errors import ApiError
 from app.sources import conventions, evidence, records, registry
 from app.sources.envelope import SourceRecordEnvelope
 from app.sources.evidence import RetrievalContext
+from tests.support import grant_set
 from tests.test_semantics_store import Member
 
 PAYPAL = "paypal"
@@ -22,7 +23,7 @@ def body(**overrides) -> dict:
     return {
         "connector_id": PAYPAL,
         "display_name": "PayPal Sandbox",
-        "config": {"webhook_id": "WH-1"},
+        "config": {"account_label": "sandbox"},
     } | overrides
 
 
@@ -134,6 +135,7 @@ def test_source_is_listed_for_its_tenant():
 @pytest.mark.db
 def test_secret_reference_is_stored_but_never_returned():
     member = Member()
+    grant_set(member.tenant, member.principal.id, "integration_admin")
     created = create_ok(member, secret_reference="ssm://settleiq/paypal-sandbox")
     assert created["has_secret_reference"] is True
     assert "secret_reference" not in created
@@ -141,6 +143,26 @@ def test_secret_reference_is_stored_but_never_returned():
     with scoped_tx(member.tenant) as conn:
         stored = conn.execute(text("SELECT secret_reference FROM data_sources")).scalar_one()
     assert stored == "ssm://settleiq/paypal-sandbox"
+
+
+@pytest.mark.db
+def test_a_reference_at_registration_needs_the_credential_key():
+    # source.create alone, as the owner and Business Admin hold it, is not a credential grant.
+    member = Member()
+    response = create(member, secret_reference="env:SOURCE_SECRET_PAYPAL_SANDBOX")
+    assert response.status_code == 403
+    assert response.json()["error"]["permission"] == "source.credential.manage"
+    with scoped_tx(member.tenant) as conn:
+        assert conn.execute(text("SELECT count(*) FROM data_sources")).scalar_one() == 0
+
+
+@pytest.mark.db
+@pytest.mark.parametrize("key", ["webhook", "webhook_id", "Webhook_ID"])
+def test_registration_cannot_carry_webhook_configuration(key):
+    # Ingress trusts config.webhook; only PUT /webhooks under source.webhook.manage sets it.
+    member = Member()
+    response = create(member, config={key: {"webhook_id": "WH-1"} if key == "webhook" else "WH-1"})
+    assert response.status_code == 422
 
 
 @pytest.mark.db
@@ -180,7 +202,7 @@ def test_request_cannot_set_server_owned_fields(field):
 @pytest.mark.parametrize("key", ["client_secret", "password", "access_token", "api_key"])
 def test_config_refuses_secret_values(key):
     member = Member()
-    response = create(member, config={"webhook_id": "WH-1", key: "raw-secret"})
+    response = create(member, config={"account_label": "sandbox", key: "raw-secret"})
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
@@ -441,5 +463,5 @@ def test_webhook_lookup_derives_the_tenant_without_a_tenant_context():
     assert found is not None
     assert found["tenant_id"] == member.tenant
     assert found["connector_id"] == PAYPAL
-    assert found["config"] == {"webhook_id": "WH-1"}
+    assert found["config"] == {"account_label": "sandbox"}
     assert registry.webhook_source(uuid4()) is None

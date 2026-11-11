@@ -23,11 +23,15 @@ from app.authz.catalogue import get_catalogue
 from app.authz.guard import TenantContext
 from app.db import global_tx, scoped_tx
 from app.domain import runs
-from app.errors import not_found
+from app.domain_packs.manifest import load_domain_packs
+from app.errors import ApiError, not_found
+from app.semantics.store import active_namespaces
 from app.sources import conventions, evidence, records
 from app.sources.envelope import SourceRecordEnvelope
 
 logger = logging.getLogger("settleiq.webhooks.processor")
+
+RETRY_BASE_SECONDS = 30
 
 
 @dataclass(frozen=True)
@@ -54,20 +58,35 @@ def _parse_time(value: str | None) -> datetime | None:
 
 
 def _get_worker_principal(conn: Connection, tenant_id: UUID) -> Principal:
+    """The tenant's Worker service principal, registered on first use.
+
+    The run it starts is attributed to this durable identity, never to an invented one. It
+    holds no grants: starting a run here is a system step, not an authorized request."""
+    conn.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+        {"key": f"worker_principal:{tenant_id}"},
+    )
     row = conn.execute(
         text(
             """
             SELECT id FROM service_principals
             WHERE tenant_id = :tenant AND kind = 'worker' AND status = 'ACTIVE'
+            ORDER BY created_at, id
             LIMIT 1
             """
         ),
         {"tenant": tenant_id},
     ).first()
-    if row is not None:
-        return Principal(row.id, PrincipalKind.WORKER, email_verified=True)
-    # Default fallback worker identity if no service principal was explicitly created
-    return Principal(uuid4(), PrincipalKind.WORKER, email_verified=True)
+    worker_id = row.id if row is not None else uuid4()
+    if row is None:
+        conn.execute(
+            text(
+                "INSERT INTO service_principals (id, tenant_id, kind, status) "
+                "VALUES (:id, :tenant, 'worker', 'ACTIVE')"
+            ),
+            {"id": worker_id, "tenant": tenant_id},
+        )
+    return Principal(worker_id, PrincipalKind.WORKER, email_verified=True)
 
 
 def claim_inbox_row(conn: Connection) -> ClaimedInboxRow | None:
@@ -114,8 +133,8 @@ def process_claimed_row(claimed: ClaimedInboxRow) -> dict[str, Any]:
                 object_type="EVENT",
             )
 
-            # 4. Extract resource and build canonical record
-            resource = payload.get("resource", {})
+            # 4. Build the canonical record. The whole event is the attributes, so mappings
+            # read `$.resource.*` and the event's own fields alike (finops mapping_hints).
             event_time = _parse_time(payload.get("create_time")) or datetime.now(UTC)
             raw_digest = conn.execute(
                 text("SELECT content_hash FROM raw_evidence WHERE id = :id"),
@@ -130,7 +149,7 @@ def process_claimed_row(claimed: ClaimedInboxRow) -> dict[str, Any]:
                 source_object_id=event_obj_id,
                 external_id=claimed.provider_event_id,
                 record_type=rec_type,
-                attributes=resource,
+                attributes=payload,
                 raw_evidence_id=claimed.raw_evidence_id,
                 occurred_at=event_time,
                 observed_at=datetime.now(UTC),
@@ -173,21 +192,28 @@ def process_claimed_row(claimed: ClaimedInboxRow) -> dict[str, Any]:
 
         # 6. Trigger domain run so capture reaches reconciliation (AC-PP-05)
         # Runs outside the inbox transaction so run failures don't roll back the inbox row
+        run_ids = []
         try:
             with scoped_tx(tenant_id) as conn:
                 worker_p = _get_worker_principal(conn, tenant_id)
-                ctx = TenantContext(
-                    tenant_id=tenant_id,
-                    principal=worker_p,
-                    access=EffectiveAccess([], get_catalogue()),
-                )
-                runs.start_run(ctx, runs.RunBody(namespace="finops"))
-        except Exception as run_err:
-            logger.warning(
-                "Domain run trigger following webhook %s had notice: %s", claimed.id, run_err
+                namespaces = sorted(set(active_namespaces(conn)) & set(load_domain_packs()))
+            ctx = TenantContext(
+                tenant_id=tenant_id,
+                principal=worker_p,
+                access=EffectiveAccess([], get_catalogue()),
             )
+            for namespace in namespaces:
+                try:
+                    run = runs.start_run(ctx, runs.RunBody(namespace=namespace))
+                    run_ids.append(run["id"])
+                except ApiError as refused:  # e.g. nothing published yet for this pack
+                    logger.info("No %s run after webhook %s: %s", namespace, claimed.id,
+                                refused.message)
+        except Exception:
+            # The event is durably processed either way; the next run picks its record up.
+            logger.exception("Domain run trigger following webhook %s failed", claimed.id)
 
-        return {"status": "PROCESSED", "inbox_id": str(claimed.id)}
+        return {"status": "PROCESSED", "inbox_id": str(claimed.id), "run_ids": run_ids}
 
     except Exception as exc:
         logger.exception("Failed to process webhook inbox row %s: %s", claimed.id, exc)
@@ -197,12 +223,15 @@ def process_claimed_row(claimed: ClaimedInboxRow) -> dict[str, Any]:
                 text(
                     """
                     UPDATE webhook_inbox
-                    SET status = :status, last_error = :err
+                    SET status = :status, last_error = :err,
+                        next_attempt_at = now() + make_interval(secs => :wait)
                     WHERE id = :id AND tenant_id = :tenant
                     """
                 ),
                 {
                     "status": new_status,
+                    # Exponential backoff before the next claim (migration 0014).
+                    "wait": RETRY_BASE_SECONDS * 2 ** (claimed.attempts - 1),
                     "err": str(exc)[:500],
                     "id": claimed.id,
                     "tenant": tenant_id,
@@ -231,7 +260,7 @@ def replay_webhook(tenant_id: UUID, inbox_id: UUID) -> dict[str, Any]:
             text(
                 """
                 UPDATE webhook_inbox
-                SET status = 'RECEIVED', attempts = 0, last_error = NULL
+                SET status = 'RECEIVED', attempts = 0, last_error = NULL, next_attempt_at = NULL
                 WHERE id = :id AND tenant_id = :tenant
                 RETURNING id, tenant_id, source_id, provider_event_id, event_type,
                           raw_evidence_id, attempts, max_attempts

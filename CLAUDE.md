@@ -201,7 +201,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 3.8 SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum (1h). `packs/finops/fixtures/`, listed in the finops manifest; evidence in `test_brr_fixture.py` (checksum, parser, balances, OPEN-10 treatment per row, upload as `synthetic_reference`).
 - [x] 3.9 Domain Operations screens: cases, observations, resolved values (2h). Runs with pinned versions, cases with triage and reopen, entities with observations and resolved values, identity review; case and observation reads now carry evidence provenance for the SYNTHETIC/REFERENCE label. Evidence in `operations.test.tsx`, `test_domain_observations.py`, `test_reconciliation.py` and `test_case_lifecycle.py`.
 - [ ] 4.7 Source Management screens, including credential status and SYNTHETIC label (1.5h)
-- [ ] 4.8 Failure tests: invalid signature, duplicate and out-of-order events (0.5h)
+- [x] 4.8 Failure tests: invalid signature, duplicate and out-of-order events (0.5h). Evidence in `test_webhook_failures.py`: nine forgeries, unknown, unregistered and cross-tenant sources, redelivery before and after processing, arrival-order independence, a late merchant row, and retry with backoff to dead letter. Deliveries are signed with PayPal's algorithm (`tests/paypal_signing.py`); the test-only signature bypass is gone.
 - [ ] 5.10 Investigation screens (1.5h)
 - [ ] 5.11 Playbook Requests screens (1.5h)
 - [ ] 5.12 Safety suite: AC-MERCH-01..07, AC-AUTHZ-06/08/15/16/17, AC-PLY-08..11 (2h)
