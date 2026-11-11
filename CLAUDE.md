@@ -215,9 +215,9 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 4.8 Failure tests: invalid signature, duplicate and out-of-order events (0.5h). Evidence in `test_webhook_failures.py`: nine forgeries, unknown, unregistered and cross-tenant sources, redelivery before and after processing, arrival-order independence, a late merchant row, and retry with backoff to dead letter. Deliveries are signed with PayPal's algorithm (`tests/paypal_signing.py`); the test-only signature bypass is gone.
 - [ ] 5.10 Investigation screens (1.5h)
 - [ ] 5.11 Playbook Requests screens (1.5h)
-- [ ] 5.12 Safety suite: AC-MERCH-01..07, AC-AUTHZ-06/08/15/16/17, AC-PLY-08..11 (2h)
+- [x] 5.12 Safety suite: AC-MERCH-01..07, AC-AUTHZ-06/08/15/16/17, AC-PLY-08..11 (2h). `internal-merchant-status-correct` v2 in `app/release/suites.yaml` fills all eight spec 9.7.2 categories with module-level tests the image can run. `test_safety_suites.py` checks every node and traces each criterion to its tests (the 6.5 sheet's source). Evidence in `test_worker.py`, `test_internal_merchant.py`, `test_execution_chain.py`, `test_playbook_gateway.py` and `test_release_attestation.py`.
 - [ ] 5.16 PB-002 request and approval screens showing the duplicate proof (1h)
-- [ ] 5.17 Refund safety suite: AC-PP-08, AC-PLY-02, PB-002 parts of AC-PLY-08, AC-EXEC-MODE-03, all required capability categories (1.5h)
+- [x] 5.17 Refund safety suite: AC-PP-08, AC-PLY-02, PB-002 parts of AC-PLY-08, AC-EXEC-MODE-03, all required capability categories (1.5h). `paypal-refunds-create` v2 in `app/release/suites.yaml`, every category filled; traced in `test_safety_suites.py`. Evidence in `test_worker_refunds.py`, `test_pb002.py` and `test_execution_mode.py`.
 - [ ] 6.4 Tenant B isolation test (1h)
 - [ ] 6.5 Acceptance-criteria status sheet with owners and evidence, §22.3 (0.5h)
 - [ ] 6.6 Demo script with SYNTHETIC disclosure and the list of what was not built (2h)

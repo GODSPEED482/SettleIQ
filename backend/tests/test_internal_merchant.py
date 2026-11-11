@@ -1,7 +1,7 @@
 """Internal-merchant write adapter (task 5.5) and its safety tests (task 5.12, AC-MERCH-01..07).
 
 These cover the adapter contract of spec 4.4.1. The grant, LIVE-scope and case-resolution parts
-of AC-MERCH-01 and AC-MERCH-02 need the execution chain (tasks 5.1 to 5.6) and are added with it.
+of AC-MERCH-01 and AC-MERCH-02 run through the Worker in test_worker.py.
 
 The merchant database is a scratch schema in the test database, set up by the shipped
 `merchant_setup.sql` with a per-test restricted role, so every test runs as the role a merchant

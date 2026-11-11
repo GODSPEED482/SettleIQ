@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.auth.sessions import create_session, session_cookie_name
+from app.authz.catalogue import get_catalogue
 from app.db import global_tx, scoped_tx
 from app.errors import ApiError
 from app.execution import lifecycle, merchant
@@ -351,6 +352,17 @@ def test_a_failing_attestation_at_the_worker_blocks(live, approver, merchant_db,
     assert "POL-14 IMAGE_DIGEST" in body["reason"]
     assert attempts(live, item.execution_id) == []
     assert payment_status(merchant_db, payment_id) == ["PENDING"]
+
+
+# AC-AUTHZ-06: the Worker's keys are its alone, and come only from a grant
+
+
+def test_the_grant_keys_are_worker_only():
+    catalogue = get_catalogue()
+    for key in gateway.GRANT_PERMISSIONS:
+        assert catalogue.get(key).principal_types == ("worker",), key
+    # So a human holding one is refused at the gate before access is even resolved.
+    assert "human" not in catalogue.get("playbook.execute").principal_types
 
 
 # AC-AUTHZ-17: no human reaches the Worker

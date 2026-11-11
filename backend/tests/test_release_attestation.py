@@ -186,9 +186,15 @@ def test_the_signer_refuses_failed_skipped_missing_or_empty(report, suite_change
         sign.check_evidence(report, suite)
 
 
-def test_the_packaged_suites_block_issuance_until_filled():
-    for suite in payloads.parse_suites(payloads.SUITES_FILE.read_text("utf-8")).values():
-        with pytest.raises(sign.Refused, match="empty"):
+def test_the_packaged_suites_fill_every_category_and_need_every_test():
+    """Tasks 5.12 and 5.17: both certified capabilities declare every category, and a report
+    missing any listed test still refuses issuance."""
+    suites = payloads.parse_suites(payloads.SUITES_FILE.read_text("utf-8"))
+    assert set(suites) == {("paypal", "refunds.create"),
+                           ("internal-merchant", "merchant.payment_status.correct")}
+    for suite in suites.values():
+        assert suite.empty_categories() == []
+        with pytest.raises(sign.Refused, match="did not run"):
             sign.check_evidence(PASSING, suite.model_dump())
 
 
@@ -586,11 +592,21 @@ def test_neither_capabilitys_attestation_authorizes_the_other_or_another_tenant(
 
 
 @db
-def test_the_packaged_empty_suites_deny(tenant, monkeypatch):
+def test_an_empty_packaged_category_denies(tenant, monkeypatch):
     publish_state()
     data = signed(attestation_payload(tenant))
-    monkeypatch.setattr(payloads, "packaged_suites", payloads.parse_suites(
-        payloads.SUITES_FILE.read_text("utf-8")).copy)
+    suite = filled_suite().model_copy(
+        update={"categories": filled_suite().categories | {"failure_recovery": []}})
+    monkeypatch.setattr(payloads, "packaged_suites", lambda: {(CONNECTOR, CAPABILITY): suite})
+    assert denial(tenant, data) == "TEST_EVIDENCE"
+
+
+@db
+def test_an_attestation_for_an_older_suite_version_denies(tenant, monkeypatch):
+    publish_state()
+    data = signed(attestation_payload(tenant))
+    suite = filled_suite().model_copy(update={"version": 2})
+    monkeypatch.setattr(payloads, "packaged_suites", lambda: {(CONNECTOR, CAPABILITY): suite})
     assert denial(tenant, data) == "TEST_EVIDENCE"
 
 

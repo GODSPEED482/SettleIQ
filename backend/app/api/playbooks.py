@@ -20,12 +20,6 @@ router = APIRouter(prefix="/api", tags=["playbooks"])
 # plus AC-PP-08 and the PB-002 parts of AC-PLY-08. If the safety suite is not green by Day 3
 # hour 7, no attestation is issued and the demo stops at step 10 in SHADOW.
 
-# TODO(G5 5.12 Suprava): the safety suite, as tests that fail CI: AC-MERCH-01..07 against the
-# 5.5 adapter, AC-AUTHZ-06/08/15/16/17 (Worker-only keys, grant binding, SHADOW, POL-14,
-# humans refused by the Worker), and AC-PLY-08..11 against these routes and the 5.1 tables.
-# Declare its categories in packaged data (spec 9.7.2) so 5.4 can refuse an empty one, and
-# trace each criterion in the acceptance sheet (6.5).
-
 
 @router.post("/playbooks/{playbook_id}/requests", status_code=201)
 def create_playbook_request(
