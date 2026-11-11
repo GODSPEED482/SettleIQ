@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     raw_evidence_dir: str = "/data/raw-evidence"
     # Where `managed:<NAME>` source secret references resolve (app/sources/secrets.py).
     source_secret_dir: str = ""
+    # 64 hex characters that seal credentials submitted through the write-only intake
+    # (app/sources/credential_store.py). The database never holds it. Empty closes the intake.
+    source_secret_key: str = ""
 
     app_base_url: str = "http://localhost:5173"
     session_ttl_hours: int = 24

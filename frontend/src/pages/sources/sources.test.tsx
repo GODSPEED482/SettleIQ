@@ -282,6 +282,46 @@ describe("SourceManagement", () => {
     ]);
   });
 
+  it("connects a tenant's own PayPal app without keeping or showing the secret", async () => {
+    const path = `PUT /api/sources/${PAYPAL_SOURCE.id}/credential-value`;
+    const api = renderSources([...READ, "source.credential.manage"], {
+      [path]: [
+        apiError(422, "CREDENTIAL_REJECTED", "PayPal Sandbox did not accept these credentials."),
+        { status: 200, body: { ...PAYPAL_SOURCE, has_secret_reference: true } },
+      ],
+    });
+    const paypal = await card("PayPal Sandbox");
+    const clientId = within(paypal).getByLabelText("Client ID") as HTMLInputElement;
+    const secret = within(paypal).getByLabelText("Client secret") as HTMLInputElement;
+    const connect = within(paypal).getByRole("button", { name: "Connect" });
+    expect(secret.type).toBe("password");
+    expect(connect).toHaveProperty("disabled", true);
+
+    fireEvent.change(clientId, { target: { value: "AYclient" } });
+    fireEvent.change(secret, { target: { value: "wrong" } });
+    fireEvent.click(connect);
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "PayPal Sandbox did not accept these credentials.",
+    );
+
+    fireEvent.change(secret, { target: { value: "EKsecret" } });
+    fireEvent.click(connect);
+    await waitFor(() => expect(secret.value).toBe(""));
+    expect(clientId.value).toBe("");
+    expect(api.sent(path)).toEqual([
+      { value: JSON.stringify({ client_id: "AYclient", client_secret: "wrong" }) },
+      { value: JSON.stringify({ client_id: "AYclient", client_secret: "EKsecret" }) },
+    ]);
+  });
+
+  it("offers no credential intake on a source that takes none", async () => {
+    renderSources([...READ, "source.credential.manage"], {});
+    const csv = await card("Bank statements");
+    expect(within(csv).queryByLabelText("Credential")).toBeNull();
+    expect(within(csv).queryByLabelText("Client secret")).toBeNull();
+  });
+
   it("registers a webhook with the checked event types only", async () => {
     const api = renderSources([...READ, "source.webhook.manage"], {
       [`PUT /api/sources/${PAYPAL_SOURCE.id}/webhooks`]: { status: 200, body: PAYPAL_SOURCE },

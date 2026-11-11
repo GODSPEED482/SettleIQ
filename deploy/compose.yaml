@@ -67,6 +67,8 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      # Seals credentials from the write-only intake (spec v1.7 §11.3). Unset closes the intake.
+      SOURCE_SECRET_KEY: ${SOURCE_SECRET_KEY:-}
     volumes:
       - /data/raw-evidence:/data/raw-evidence
       - ./source-secrets:/run/source-secrets:ro

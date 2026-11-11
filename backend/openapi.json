@@ -1226,6 +1226,60 @@
         }
       }
     },
+    "/api/sources/{source_id}/credential-value": {
+      "put": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Put Source Credential Value",
+        "operationId": "put_source_credential_value_api_sources__source_id__credential_value_put",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialValueBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Put Source Credential Value Api Sources  Source Id  Credential Value Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sources/{source_id}/webhooks": {
       "put": {
         "tags": [
@@ -3201,6 +3255,25 @@
         ],
         "title": "CredentialBody",
         "description": "A reference only. There is deliberately no field that could carry a value (spec 11.3)."
+      },
+      "CredentialValueBody": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "format": "password",
+            "title": "Value",
+            "writeOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "CredentialValueBody",
+        "description": "The credential itself, accepted once and never returned (spec v1.7 \u00a711.3, AC-PP-14).\n\nFor PayPal, JSON `{\"client_id\", \"client_secret\"}` or `client_id:client_secret`."
       },
       "EditDraftBody": {
         "properties": {
