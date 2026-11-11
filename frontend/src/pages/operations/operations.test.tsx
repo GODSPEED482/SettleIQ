@@ -353,7 +353,20 @@ describe("DomainOperations", () => {
           body: {
             id: "req-1",
             status: "NEEDS_APPROVAL",
-            decisions: [{ stage: "REQUEST", conditions: { proof: { order_reference: "ORD-7" } } }],
+            target: { capture_id: "CAP-B", amount: "25.00", currency: "USD" },
+            decisions: [
+              {
+                stage: "REQUEST",
+                conditions: {
+                  proof: {
+                    order_reference: "ORD-7",
+                    original: { capture_id: "CAP-A", captured_at: "2026-11-11T09:00:00Z" },
+                    duplicate: { capture_id: "CAP-B", captured_at: "2026-11-11T09:00:05Z" },
+                    rule: "two distinct PayPal captures for one merchant order",
+                  },
+                },
+              },
+            ],
           },
         },
       ]));
@@ -365,6 +378,10 @@ describe("DomainOperations", () => {
       expect(await within(form).findByText(/Request created/)).toBeTruthy();
       expect(within(form).getByRole("link", { name: "Open the request" }).getAttribute("href"))
         .toBe("/playbooks?request=req-1");
+      // PB-002's duplicate proof is shown as soon as the request exists (task 5.16).
+      const proof = within(form).getByRole("region", { name: "Duplicate capture proof" });
+      expect(within(proof).getByText("CAP-B")).toBeTruthy();
+      expect(within(proof).getByText("25.00 USD")).toBeTruthy();
 
       const bodies = api.sent(CREATE);
       expect(bodies).toEqual([

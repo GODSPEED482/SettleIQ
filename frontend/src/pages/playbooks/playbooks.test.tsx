@@ -199,7 +199,7 @@ describe("PlaybookRequests", () => {
     const api = renderPlaybooks(["playbook.read"]);
     const detail = await openRequest();
     expect(await within(detail).findByText("PB-002 always requires approval.")).toBeTruthy();
-    expect(within(detail).getByRole("region", { name: "Request proof" })).toBeTruthy();
+    expect(within(detail).getByRole("region", { name: "Duplicate capture proof" })).toBeTruthy();
     expect(within(detail).getByText("Waiting for an independent approver.")).toBeTruthy();
     expect(within(detail).getByText(/playbook\.requested/)).toBeTruthy();
     expect(within(detail).queryByRole("button", { name: "Approve" })).toBeNull();
@@ -210,6 +210,34 @@ describe("PlaybookRequests", () => {
     );
     expect(within(detail).getByText("Mode not visible")).toBeTruthy();
     expect(within(detail).getByText("PayPal Sandbox")).toBeTruthy();
+  });
+
+  it("shows the PB-002 duplicate proof an approver decides on", async () => {
+    renderPlaybooks(["playbook.read", "playbook.approve"]);
+    const detail = await openRequest();
+    const proof = await within(detail).findByRole("region", { name: "Duplicate capture proof" });
+    const rows = within(proof).getAllByRole("row");
+    expect(rows[1].textContent).toContain("Original");
+    expect(rows[1].textContent).toContain("CAP-A");
+    expect(rows[2].textContent).toContain("Duplicate");
+    expect(rows[2].textContent).toContain("CAP-B");
+    expect(within(proof).getByText("ORD-7")).toBeTruthy();
+    expect(within(proof).getByText("25.00 USD")).toBeTruthy();
+    expect(within(proof).getByText(/no refund or dispute exists/)).toBeTruthy();
+    expect(within(proof).queryByRole("alert")).toBeNull();
+    expect(within(detail).getByRole("button", { name: "Approve" })).toBeTruthy();
+  });
+
+  it("warns when the refund target is not the duplicate capture", async () => {
+    renderPlaybooks(["playbook.read"], {
+      [`GET /api/playbook-requests/${R}`]: {
+        status: 200,
+        body: { ...REQUEST, target: { ...REQUEST.target, capture_id: "CAP-A" } },
+      },
+    });
+    const detail = await openRequest();
+    const proof = await within(detail).findByRole("region", { name: "Duplicate capture proof" });
+    expect(within(proof).getByRole("alert").textContent).toContain("Do not approve");
   });
 
   it("shows the exact scope's mode beside the PayPal Sandbox environment", async () => {
