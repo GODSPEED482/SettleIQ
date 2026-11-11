@@ -167,7 +167,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 ### Swapnaneel Ray: Semantics, Domain and AI (leads G2, G3; demo Domain Operator, also holds an Approver grant for the POL-01 denial)
 
 - [x] OPEN-03 (Day 1). Recorded in `README.md`; activation rules are tested in `test_contracts.py`.
-- [ ] OPEN-10: included-in-net semantics for the fixture (before 3.3; not a G1 item)
+- [x] OPEN-10: included-in-net semantics for the fixture (before 3.3; not a G1 item). Recorded in `README.md`; the table is `packs/finops/settlement_treatment.yaml` and `test_settlement.py` is the evidence.
 - [x] 1.8 Freeze domain-pack manifest (0.5h). Evidence in `test_contracts.py`.
 - [x] 1.9 Registration, email verification, email sending, atomic tenant creation (2.5h). Evidence in `test_identity.py`.
 - [x] 1.9 follow-up: configure an SMTP relay and confirm a real email arrives. Brevo is configured locally, and a real test email arrived on 2026-11-10. Production still needs its SMTP values in `.env.production`.

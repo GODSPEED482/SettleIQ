@@ -18,9 +18,6 @@ validators:
 # Order, Payment, Capture, Refund, SettlementEntry and BankTransaction, and which shared
 # identifiers link them (capture ID, merchant order ID).
 entity_resolution_policies: []
-# TODO(G3 OPEN-10 Swapnaneel): before 3.3, decide which BRR entry types are included in the
-# reported net, and the sign of each, and record the decision in README.md. The settlement
-# calculation and the 3.8 fixture manifest both follow it.
 # TODO(G3 3.3 Swapnaneel): the Finance engine as a pack entrypoint. INTRA_ENTITY compares
 # comparable observations of one entity and property (STATUS_MISMATCH: provider COMPLETED,
 # merchant PENDING). INTER_ENTITY checks invariants across entities (SettlementBatch to
