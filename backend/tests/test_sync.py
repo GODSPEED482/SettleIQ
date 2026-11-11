@@ -196,12 +196,13 @@ def test_sync_requires_discovery(merchant_schema, evidence_root):
 
 
 @pytest.mark.db
-def test_other_connectors_still_answer_501_until_4_2(evidence_root):
+def test_paypal_sync_without_credentials_fails_closed(evidence_root):
     member = operator()
     source = create_ok(member)
     response = sync(member, source["id"])
-    assert response.status_code == 501
-    assert response.json()["error"]["task"] == "4.2"
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "SECRET_UNRESOLVED"
+    assert stored_records(member, source["id"]) == []
 
 
 @pytest.mark.db

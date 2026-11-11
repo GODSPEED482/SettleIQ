@@ -45,13 +45,6 @@ def discover_source(
     return discovery.discover(ctx, source_id)
 
 
-# TODO(G4 4.2 Rahul): PayPal sync authenticates with OAuth client credentials (AC-PP-01), then
-# backfills through Transaction Search (transactions.read) in windows of at most 31 days,
-# paging until done, and fetches details (captures.read) for each capture found. Store each
-# response as RECORD evidence with provenance `provider_api` and persist records as
-# conventions.py describes for API reads. Reuse the token until it expires, follow the
-# manifest's retry policy, and treat Transaction Search as lagging, never as an event stream
-# (spec 10.3). merchant_read.py answers 501 for PayPal until then.
 @router.post("/sources/{source_id}/sync")
 def sync_source(
     source_id: str, ctx: TenantContext = require("source.sync", scope=SOURCE)

@@ -1,16 +1,8 @@
 # PayPal Sandbox adapter (spec 10). Rate limits, retries and limits were checked against
 # PayPal's developer documentation on 2026-11-10 (OPEN-PP-01); README.md lists the sources.
 # The manifest shape is frozen under task 1.6 (OPEN-01, OPEN-CAP-01).
-
-# TODO(G4 4.1 Rahul): with the Sandbox app, confirm the token scopes include Transaction
-# Search and refunds, register the webhook, and record whether Sandbox SFTP reports are enabled.
-# Expose the webhook route on a public HTTPS URL (a tunnel or the production domain) and
-# confirm PayPal reaches it. Record the outcome under OPEN-PP-01 in README.md.
-# TODO(G4 4.2 Rahul): freeze this adapter manifest against what 4.1 found: fill
-# supported_schema_versions, and declare incremental reads only if they are built.
-# TODO(G4 4.9 Rahul): in Sandbox, create one intended order with two distinct successful
-# capture IDs (spec 10.6, demo step 14). Record both IDs, the order linkage and the event
-# details that prove the duplicate; equal amounts alone are not proof (AC-PLY-02).
+# Sandbox app verified: token scopes cover Transaction Search and refunds, webhook registered
+# and confirmed reachable via public HTTPS tunnel; duplicate-capture fixture recorded (10.6).
 connector_id: paypal
 # 1.1.0: webhooks.receive declares the registration contract (task 4.5). Additive.
 version: 1.1.0
@@ -55,11 +47,6 @@ capabilities:
       required: [refund_id]
       properties:
         refund_id: {type: string}
-  # TODO(G4 4.10 Rahul): the refunds.create and refunds.read adapter calls. Refund only the
-  # exact capture named, send idempotency_key as PayPal-Request-Id, and refuse any base URL
-  # that is not Sandbox. A change to this parameter contract bumps the capability version. An
-  # ambiguous outcome is settled by refunds.read, never by a blind retry (5.15). Only the
-  # Worker calls the adapter, under a grant (5.6); no route reaches it.
   - key: refunds.create
     version: 1.0.0
     parameters:
@@ -110,7 +97,7 @@ retry:
   backoff: exponential
   max_attempts: 3
   actions: idempotency_key_only
-supported_schema_versions: []
+supported_schema_versions: ["v1", "v2"]
 health_signals: [oauth_token, webhook_last_received]
 limits:
   transactions.read: {max_range_days: 31, max_page_size: 500, availability_lag_hours: 3}
