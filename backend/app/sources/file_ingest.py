@@ -29,8 +29,8 @@ from app.sources.evidence import RetrievalContext
 
 Kind = Literal["BANK_CSV", "BRR"]
 
-# Provisional until the 3.8 fixture pins the PayPal Balance Report layout. Parsing is by
-# column name, so additional columns are kept without changing this list.
+# The columns every Balance Report needs; packs/finops/fixtures holds the SYNTHETIC/REFERENCE
+# fixture built on this layout. Parsing is by column name, so additional columns are kept.
 BRR_REQUIRED_COLUMNS = ("Transaction ID", "Date", "Type", "Currency", "Net", "Balance")
 BALANCE_AFFECTING_COLUMN = "Balance Affecting"
 _BALANCE_AFFECTING = {"Y", "YES", "TRUE", "1"}

@@ -198,7 +198,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 2.8 Ontology Studio graph in React Flow, view and edit relationships (2.5h). Evidence in `studio.test.tsx` and `graph.test.ts`.
 - [x] 2.9 Binding and authority editors (1.5h). Evidence in `bindings.test.tsx`.
 - [x] 2.10 Publish confirmation showing candidate hash and validation run (1h). Evidence in `publish.test.tsx`; draft reads carry the candidate hash (`test_mappings.py`).
-- [ ] 3.8 SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum (1h)
+- [x] 3.8 SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum (1h). `packs/finops/fixtures/`, listed in the finops manifest; evidence in `test_brr_fixture.py` (checksum, parser, balances, OPEN-10 treatment per row, upload as `synthetic_reference`).
 - [ ] 3.9 Domain Operations screens: cases, observations, resolved values (2h)
 - [ ] 4.7 Source Management screens, including credential status and SYNTHETIC label (1.5h)
 - [ ] 4.8 Failure tests: invalid signature, duplicate and out-of-order events (0.5h)
