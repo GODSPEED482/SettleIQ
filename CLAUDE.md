@@ -199,7 +199,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 2.9 Binding and authority editors (1.5h). Evidence in `bindings.test.tsx`.
 - [x] 2.10 Publish confirmation showing candidate hash and validation run (1h). Evidence in `publish.test.tsx`; draft reads carry the candidate hash (`test_mappings.py`).
 - [x] 3.8 SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum (1h). `packs/finops/fixtures/`, listed in the finops manifest; evidence in `test_brr_fixture.py` (checksum, parser, balances, OPEN-10 treatment per row, upload as `synthetic_reference`).
-- [ ] 3.9 Domain Operations screens: cases, observations, resolved values (2h)
+- [x] 3.9 Domain Operations screens: cases, observations, resolved values (2h). Runs with pinned versions, cases with triage and reopen, entities with observations and resolved values, identity review; case and observation reads now carry evidence provenance for the SYNTHETIC/REFERENCE label. Evidence in `operations.test.tsx`, `test_domain_observations.py`, `test_reconciliation.py` and `test_case_lifecycle.py`.
 - [ ] 4.7 Source Management screens, including credential status and SYNTHETIC label (1.5h)
 - [ ] 4.8 Failure tests: invalid signature, duplicate and out-of-order events (0.5h)
 - [ ] 5.10 Investigation screens (1.5h)

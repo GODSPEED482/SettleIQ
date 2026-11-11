@@ -112,6 +112,8 @@ def test_every_case_carries_what_ac_rec_08_requires(reconciled):
         assert case["entity_ids"] and case["observation_ids"]
         assert case["evidence"]["source_record_ids"]
         assert case["evidence"]["resolution"]
+        # The fixture's evidence is reference data, and the case says so (spec 10.3.1).
+        assert case["evidence_provenance"] == ["synthetic_reference"]
         assert case["method"] and case["observed"] is not None
         assert case["version_refs"]["rule_version"] == run["rule_version"]
         assert case["version_refs"]["ontology_content_hash"] == run["ontology_content_hash"]

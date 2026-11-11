@@ -88,12 +88,16 @@ def read_entity(ctx: TenantContext, entity_id: UUID) -> dict[str, Any]:
         observations = conn.execute(
             text(
                 """
-                SELECT id, property_iri, source_id, source_record_id, raw_evidence_id,
-                    evidence_hash, field_path, mapping_id, mapping_version, raw_value,
-                    normalized_value, numeric_value, datatype, unit, currency, value_basis,
-                    temporal_context, occurred_at, observed_at, ingested_at
-                FROM property_observations WHERE entity_id = :id
-                ORDER BY property_iri, observed_at, id
+                SELECT o.id, o.property_iri, o.source_id, o.source_record_id,
+                    o.raw_evidence_id, o.evidence_hash, o.field_path, o.mapping_id,
+                    o.mapping_version, o.raw_value, o.normalized_value, o.numeric_value,
+                    o.datatype, o.unit, o.currency, o.value_basis, o.temporal_context,
+                    o.occurred_at, o.observed_at, o.ingested_at,
+                    e.retrieval_context->>'provenance' AS provenance
+                FROM property_observations o
+                JOIN raw_evidence e ON e.tenant_id = o.tenant_id AND e.id = o.raw_evidence_id
+                WHERE o.entity_id = :id
+                ORDER BY o.property_iri, o.observed_at, o.id
                 """
             ),
             {"id": entity_id},

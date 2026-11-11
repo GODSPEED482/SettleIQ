@@ -54,11 +54,23 @@ class ReopenBody(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
 
 
+# `evidence_provenance` is how the case's source records were obtained, so the UI can label
+# SYNTHETIC/REFERENCE evidence wherever a case shows it (spec 10.3.1).
 _COLUMNS = """
     id, run_id, case_type, reconciliation_scope, severity, status, fingerprint, entity_ids,
     property_iris, relationship_ids, observation_ids, expected, observed, expected_amount,
     observed_amount, currency, evidence, method, rule_version, version_refs, assignee_id,
-    reason, created_at, updated_at
+    reason, created_at, updated_at,
+    ARRAY(
+        SELECT DISTINCT e.retrieval_context->>'provenance'
+        FROM source_records r
+        JOIN raw_evidence e ON e.tenant_id = r.tenant_id AND e.id = r.raw_evidence_id
+        WHERE r.id = ANY(ARRAY(
+            SELECT CAST(item AS uuid)
+            FROM jsonb_array_elements_text(domain_cases.evidence->'source_record_ids') item))
+          AND e.retrieval_context->>'provenance' IS NOT NULL
+        ORDER BY 1
+    ) AS evidence_provenance
 """
 
 
