@@ -320,3 +320,74 @@ describe("SourceManagement", () => {
     );
   });
 });
+
+const EVENTS_PATH = `/api/sources/${PAYPAL_SOURCE.id}/webhook-events`;
+
+const delivery = (overrides: Record<string, unknown>) => ({
+  id: "e0000000-0000-4000-8000-000000000001",
+  provider_event_id: "WH-EVT-1",
+  event_type: "PAYMENT.CAPTURE.COMPLETED",
+  status: "PROCESSED",
+  attempts: 1,
+  max_attempts: 3,
+  last_error: null,
+  provider_timestamp: "2026-11-11T10:00:00Z",
+  received_at: "2026-11-11T10:00:01Z",
+  processed_at: "2026-11-11T10:00:02Z",
+  next_attempt_at: null,
+  ...overrides,
+});
+
+const PROCESSED = delivery({});
+const DEAD = delivery({
+  id: "e0000000-0000-4000-8000-000000000002",
+  provider_event_id: "WH-EVT-2",
+  status: "DEAD_LETTER",
+  attempts: 3,
+  last_error: "evidence unreadable",
+  processed_at: null,
+});
+
+const events = (body: unknown[]): Reply => ({ status: 200, body });
+
+describe("Webhook events", () => {
+  it("lists each delivery's state without offering replay to readers", async () => {
+    renderSources(READ, { [`GET ${EVENTS_PATH}`]: events([PROCESSED, DEAD]) });
+    const paypal = await card("PayPal Sandbox");
+    const inbox = await within(paypal).findByRole("region", { name: "Webhook events" });
+    const dead = (await within(inbox).findByText("WH-EVT-2")).closest("tr")!;
+    expect(within(dead).getByText("DEAD_LETTER")).toBeTruthy();
+    expect(within(dead).getByText("3 / 3")).toBeTruthy();
+    expect(within(dead).getByText("evidence unreadable")).toBeTruthy();
+    expect(within(inbox).getByText("PROCESSED")).toBeTruthy();
+    expect(within(inbox).queryByRole("button", { name: /^Replay/ })).toBeNull();
+  });
+
+  it("offers replay only on failed or dead-lettered events, then re-reads the inbox", async () => {
+    const replayed = { ...DEAD, status: "PROCESSED", attempts: 1, last_error: null };
+    const scoped = { key: "source.webhook.manage", scopes: [PAYPAL_SOURCE.id] };
+    const api = renderSources([...READ, scoped], {
+      [`GET ${EVENTS_PATH}`]: [events([PROCESSED, DEAD]), events([PROCESSED, replayed])],
+      [`POST ${EVENTS_PATH}/${DEAD.id}/replay`]: { status: 200, body: replayed },
+    });
+    const paypal = await card("PayPal Sandbox");
+    const inbox = await within(paypal).findByRole("region", { name: "Webhook events" });
+    const replay = await within(inbox).findByRole("button", { name: "Replay WH-EVT-2" });
+    expect(within(inbox).queryByRole("button", { name: "Replay WH-EVT-1" })).toBeNull();
+
+    fireEvent.click(replay);
+    expect(await screen.findByText("PayPal Sandbox: WH-EVT-2 replayed.")).toBeTruthy();
+    await waitFor(() => expect(within(inbox).queryByText("DEAD_LETTER")).toBeNull());
+    const replays = api.calls.filter((call) => call.key === `POST ${EVENTS_PATH}/${DEAD.id}/replay`);
+    expect(replays).toHaveLength(1);
+    expect(within(inbox).queryByRole("button", { name: /^Replay/ })).toBeNull();
+  });
+
+  it("shows no inbox for a source that cannot receive webhooks", async () => {
+    renderSources(READ, { [`GET ${EVENTS_PATH}`]: events([]) });
+    const paypal = await card("PayPal Sandbox");
+    expect(await within(paypal).findByText("No deliveries yet.")).toBeTruthy();
+    const csv = await card("Bank statements");
+    expect(within(csv).queryByRole("region", { name: "Webhook events" })).toBeNull();
+  });
+});

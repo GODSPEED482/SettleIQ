@@ -79,6 +79,26 @@ export type SyncResult = { source_id: string; record_count: number };
 
 export type FileKind = "BANK_CSV" | "BRR";
 
+// One delivery in a source's webhook inbox (spec 10.4). Processing state only, never a payload.
+export type WebhookEventStatus = "RECEIVED" | "PROCESSING" | "PROCESSED" | "FAILED" | "DEAD_LETTER";
+
+export type WebhookEvent = {
+  id: string;
+  provider_event_id: string;
+  event_type: string;
+  status: WebhookEventStatus;
+  attempts: number;
+  max_attempts: number;
+  last_error: string | null;
+  provider_timestamp: string | null;
+  received_at: string;
+  processed_at: string | null;
+  next_attempt_at: string | null;
+};
+
+// Replay reprocesses these under the original provider event ID.
+export const REPLAYABLE: WebhookEventStatus[] = ["FAILED", "DEAD_LETTER"];
+
 export type UploadResult = {
   source_id: string;
   evidence_id: string;

@@ -7,6 +7,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 from app.authz.guard import TenantContext, require
 from app.connectors.manifest import load_capability_registry, load_connector_manifests
 from app.sources import discovery, file_ingest, merchant_read, registry
+from app.webhooks import processor
 
 router = APIRouter(prefix="/api", tags=["sources"])
 
@@ -79,3 +80,21 @@ def put_source_webhooks(
     ctx: TenantContext = require("source.webhook.manage", scope=SOURCE),
 ) -> dict:
     return registry.put_webhooks(ctx, source_id, body)
+
+
+# §12.2 omits these; §10.4 requires failed processing, replay and dead-letter state to be
+# exposed. The list carries status only, never payloads.
+@router.get("/sources/{source_id}/webhook-events")
+def list_webhook_events(
+    source_id: str, ctx: TenantContext = require("source.read", scope=SOURCE)
+) -> list[dict]:
+    return processor.list_inbox_rows(ctx, source_id)
+
+
+@router.post("/sources/{source_id}/webhook-events/{event_id}/replay")
+def replay_webhook_event(
+    source_id: str,
+    event_id: str,
+    ctx: TenantContext = require("source.webhook.manage", scope=SOURCE),
+) -> dict:
+    return processor.replay_webhook(ctx, source_id, event_id)

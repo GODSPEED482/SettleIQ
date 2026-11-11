@@ -18,13 +18,14 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import Connection, text
 
+from app.audit import write_audit
 from app.authz.access import EffectiveAccess, Principal, PrincipalKind
 from app.authz.catalogue import get_catalogue
 from app.authz.guard import TenantContext
-from app.db import global_tx, scoped_tx
+from app.db import global_tx, scoped_tx, tenant_tx
 from app.domain import runs
 from app.domain_packs.manifest import load_domain_packs
-from app.errors import ApiError, not_found
+from app.errors import ApiError, conflict, not_found
 from app.semantics.store import active_namespaces
 from app.sources import conventions, evidence, records
 from app.sources.envelope import SourceRecordEnvelope
@@ -253,66 +254,107 @@ def claim_and_process_pending_webhooks(limit: int = 50) -> list[dict[str, Any]]:
     return results
 
 
-def replay_webhook(tenant_id: UUID, inbox_id: UUID) -> dict[str, Any]:
-    """Reset a failed or dead-lettered webhook inbox row and reprocess it."""
-    with scoped_tx(tenant_id) as conn:
+REPLAYABLE = ("FAILED", "DEAD_LETTER")
+
+_INBOX_COLUMNS = """
+    id, provider_event_id, event_type, status, attempts, max_attempts, last_error,
+    provider_timestamp, received_at, processed_at, next_attempt_at
+"""
+
+
+def _uuid(value: str) -> UUID:
+    try:
+        return UUID(value)
+    except ValueError:
+        raise not_found() from None
+
+
+def _inbox_view(r: Any) -> dict[str, Any]:
+    out = dict(r._mapping)
+    out["id"] = str(out["id"])
+    for key in ("provider_timestamp", "received_at", "processed_at", "next_attempt_at"):
+        out[key] = out[key].isoformat() if out[key] else None
+    return out
+
+
+def list_inbox_rows(ctx: TenantContext, source_id: str) -> list[dict[str, Any]]:
+    """One source's delivery history for the Sources screen (task 4.7, spec 10.4).
+
+    Status, attempts and errors only: payloads stay behind evidence.raw.read."""
+    source_uuid = _uuid(source_id)
+    with tenant_tx(ctx) as conn:
+        if conn.execute(
+            text("SELECT 1 FROM data_sources WHERE id = :id"), {"id": source_uuid}
+        ).first() is None:
+            raise not_found()
+        rows = conn.execute(
+            text(
+                f"""
+                SELECT {_INBOX_COLUMNS} FROM webhook_inbox
+                WHERE source_id = :source
+                ORDER BY received_at DESC, id
+                LIMIT 100
+                """
+            ),
+            {"source": source_uuid},
+        ).all()
+    return [_inbox_view(r) for r in rows]
+
+
+def replay_webhook(ctx: TenantContext, source_id: str, inbox_id: str) -> dict[str, Any]:
+    """Reprocess one failed or dead-lettered event of this source, now.
+
+    The row keeps its provider event ID, so a replay collapses onto any record the event
+    already produced (spec 10.4). The replay claims the row itself, as the processor would,
+    so the background processor cannot take it at the same time."""
+    source_uuid, inbox_uuid = _uuid(source_id), _uuid(inbox_id)
+    with tenant_tx(ctx) as conn:
         row = conn.execute(
             text(
                 """
-                UPDATE webhook_inbox
-                SET status = 'RECEIVED', attempts = 0, last_error = NULL, next_attempt_at = NULL
-                WHERE id = :id AND tenant_id = :tenant
-                RETURNING id, tenant_id, source_id, provider_event_id, event_type,
-                          raw_evidence_id, attempts, max_attempts
+                SELECT id, tenant_id, source_id, provider_event_id, event_type,
+                    raw_evidence_id, status, max_attempts
+                FROM webhook_inbox
+                WHERE id = :id AND source_id = :source
+                FOR UPDATE
                 """
             ),
-            {"id": inbox_id, "tenant": tenant_id},
+            {"id": inbox_uuid, "source": source_uuid},
         ).first()
         if row is None:
             raise not_found()
-
-    claimed = ClaimedInboxRow(
-        id=row.id,
-        tenant_id=row.tenant_id,
-        source_id=row.source_id,
-        provider_event_id=row.provider_event_id,
-        event_type=row.event_type,
-        raw_evidence_id=row.raw_evidence_id,
-        attempts=0,
-        max_attempts=row.max_attempts,
-    )
-    return process_claimed_row(claimed)
-
-
-def list_inbox_rows(conn: Connection, tenant_id: UUID, source_id: UUID) -> list[dict[str, Any]]:
-    """Query inbox rows for the Sources screen (task 4.7)."""
-    rows = conn.execute(
-        text(
-            """
-            SELECT id, provider_event_id, event_type, status, attempts, max_attempts,
-                   last_error, provider_timestamp, received_at, processed_at
-            FROM webhook_inbox
-            WHERE tenant_id = :tenant AND source_id = :source
-            ORDER BY received_at DESC
-            LIMIT 100
-            """
-        ),
-        {"tenant": tenant_id, "source": source_id},
-    ).all()
-    return [
-        {
-            "id": str(r.id),
-            "provider_event_id": r.provider_event_id,
-            "event_type": r.event_type,
-            "status": r.status,
-            "attempts": r.attempts,
-            "max_attempts": r.max_attempts,
-            "last_error": r.last_error,
-            "provider_timestamp": (
-                r.provider_timestamp.isoformat() if r.provider_timestamp else None
+        if row.status not in REPLAYABLE:
+            raise conflict("WEBHOOK_NOT_REPLAYABLE", "Only failed or dead-lettered events replay.")
+        conn.execute(
+            text(
+                """
+                UPDATE webhook_inbox
+                SET status = 'PROCESSING', attempts = 1, last_error = NULL, next_attempt_at = NULL
+                WHERE id = :id
+                """
             ),
-            "received_at": r.received_at.isoformat() if r.received_at else None,
-            "processed_at": r.processed_at.isoformat() if r.processed_at else None,
-        }
-        for r in rows
-    ]
+            {"id": row.id},
+        )
+        write_audit(
+            conn, ctx.tenant_id, ctx.principal, "source.webhook.replayed", "source",
+            {"source_id": str(source_uuid), "inbox_id": str(row.id),
+             "provider_event_id": row.provider_event_id, "previous_status": row.status},
+        )
+
+    process_claimed_row(
+        ClaimedInboxRow(
+            id=row.id,
+            tenant_id=row.tenant_id,
+            source_id=row.source_id,
+            provider_event_id=row.provider_event_id,
+            event_type=row.event_type,
+            raw_evidence_id=row.raw_evidence_id,
+            attempts=1,
+            max_attempts=row.max_attempts,
+        )
+    )
+    with tenant_tx(ctx) as conn:
+        after = conn.execute(
+            text(f"SELECT {_INBOX_COLUMNS} FROM webhook_inbox WHERE id = :id"), {"id": row.id}
+        ).one()
+    return _inbox_view(after)

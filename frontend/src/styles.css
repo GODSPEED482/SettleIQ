@@ -289,6 +289,7 @@ span.status {
 
 .status-resolved,
 .status-succeeded,
+.status-processed,
 .status-closed {
   color: #2e7d4f;
 }
@@ -297,6 +298,7 @@ span.status {
 .status-authority_conflict,
 .status-unresolved,
 .status-failed,
+.status-dead_letter,
 .status-open {
   color: #b42318;
   border-color: currentColor;
@@ -576,4 +578,16 @@ code.hash {
 
 .source-card .notice p {
   margin: 0 0 4px;
+}
+
+.webhook-events {
+  margin-top: 12px;
+}
+
+.webhook-events .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
 }

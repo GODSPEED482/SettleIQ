@@ -8,6 +8,7 @@ import type {
   SyncResult,
   UploadResult,
   WebhookConfig,
+  WebhookEvent,
 } from "./types";
 
 // The source routes take the tenant from X-Tenant-Id; none has a tenant path.
@@ -36,6 +37,12 @@ export function sourcesApi(tenantId: string) {
       }),
     registerWebhook: (sourceId: string, body: WebhookConfig) =>
       call<Source>(`/api/sources/${sourceId}/webhooks`, { method: "PUT", json: body }),
+    webhookEvents: (sourceId: string) =>
+      call<WebhookEvent[]>(`/api/sources/${sourceId}/webhook-events`),
+    replayWebhook: (sourceId: string, eventId: string) =>
+      call<WebhookEvent>(`/api/sources/${sourceId}/webhook-events/${eventId}/replay`, {
+        method: "POST",
+      }),
   };
 }
 

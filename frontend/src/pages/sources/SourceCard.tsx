@@ -1,15 +1,18 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 
+import { messageOf } from "../../api/client";
 import { can, type EffectivePermission } from "../../permissions/can";
 import { ProvenanceLabel, StatusBadge } from "../operations/labels";
 import { webhookEventTypes, type SourcesApi } from "./api";
-import type {
-  ConnectorManifest,
-  DiscoverResult,
-  FileKind,
-  Source,
-  SyncResult,
-  UploadResult,
+import {
+  REPLAYABLE,
+  type ConnectorManifest,
+  type DiscoverResult,
+  type FileKind,
+  type Source,
+  type SyncResult,
+  type UploadResult,
+  type WebhookEvent,
 } from "./types";
 
 type Result =
@@ -145,7 +148,126 @@ export function SourceCard({ source, manifest, permissions, api, busy, run }: Pr
         />
       )}
       {result && <ResultView result={result} />}
+      {eventTypes !== null && (
+        <WebhookEvents
+          source={source}
+          api={api}
+          canReplay={allowed("source.webhook.manage")}
+          busy={busy}
+          run={run}
+        />
+      )}
     </article>
+  );
+}
+
+// The source's webhook inbox: what arrived, how processing went, and replay of failed and
+// dead-lettered events (spec 10.4). Readable with source.read; replay needs the webhook key.
+function WebhookEvents({
+  source,
+  api,
+  canReplay,
+  busy,
+  run,
+}: Pick<Props, "source" | "api" | "busy" | "run"> & { canReplay: boolean }) {
+  const headingId = useId();
+  const [events, setEvents] = useState<WebhookEvent[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    let current = true;
+    api
+      .webhookEvents(source.id)
+      .then((list) => {
+        if (!current) return;
+        setEvents(list);
+        setError(null);
+      })
+      .catch((caught) => current && setError(messageOf(caught)));
+    return () => {
+      current = false;
+    };
+  }, [api, source.id, version]);
+
+  async function replay(item: WebhookEvent) {
+    await run(
+      () => api.replayWebhook(source.id, item.id),
+      `${source.display_name}: ${item.provider_event_id} replayed.`,
+    );
+    setVersion((current) => current + 1);
+  }
+
+  return (
+    <section className="webhook-events" aria-labelledby={headingId}>
+      <div className="row">
+        <h4 id={headingId}>Webhook events</h4>
+        <button type="button" disabled={busy} onClick={() => setVersion((current) => current + 1)}>
+          Refresh
+        </button>
+      </div>
+      {error ? (
+        <p className="error">{error}</p>
+      ) : events === null ? (
+        <p className="muted">Loading…</p>
+      ) : events.length === 0 ? (
+        <p className="muted">No deliveries yet.</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Attempts</th>
+                <th>Received</th>
+                <th>Last error</th>
+                {canReplay && <th aria-label="Actions" />}
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <code>{item.provider_event_id}</code>
+                  </td>
+                  <td>{item.event_type}</td>
+                  <td>
+                    <StatusBadge status={item.status} />
+                    {item.status === "FAILED" && item.next_attempt_at && (
+                      <span className="muted">
+                        {" "}
+                        retry after {new Date(item.next_attempt_at).toLocaleString()}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {item.attempts} / {item.max_attempts}
+                  </td>
+                  <td>{new Date(item.received_at).toLocaleString()}</td>
+                  <td>{item.last_error ?? <span className="muted">—</span>}</td>
+                  {canReplay && (
+                    <td>
+                      {REPLAYABLE.includes(item.status) && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          aria-label={`Replay ${item.provider_event_id}`}
+                          onClick={() => void replay(item)}
+                        >
+                          Replay
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

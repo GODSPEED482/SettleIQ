@@ -69,7 +69,8 @@ def url(route: dict, tenant: UUID = TENANT) -> str:
     path = route["path"].replace("{tenant_id}", str(tenant))
     for name in ("token", "invitation_id", "user_id", "source_id", "case_id", "decision_id",
                  "investigation_id", "playbook_id", "request_id", "execution_id", "audit_id",
-                 "draft_id", "job_id", "mapping_id", "assertion_id", "entity_id", "run_id"):
+                 "draft_id", "job_id", "mapping_id", "assertion_id", "entity_id", "run_id",
+                 "event_id"):
         path = path.replace(f"{{{name}}}", str(uuid4()))
     return path
 
@@ -184,6 +185,13 @@ def test_undeclared_scope_type_fails_startup():
         ("PUT", "/api/tenants/{tenant_id}/execution-mode", "PERMISSION", "execution_mode.manage"),
         ("PUT", "/api/sources/{source_id}/credentials", "PERMISSION", "source.credential.manage"),
         ("PUT", "/api/sources/{source_id}/webhooks", "PERMISSION", "source.webhook.manage"),
+        ("GET", "/api/sources/{source_id}/webhook-events", "PERMISSION", "source.read"),
+        (
+            "POST",
+            "/api/sources/{source_id}/webhook-events/{event_id}/replay",
+            "PERMISSION",
+            "source.webhook.manage",
+        ),
         ("POST", "/api/ontology/publish", "PERMISSION", "ontology.publish"),
         ("POST", "/api/playbooks/{playbook_id}/requests", "PERMISSION", "playbook.request"),
         ("POST", "/api/playbook-requests/{request_id}/approve", "PERMISSION", "playbook.approve"),

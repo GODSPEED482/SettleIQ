@@ -9,9 +9,9 @@ import { SourceCard } from "./SourceCard";
 import type { ConnectorManifest, CreateSourceInput, Source } from "./types";
 
 // Source Management (spec 13.1): connectors and their declared capabilities, registered sources
-// with credential and webhook status, and the discover, sync, upload, credential and webhook
-// actions. Each control shows only with its key from GET /api/me/permissions; the API rechecks
-// every call.
+// with credential and webhook status, the discover, sync, upload, credential and webhook
+// actions, and each webhook source's inbox with replay. Each control shows only with its key
+// from GET /api/me/permissions; the API rechecks every call.
 export function SourceManagement() {
   const { tenantId, permissions } = usePermissions();
   const canReadConnectors = can(permissions, "connector.read");
@@ -107,16 +107,6 @@ export function SourceManagement() {
             />
           ))
         )}
-      </section>
-      <section className="panel">
-        <h2>Webhook inbox</h2>
-        {/* TODO(G4 4.4 Suprava): once 4.4 exposes inbox rows, list received, processed, failed
-            and dead-lettered events per source with their attempts, and offer replay to
-            source.webhook.manage holders. Replay keeps the original event identity. */}
-        <p className="muted">
-          Delivery history, failed and dead-lettered events, and replay appear here once
-          webhook processing is built (task 4.4).
-        </p>
       </section>
     </section>
   );
