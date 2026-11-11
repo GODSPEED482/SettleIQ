@@ -102,7 +102,7 @@ def test_created_source_carries_the_manifest_capabilities():
     source = create_ok(member)
     declared = [c.key for c in load_connector_manifests()[PAYPAL].capabilities]
     assert source["connector_id"] == PAYPAL
-    assert source["connector_version"] == "1.0.0"
+    assert source["connector_version"] == load_connector_manifests()[PAYPAL].version
     assert source["source_type"] == "payment_provider"
     assert [c["key"] for c in source["capabilities"]] == declared
     assert source["has_secret_reference"] is False

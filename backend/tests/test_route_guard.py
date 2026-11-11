@@ -377,7 +377,8 @@ def test_scope_narrowed_grant_only_reaches_its_scope():
         FakeGateway([GrantRow("source.credential.manage", "ALLOW", Scope("source", "a"))])
     )
     headers = {TENANT_HEADER: str(TENANT)}
-    assert client.put("/api/sources/a/credentials", headers=headers).status_code == 501
+    # 422: the gate passed, then the missing body was refused.
+    assert client.put("/api/sources/a/credentials", headers=headers).status_code == 422
     assert client.put("/api/sources/b/credentials", headers=headers).status_code == 403
 
 

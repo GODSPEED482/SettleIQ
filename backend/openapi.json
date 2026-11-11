@@ -1164,12 +1164,26 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialBody"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Put Source Credentials Api Sources  Source Id  Credentials Put"
+                }
               }
             }
           },
@@ -1204,12 +1218,26 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookBody"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Put Source Webhooks Api Sources  Source Id  Webhooks Put"
+                }
               }
             }
           },
@@ -3031,6 +3059,23 @@
         ],
         "title": "CreateTenantBody"
       },
+      "CredentialBody": {
+        "properties": {
+          "secret_reference": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Secret Reference"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "secret_reference"
+        ],
+        "title": "CredentialBody",
+        "description": "A reference only. There is deliberately no field that could carry a value (spec 11.3)."
+      },
       "EditDraftBody": {
         "properties": {
           "expected_revision": {
@@ -3670,6 +3715,31 @@
           "token"
         ],
         "title": "VerifyEmailBody"
+      },
+      "WebhookBody": {
+        "properties": {
+          "webhook_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Webhook Id"
+          },
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Event Types"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "webhook_id",
+          "event_types"
+        ],
+        "title": "WebhookBody"
       }
     }
   }

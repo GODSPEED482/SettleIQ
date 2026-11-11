@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     database_url: str
     environment: str = "development"
     raw_evidence_dir: str = "/data/raw-evidence"
+    # Where `managed:<NAME>` source secret references resolve (app/sources/secrets.py).
+    source_secret_dir: str = ""
 
     app_base_url: str = "http://localhost:5173"
     session_ttl_hours: int = 24

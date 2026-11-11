@@ -24,6 +24,7 @@ x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB}
   ENVIRONMENT: ${ENVIRONMENT}
   RAW_EVIDENCE_DIR: /data/raw-evidence
+  SOURCE_SECRET_DIR: /run/source-secrets
 
 services:
   proxy:
@@ -68,6 +69,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
     volumes:
       - /data/raw-evidence:/data/raw-evidence
+      - ./source-secrets:/run/source-secrets:ro
     depends_on:
       db:
         condition: service_healthy
@@ -86,6 +88,7 @@ services:
     environment: *backend-env
     volumes:
       - /data/raw-evidence:/data/raw-evidence
+      - ./source-secrets:/run/source-secrets:ro
     depends_on:
       db:
         condition: service_healthy

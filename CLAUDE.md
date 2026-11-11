@@ -133,7 +133,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.5 Invitation backend: hashed single-use tokens, matching-email acceptance (1.5h). `tests/test_invitations.py` covers AC-IAM-02 to 06, 08, 09, 10, AC-OWNER-02, AC-AUTHZ-05, 09, 18.
 - [x] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h). Evidence in `test_publication.py` and `test_mappings.py`.
 - [x] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h). Migration 0011; evidence in `test_rls.py` (domain section), traced under AC-TEN-02.
-- [ ] 4.5 Secret references; credential and webhook routes limited to Integration Admin (2h)
+- [x] 4.5 Secret references; credential and webhook routes limited to Integration Admin (2h). `env:` and `managed:` references (the second rendered from SSM by `deploy/deploy.sh`); evidence in `test_source_credentials.py` (AC-PP-10 both sides) and `test_secrets.py`.
 - [ ] 5.1 Request, decision, approval, execution, grant and attempt tables with the full FK chain (2h)
 - [ ] 5.2 Two-stage policy gateway, POL-01, single-use grant issuance (2h)
 - [ ] 5.3 Exact-scope execution mode, SHADOW by default (1h)

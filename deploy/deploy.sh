@@ -40,6 +40,24 @@ aws ssm get-parameters-by-path --region "$REGION" --path "$PARAM_PATH" --with-de
 } >> .env
 chmod 600 .env
 
+echo "==> rendering source secrets from SSM ${PARAM_PATH}/source"
+# One file per parameter, read by `managed:<NAME>` source secret references
+# (backend/app/sources/secrets.py). Containers cannot reach the instance role, so the host renders
+# them, readable only by the app user. Values are never printed.
+# Rendered afresh each run, so a deleted parameter does not linger.
+rm -rf source-secrets
+install -d -o 10001 -g 10001 -m 500 source-secrets
+aws ssm get-parameters-by-path --region "$REGION" --path "${PARAM_PATH%/}/source" --with-decryption \
+  --query 'Parameters[].[Name,Value]' --output text \
+  | while IFS=$'\t' read -r name value; do
+      name="${name##*/}"
+      # The names secrets.py accepts: upper case, digits and underscores, so never a path.
+      [[ "$name" =~ ^[A-Z][A-Z0-9_]{0,99}$ ]] || continue
+      [ "$value" != "CHANGE_ME" ] || continue
+      install -o 10001 -g 10001 -m 400 /dev/null "source-secrets/$name"
+      printf '%s' "$value" > "source-secrets/$name"
+    done
+
 # A required value still on CHANGE_ME was left out above, so it fails here as unset.
 required="ENVIRONMENT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD APP_DB_PASSWORD DISPATCHER_DB_PASSWORD ACME_EMAIL"
 if grep -q '^COMPOSE_PROFILES=.*agent' .env; then
