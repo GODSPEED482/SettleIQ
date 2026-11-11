@@ -2733,6 +2733,62 @@
         }
       }
     },
+    "/api/investigations": {
+      "get": {
+        "tags": [
+          "investigation"
+        ],
+        "summary": "List Investigations",
+        "description": "Investigation summaries, newest first, optionally for one case.",
+        "operationId": "list_investigations_api_investigations_get",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response List Investigations Api Investigations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/investigations/{investigation_id}": {
       "get": {
         "tags": [
@@ -2829,6 +2885,78 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Create Playbook Request Api Playbooks  Playbook Id  Requests Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/playbook-requests": {
+      "get": {
+        "tags": [
+          "playbooks"
+        ],
+        "summary": "List Playbook Requests",
+        "description": "Requests newest first, each with its decisions, approval and execution.",
+        "operationId": "list_playbook_requests_api_playbook_requests_get",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response List Playbook Requests Api Playbook Requests Get"
                 }
               }
             }
@@ -3014,6 +3142,7 @@
           "playbooks"
         ],
         "summary": "Read Execution",
+        "description": "One execution with its state, both decision IDs, the approval if any, every attempt and\nthe readback evidence that verified it.",
         "operationId": "read_execution_api_executions__execution_id__get",
         "parameters": [
           {
@@ -3022,6 +3151,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Execution Id"
             }
           }
@@ -3031,7 +3161,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Read Execution Api Executions  Execution Id  Get"
+                }
               }
             }
           },

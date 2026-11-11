@@ -59,6 +59,24 @@ describe("apiFetch", () => {
     expect(messageOf(error)).toBe("The draft changed.");
   });
 
+  it("keeps other envelope keys and shows listed failures after the message", async () => {
+    respond(422, {
+      error: {
+        code: "PLAYBOOK_INELIGIBLE",
+        message: "The playbook's preconditions do not hold.",
+        failures: ["a refund already exists", "the order is disputed"],
+      },
+    });
+    const error = await apiFetch("/api/x").catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      fields: [],
+      details: { failures: ["a refund already exists", "the order is disputed"] },
+    });
+    expect(messageOf(error)).toBe(
+      "The playbook's preconditions do not hold. a refund already exists; the order is disputed",
+    );
+  });
+
   it("raises UNKNOWN when the error has no envelope", async () => {
     respond(502);
     await expect(apiFetch("/api/x")).rejects.toMatchObject({ status: 502, code: "UNKNOWN" });

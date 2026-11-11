@@ -6,7 +6,7 @@ the gateway tests build chains through the routes instead.
 
 import hashlib
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
@@ -93,6 +93,8 @@ def insert_execution(conn, tenant: UUID, request_id: UUID, request_decision: UUI
 
 def insert_grant(conn, tenant: UUID, chain: dict, *, target: str = TARGET,
                  expires_in: timedelta = timedelta(minutes=5)) -> UUID:
+    # The expiry is taken from the database clock, which the consume trigger compares against;
+    # a host clock ahead of the database would leave a short-lived grant still unexpired.
     grant_id = uuid4()
     conn.execute(
         text(
@@ -103,7 +105,7 @@ def insert_grant(conn, tenant: UUID, chain: dict, *, target: str = TARGET,
                 permission_keys, token_hash, attestation_id, expires_at)
             VALUES (:id, :t, :execution, :request, :req_decision, :exe_decision, :approval,
                 '1.0.0', 'internal-merchant', 'merchant.payment_status.correct', :target, :key,
-                ARRAY['playbook.execute'], :hash, 'att-1', :expires)
+                ARRAY['playbook.execute'], :hash, 'att-1', now() + :expires_in)
             """
         ),
         {"id": grant_id, "t": tenant, "execution": chain["execution"],
@@ -111,7 +113,7 @@ def insert_grant(conn, tenant: UUID, chain: dict, *, target: str = TARGET,
          "exe_decision": chain["execution_decision"], "approval": chain["approval"],
          "target": target, "key": chain["key"],
          "hash": hashlib.sha256(grant_id.bytes).hexdigest(),
-         "expires": datetime.now(UTC) + expires_in},
+         "expires_in": expires_in},
     )
     return grant_id
 

@@ -33,6 +33,8 @@ class Principal:
     id: UUID
     kind: PrincipalKind
     email_verified: bool = False
+    # A Worker carries the execution grant it authenticated with (POL-09); nobody else does.
+    grant_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -162,6 +164,16 @@ _OWNER_ITEMS_SQL = text(
     """
 )
 
+_WORKER_GRANT_SQL = text(
+    """
+    SELECT g.permission_keys
+    FROM execution_grants g
+    JOIN service_principals p ON p.tenant_id = g.tenant_id AND p.id = :worker_id
+    WHERE g.id = :grant_id AND p.kind = 'worker' AND p.status = 'ACTIVE'
+      AND g.consumed_at IS NULL AND g.expires_at > now()
+    """
+)
+
 _AUDIT_SQL = text(
     """
     INSERT INTO audit_logs (id, tenant_id, principal_kind, principal_id, action,
@@ -183,8 +195,8 @@ class PostgresAccessGateway:
 
     def resolve(self, principal: Principal, tenant_id: UUID) -> EffectiveAccess | None:
         # The Agent resolves only through resolve_agent, on behalf of one invoker.
-        # TODO(G5 5.6 Rahul): resolve the Worker only through a valid grant (POL-09); its keys
-        # can never be granted to a human (AC-AUTHZ-06).
+        if principal.kind is PrincipalKind.WORKER:
+            return self._resolve_worker(principal, tenant_id)
         if principal.kind is not PrincipalKind.HUMAN:
             return None
         params = {"tenant_id": tenant_id, "user_id": principal.id}
@@ -198,6 +210,19 @@ class PostgresAccessGateway:
             if membership.owner_user_id == principal.id:
                 rows.extend(conn.execute(_OWNER_ITEMS_SQL))
         return EffectiveAccess((_to_row(row) for row in rows), self._catalogue)
+
+    def _resolve_worker(self, worker: Principal, tenant_id: UUID) -> EffectiveAccess | None:
+        """POL-09: the Worker holds exactly its grant's keys, and only while that grant is
+        unconsumed and unexpired. Worker-only keys come from nowhere else (AC-AUTHZ-06)."""
+        if worker.grant_id is None:
+            return None
+        with scoped_tx(tenant_id) as conn:
+            keys = conn.execute(
+                _WORKER_GRANT_SQL, {"grant_id": worker.grant_id, "worker_id": worker.id}
+            ).scalar_one_or_none()
+        if not keys:
+            return None
+        return EffectiveAccess((GrantRow(key, "ALLOW") for key in keys), self._catalogue)
 
     def resolve_platform(self, principal: Principal) -> EffectiveAccess | None:
         return None

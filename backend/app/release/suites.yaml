@@ -4,36 +4,159 @@
 # (AC-REL-02). The verifier checks the suite ID and version an attestation names (check 9).
 #
 # Categories are the eight spec 9.7.2 names. Bump `version` whenever a list changes.
+# List module-level test functions only: the signer matches JUnit class names to node IDs, so a
+# test inside a class never counts. The harness holds backend/ only, so no listed test may read
+# files outside it. tests/test_safety_suites.py checks both, and traces each criterion.
 suites:
+  # Task 5.17: AC-PP-08, AC-PLY-02, the PB-002 parts of AC-PLY-08, AC-EXEC-MODE-03.
   - capability: refunds.create
     connector_id: paypal
     suite_id: paypal-refunds-create
-    version: 1
+    version: 2
     categories:
-      authorization_enforcement: []
-      tenant_isolation: []
-      transitions: []
-      idempotency: []
-      concurrency_and_stale_state: []
-      failure_recovery: []
-      shadow_side_effect_prevention: []
-      post_action_verification: []
-    # TODO(G5 5.17 Suprava): fill every category from the refund safety suite (AC-PP-08,
-    # AC-PLY-02, PB-002 parts of AC-PLY-08, AC-EXEC-MODE-03); until then no refunds.create
-    # attestation can be issued.
+      authorization_enforcement:
+        - tests/test_pb002.py::test_pb002_definition_always_requires_approval
+        - tests/test_pb002.py::test_pb002_needs_approval_even_when_the_tenant_says_otherwise
+        - tests/test_playbook_gateway.py::test_the_requester_cannot_decide_their_own_request
+        - tests/test_worker.py::test_the_grant_keys_are_worker_only
+        - tests/test_worker.py::test_a_human_session_is_refused_before_any_side_effect
+        - tests/test_route_guard.py::test_human_is_rejected_by_the_worker_route
+        - tests/test_paypal_g4.py::test_paypal_client_refuses_non_sandbox_host
+      tenant_isolation:
+        - tests/test_worker_refunds.py::test_the_client_comes_only_from_the_tenants_own_paypal_source
+        - tests/test_release_attestation.py::test_neither_capabilitys_attestation_authorizes_the_other_or_another_tenant
+        - tests/test_playbook_gateway.py::test_another_tenant_cannot_read_or_approve_the_request
+        - tests/test_worker.py::test_a_grant_is_bound_to_its_execution_and_tenant
+        - tests/test_execution_mode.py::test_another_tenants_live_row_is_invisible
+      transitions:
+        - tests/test_pb002.py::test_equal_amounts_on_two_orders_are_not_a_duplicate
+        - tests/test_pb002.py::test_pb002_is_ineligible_without_the_full_proof
+        - tests/test_pb002.py::test_three_captures_are_ambiguous
+        - tests/test_pb002.py::test_pb002_refunds_the_later_capture_in_full
+        - tests/test_pb002.py::test_the_original_is_decided_by_paypals_capture_time_not_by_order_of_ids
+        - tests/test_pb002.py::test_a_capture_paypal_has_not_completed_blocks_the_refund
+        - tests/test_pb002.py::test_completion_from_a_non_paypal_authority_is_not_enough
+        - tests/test_paypal_g4.py::test_ac_ply_02_duplicate_capture_proof
+        - tests/test_paypal_g4.py::test_refunds_refuses_invalid_amount_or_currency
+        - tests/test_worker.py::test_python_and_database_allow_the_same_execution_transitions
+      idempotency:
+        - tests/test_worker_refunds.py::test_an_ambiguous_refund_is_settled_under_the_same_request_id
+        - tests/test_paypal_g4.py::test_ac_pp_12_refunds_adapter_contract
+        - tests/test_playbook_gateway.py::test_a_repeated_key_returns_the_prior_request
+        - tests/test_execution_chain.py::test_one_execution_per_request
+      concurrency_and_stale_state:
+        - tests/test_worker_refunds.py::test_a_capture_refunded_meanwhile_is_not_refunded_again
+        - tests/test_worker_refunds.py::test_an_original_that_changed_stops_the_refund
+        - tests/test_pb002.py::test_a_prior_refund_on_the_order_makes_pb002_ineligible
+        - tests/test_worker.py::test_concurrent_runs_consume_the_grant_once
+        - tests/test_worker.py::test_a_grant_runs_once
+      failure_recovery:
+        - tests/test_worker_refunds.py::test_an_ambiguous_refund_with_no_refund_visible_goes_to_manual_review
+        - tests/test_worker_refunds.py::test_an_unanswered_refund_is_unknown_even_if_the_capture_reads_refunded
+        - tests/test_worker_refunds.py::test_an_ambiguous_refund_is_settled_under_the_same_request_id
+      shadow_side_effect_prevention:
+        - tests/test_worker_refunds.py::test_shadow_after_the_grant_sends_nothing_to_paypal
+        - tests/test_execution_mode.py::test_each_playbook_runs_under_its_own_scope
+        - tests/test_execution_mode.py::test_switching_one_scope_live_leaves_the_other_unchanged
+        - tests/test_execution_mode.py::test_returning_one_scope_to_shadow_leaves_the_other_live
+        - tests/test_execution_mode.py::test_an_attestation_for_one_scope_does_not_switch_another
+        - tests/test_playbook_gateway.py::test_another_live_scope_does_not_unblock_this_one
+      post_action_verification:
+        - tests/test_worker_refunds.py::test_an_approved_duplicate_is_refunded_and_resolved_only_after_readback
+        - tests/test_worker_refunds.py::test_a_pending_refund_is_never_resolution
 
+  # Task 5.12: AC-MERCH-01..07, AC-AUTHZ-06/08/15/16/17, AC-PLY-08..11.
   - capability: merchant.payment_status.correct
     connector_id: internal-merchant
     suite_id: internal-merchant-status-correct
-    version: 1
+    version: 2
     categories:
-      authorization_enforcement: []
-      tenant_isolation: []
-      transitions: []
-      idempotency: []
-      concurrency_and_stale_state: []
-      failure_recovery: []
-      shadow_side_effect_prevention: []
-      post_action_verification: []
-    # TODO(G5 5.12 Suprava): fill every category from the safety suite (AC-MERCH-01..07,
-    # AC-AUTHZ-06/08/15/16/17, AC-PLY-08..11); the capability also needs Rahul's 5.5 adapter.
+      authorization_enforcement:
+        - tests/test_worker.py::test_the_grant_keys_are_worker_only
+        - tests/test_worker.py::test_a_human_session_is_refused_before_any_side_effect
+        - tests/test_route_guard.py::test_human_is_rejected_by_the_worker_route
+        - tests/test_route_guard.py::test_worker_route_is_not_on_the_public_app
+        - tests/test_route_guard.py::test_the_worker_app_reads_no_session_cookie
+        - tests/test_rls.py::test_a_worker_without_a_live_grant_resolves_to_nothing
+        - tests/test_catalogue.py::test_pol_03_principal_ceilings
+        - tests/test_catalogue.py::test_investigation_agent_cannot_act
+        - tests/test_playbook_gateway.py::test_the_requester_cannot_decide_their_own_request
+        - tests/test_internal_merchant.py::test_a_merchant_postgres_read_source_cannot_write
+        - tests/test_contracts.py::test_internal_merchant_publishes_only_its_two_keys
+      tenant_isolation:
+        - tests/test_internal_merchant.py::test_another_tenants_source_or_tenant_id_reveals_nothing
+        - tests/test_internal_merchant.py::test_same_payment_id_under_another_merchant_is_never_touched
+        - tests/test_internal_merchant.py::test_unknown_ambiguous_and_foreign_targets_fail_closed_alike
+        - tests/test_execution_chain.py::test_tenant_a_sees_none_of_tenant_bs_chain
+        - tests/test_execution_chain.py::test_tenant_a_cannot_reference_tenant_bs_chain
+        - tests/test_playbook_gateway.py::test_another_tenant_cannot_read_or_approve_the_request
+        - tests/test_worker.py::test_a_grant_is_bound_to_its_execution_and_tenant
+        - tests/test_release_attestation.py::test_neither_capabilitys_attestation_authorizes_the_other_or_another_tenant
+      transitions:
+        - tests/test_internal_merchant.py::test_only_pending_to_completed_validates
+        - tests/test_internal_merchant.py::test_undeclared_fields_are_rejected
+        - tests/test_internal_merchant.py::test_sql_text_in_an_identifier_is_rejected
+        - tests/test_internal_merchant.py::test_every_statement_is_a_constant_with_bind_parameters_only
+        - tests/test_internal_merchant.py::test_parameter_models_match_the_manifest
+        - tests/test_internal_merchant.py::test_the_adapter_role_can_only_read_and_correct_status
+        - tests/test_internal_merchant.py::test_the_adapter_role_can_run_the_declared_statements
+        - tests/test_worker.py::test_python_and_database_allow_the_same_execution_transitions
+        - tests/test_execution_chain.py::test_an_execution_moves_only_along_its_machine
+        - tests/test_execution_chain.py::test_an_execution_cannot_skip_its_grant
+        - tests/test_execution_chain.py::test_a_full_chain_with_approval_is_accepted
+        - tests/test_execution_chain.py::test_a_request_has_one_request_stage_decision
+        - tests/test_execution_chain.py::test_an_execution_decision_follows_its_own_requests_decision
+        - tests/test_execution_chain.py::test_required_approval_cannot_be_omitted
+        - tests/test_execution_chain.py::test_a_rejected_approval_does_not_authorize
+        - tests/test_execution_chain.py::test_another_requests_approval_does_not_authorize
+        - tests/test_execution_chain.py::test_no_approval_may_be_attached_when_none_is_required
+        - tests/test_execution_chain.py::test_only_an_execution_stage_allow_creates_an_execution
+        - tests/test_execution_chain.py::test_a_request_decision_cannot_stand_in_for_the_execution_decision
+        - tests/test_playbook_gateway.py::test_a_request_and_its_decision_exist_before_any_approval
+        - tests/test_playbook_gateway.py::test_without_required_approval_the_request_goes_straight_to_execution
+        - tests/test_pb002.py::test_pb001_follows_the_tenants_latest_policy
+      idempotency:
+        - tests/test_internal_merchant.py::test_same_key_and_payload_returns_the_original_outcome_once
+        - tests/test_internal_merchant.py::test_same_key_with_a_different_payload_is_refused_without_mutation
+        - tests/test_internal_merchant.py::test_keys_are_scoped_to_the_merchant
+        - tests/test_playbook_gateway.py::test_a_repeated_key_returns_the_prior_request
+        - tests/test_worker.py::test_an_unreachable_merchant_is_retried_under_the_same_key
+        - tests/test_execution_chain.py::test_one_execution_per_request
+      concurrency_and_stale_state:
+        - tests/test_internal_merchant.py::test_already_completed_payment_is_stale_with_no_mutation
+        - tests/test_internal_merchant.py::test_concurrent_change_after_precondition_read_is_stale
+        - tests/test_internal_merchant.py::test_concurrent_attempts_under_one_key_mutate_once
+        - tests/test_worker.py::test_stale_state_fails_closed_and_returns_the_case_to_human_review
+        - tests/test_worker.py::test_concurrent_runs_consume_the_grant_once
+        - tests/test_worker.py::test_a_grant_runs_once
+        - tests/test_worker.py::test_an_expired_grant_runs_nothing
+        - tests/test_execution_chain.py::test_a_grant_is_consumed_once
+        - tests/test_execution_chain.py::test_an_expired_grant_cannot_be_consumed
+        - tests/test_execution_chain.py::test_a_grant_is_bound_to_exactly_its_execution
+        - tests/test_execution_chain.py::test_a_grant_without_its_approval_is_refused
+        - tests/test_playbook_gateway.py::test_a_changed_precondition_or_target_denies_and_returns_the_case
+      failure_recovery:
+        - tests/test_worker.py::test_an_outcome_left_unknown_is_settled_by_readback_only
+        - tests/test_worker.py::test_an_unreachable_merchant_is_retried_under_the_same_key
+        - tests/test_internal_merchant.py::test_a_source_without_a_merchant_binding_fails_closed
+        - tests/test_internal_merchant.py::test_an_unresolved_secret_fails_closed
+        - tests/test_internal_merchant.py::test_health_check_reports_the_database_connection
+        - tests/test_playbook_gateway.py::test_a_reject_is_terminal_and_returns_the_case
+      shadow_side_effect_prevention:
+        - tests/test_playbook_gateway.py::test_an_approval_in_shadow_is_blocked_and_issues_nothing
+        - tests/test_playbook_gateway.py::test_another_live_scope_does_not_unblock_this_one
+        - tests/test_playbook_gateway.py::test_live_without_a_passing_attestation_is_blocked_by_pol14
+        - tests/test_playbook_gateway.py::test_a_grant_is_refused_when_the_gate_fails_after_the_decision
+        - tests/test_playbook_gateway.py::test_live_reevaluates_the_approved_request_and_binds_one_grant
+        - tests/test_worker.py::test_shadow_after_the_grant_blocks_the_worker
+        - tests/test_worker.py::test_a_failing_attestation_at_the_worker_blocks
+        - tests/test_execution_mode.py::test_every_scope_starts_in_shadow
+        - tests/test_execution_mode.py::test_live_without_an_attestation_is_denied_and_audited
+        - tests/test_execution_mode.py::test_switching_one_scope_live_leaves_the_other_unchanged
+        - tests/test_release_attestation.py::test_live_needs_and_records_a_valid_attestation
+      post_action_verification:
+        - tests/test_worker.py::test_a_live_grant_corrects_one_payment_and_resolves_after_readback
+        - tests/test_worker.py::test_the_readback_alone_resolves_the_case
+        - tests/test_internal_merchant.py::test_correction_changes_exactly_one_row_and_readback_sees_completed
+        - tests/test_execution_chain.py::test_an_attempt_records_its_binding
+        - tests/test_execution_chain.py::test_append_only_chain_tables_refuse_change

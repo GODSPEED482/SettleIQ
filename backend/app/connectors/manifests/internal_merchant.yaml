@@ -1,14 +1,8 @@
 # Internal-merchant write adapter (spec 4.4.1). Registered separately from the PostgreSQL
 # read source, so registering that source grants no write authority. Frozen under task 1.6.
 
-# TODO(G5 5.5 Rahul): the adapter behind these two capabilities (spec 4.4.1). The correction is
-# a conditional UPDATE ... WHERE status = expected_current_status on exactly one tenant-scoped
-# row, run as a restricted merchant role that can update only that status column. Zero or
-# several matches, stale state, another tenant's row or any transition other than
-# PENDING -> COMPLETED fails closed with no mutation (AC-MERCH-02..04). Map the idempotency key
-# to one durable action record: same payload returns the original outcome, a different one is
-# refused (AC-MERCH-05). No caller value reaches SQL text (AC-MERCH-06). Register a health
-# check, and keep merchant.payment.read read-only for preconditions and readback.
+# The adapter is app/connectors/internal_merchant/ (task 5.5); the merchant-side view, action
+# record table and restricted role are in its merchant_setup.sql.
 connector_id: internal-merchant
 version: 1.0.0
 protocols: [postgresql]

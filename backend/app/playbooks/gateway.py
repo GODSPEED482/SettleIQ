@@ -23,6 +23,7 @@ Each decision is audited as critical with the permission and policy IDs it appli
 import hashlib
 import json
 import logging
+import os
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -30,6 +31,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
+import httpx
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, text
 from sqlalchemy.exc import IntegrityError
@@ -49,7 +51,10 @@ from app.release import verifier
 logger = logging.getLogger(__name__)
 
 GRANT_TTL = timedelta(minutes=15)
-GRANT_PERMISSIONS = ["playbook.execute", "connector.action.invoke"]
+# The Worker acts, records and verifies under the one grant (spec 4.4.1, POL-09).
+GRANT_PERMISSIONS = ["playbook.execute", "connector.action.invoke", "execution.record",
+                     "outcome.verify"]
+WORKER_TIMEOUT_S = 60.0
 GATEWAY_VERSION = "gateway/1"
 # Request states the execution stage may evaluate. NEEDS_APPROVAL waits for a person.
 EVALUABLE = frozenset({"REQUEST_POLICY_EVALUATED", "APPROVED", "PRECONDITIONS_VALIDATED"})
@@ -90,13 +95,31 @@ class ExecutionDispatch:
     expires_at: datetime
 
 
-def _no_worker(item: ExecutionDispatch) -> None:
-    # TODO(G5 5.6 Rahul): hand the grant to the Worker, which consumes it atomically with the
-    # move to EXECUTING. Until then the grant expires unused, so nothing executes.
-    logger.info("execution %s granted; no Worker dispatch yet", item.execution_id)
+def _to_worker(item: ExecutionDispatch) -> None:
+    """Hand the grant to the Worker, which consumes it atomically with the move to EXECUTING.
+
+    The token travels only in this call. If the Worker cannot be reached the grant expires
+    unused and the execution stays GRANT_ISSUED, visible on the execution read; nothing runs."""
+    base = os.environ.get("WORKER_URL")
+    if not base:
+        logger.warning("execution %s granted; WORKER_URL is not set", item.execution_id)
+        return
+    try:
+        response = httpx.post(
+            f"{base.rstrip('/')}/internal/executions/{item.execution_id}/run",
+            headers={"Authorization": f"Bearer {item.token}",
+                     "X-Tenant-Id": str(item.tenant_id)},
+            timeout=WORKER_TIMEOUT_S,
+        )
+    except httpx.HTTPError:
+        logger.warning("execution %s could not reach the Worker", item.execution_id)
+        return
+    if response.status_code != 200:
+        logger.warning("execution %s: Worker answered %s", item.execution_id,
+                       response.status_code)
 
 
-dispatch: Callable[[ExecutionDispatch], None] = _no_worker
+dispatch: Callable[[ExecutionDispatch], None] = _to_worker
 
 
 # Reads
@@ -196,12 +219,57 @@ def _view(conn: Connection, request_id: UUID) -> dict[str, Any] | None:
     }
 
 
+def _for_viewer(ctx: TenantContext, conn: Connection, view: dict[str, Any]) -> dict[str, Any]:
+    """What only the reader's own request can say: whether they made it, so a screen can hide
+    approve and reject from the requester (POL-01 still refuses on the server), and the audit
+    records written for it and its execution."""
+    execution = view["execution"]["id"] if view["execution"] else None
+    audit = conn.execute(
+        text(
+            """
+            SELECT id, action, decision, created_at FROM audit_logs
+            WHERE detail ->> 'request_id' = :request
+               OR (CAST(:execution AS text) IS NOT NULL AND detail ->> 'execution_id' = :execution)
+            ORDER BY created_at, id
+            """
+        ),
+        {"request": view["id"], "execution": execution},
+    ).all()
+    return view | {
+        "requested_by_me": view["requested_by"] == str(ctx.principal.id),
+        "audit_refs": [{"id": str(a.id), "action": a.action, "decision": a.decision,
+                        "created_at": _iso(a.created_at)} for a in audit],
+    }
+
+
 def read(ctx: TenantContext, request_id: UUID) -> dict[str, Any]:
     with tenant_tx(ctx) as conn:
         view = _view(conn, request_id)
-    if view is None:
-        raise not_found()
-    return view
+        if view is None:
+            raise not_found()
+        return _for_viewer(ctx, conn, view)
+
+
+def list_requests(ctx: TenantContext, case_id: UUID | None,
+                  status: str | None) -> list[dict[str, Any]]:
+    """Requests newest first, leaving out any playbook the reader is denied (POL-07)."""
+    with tenant_tx(ctx) as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, pack_namespace, playbook_id FROM playbook_requests
+                WHERE (CAST(:case AS uuid) IS NULL OR case_id = :case)
+                  AND (CAST(:status AS text) IS NULL OR status = :status)
+                ORDER BY created_at DESC, id
+                LIMIT 200
+                """
+            ),
+            {"case": case_id, "status": status},
+        ).all()
+        return [
+            _for_viewer(ctx, conn, _view(conn, row.id)) for row in rows
+            if ctx.access.permits("playbook.read", Scope("playbook", _qualified(row)))
+        ]
 
 
 # Request stage

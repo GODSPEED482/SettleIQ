@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { messageOf } from "../../api/client";
-import { can } from "../../permissions/can";
+import { can, canAny } from "../../permissions/can";
 import { usePermissions } from "../../permissions/PermissionsContext";
+import { playbooksApi } from "../playbooks/api";
+import { RequestPlaybook } from "../playbooks/RequestPlaybook";
 import { operationsApi } from "./api";
 import { Cases } from "./Cases";
 import { Entities } from "./Entities";
@@ -22,8 +24,13 @@ export function DomainOperations() {
   const canReview = can(permissions, "entity_resolution.review");
   const canStart = can(permissions, "domain_run.create");
   const canReadMembers = can(permissions, "member.read");
+  // The recommendation comes from the case's investigations; each playbook's own scope is
+  // checked inside the request form.
+  const canRequest =
+    canAny(permissions, "playbook.request") && can(permissions, "investigation.read");
 
   const api = useMemo(() => (tenantId ? operationsApi(tenantId) : null), [tenantId]);
+  const playbooks = useMemo(() => (tenantId ? playbooksApi(tenantId) : null), [tenantId]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -43,7 +50,7 @@ export function DomainOperations() {
     };
   }, [api, canTriage, canReadMembers]);
 
-  if (!api) return null;
+  if (!api || !playbooks) return null;
 
   // Runs one change, reports it, then re-reads every section.
   async function run(work: () => Promise<unknown>, done: string) {
@@ -92,6 +99,16 @@ export function DomainOperations() {
           onReopen={(item, reason) =>
             run(() => api.reopen(item.id, reason), `${item.case_type} case reopened.`)
           }
+          canRequest={canRequest}
+          renderRequest={(item) => (
+            <RequestPlaybook
+              key={item.id}
+              api={playbooks}
+              item={item}
+              permissions={permissions}
+              onCreated={() => setVersion((current) => current + 1)}
+            />
+          )}
         />
       )}
       {canReadEntities && <Entities api={api} version={version} />}

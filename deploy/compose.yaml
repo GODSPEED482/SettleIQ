@@ -69,6 +69,8 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       # Seals credentials from the write-only intake (spec v1.7 §11.3). Unset closes the intake.
       SOURCE_SECRET_KEY: ${SOURCE_SECRET_KEY:-}
+      # Each execution grant is handed to the private Worker here (task 5.6).
+      WORKER_URL: http://worker:8001
     volumes:
       - /data/raw-evidence:/data/raw-evidence
       - ./source-secrets:/run/source-secrets:ro
@@ -87,7 +89,11 @@ services:
     <<: *python
     image: ${REGISTRY}/settleiq-api:${TAG}
     command: ["uvicorn", "app.worker_api:app", "--host", "0.0.0.0", "--port", "8001"]
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      # Opens the tenant's sealed PayPal credentials for refunds.create (task 5.15). The Worker
+      # is the only caller of connector actions (spec 4.4.1).
+      SOURCE_SECRET_KEY: ${SOURCE_SECRET_KEY:-}
     volumes:
       - /data/raw-evidence:/data/raw-evidence
       - ./source-secrets:/run/source-secrets:ro

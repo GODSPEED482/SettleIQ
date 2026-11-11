@@ -29,6 +29,14 @@ def start_investigation(
     return service.start(ctx, case_id)
 
 
+@router.get("/investigations")
+def list_investigations(
+    case_id: UUID | None = None, ctx: TenantContext = require("investigation.read")
+) -> list[dict]:
+    """Investigation summaries, newest first, optionally for one case."""
+    return service.list_for(ctx, case_id)
+
+
 @router.get("/investigations/{investigation_id}")
 def read_investigation(
     investigation_id: UUID, ctx: TenantContext = require("investigation.read")

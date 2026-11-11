@@ -213,6 +213,22 @@ def test_an_unknown_or_inactive_playbook_is_404(shadow):
 # POL-01 (AC-AUTHZ-04, demo step 9)
 
 
+def test_requests_are_listed_per_case_and_tell_the_requester_apart(shadow, approver):
+    """The screens' reads: a case's requests, and whether the reader made each one (POL-01
+    hides approve and reject from the requester; the server still refuses them)."""
+    case_id = status_case(shadow)
+    request = create(shadow, case_id).json()
+    assert request["requested_by_me"] is True
+    listed = shadow.request("GET", "/api/playbook-requests", params={"case_id": str(case_id)})
+    assert listed.status_code == 200, listed.text
+    assert [r["id"] for r in listed.json()] == [request["id"]]
+    assert shadow.request("GET", "/api/playbook-requests",
+                          params={"case_id": str(case_id), "status": "REJECTED"}).json() == []
+    seen = approver.request("GET", f"/api/playbook-requests/{request['id']}").json()
+    assert seen["requested_by_me"] is False
+    assert "playbook.requested" in [a["action"] for a in seen["audit_refs"]]
+
+
 @pytest.mark.parametrize("route", ["approve", "reject"])
 def test_the_requester_cannot_decide_their_own_request(shadow, route):
     both = Person(shadow, "domain_operator", "approver")

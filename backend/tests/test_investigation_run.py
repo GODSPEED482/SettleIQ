@@ -132,6 +132,16 @@ def test_start_writes_a_running_investigation_and_its_job(paypal, running):
     assert (job.kind, job.subject_id, job.status) == ("INVESTIGATION", row.id, "QUEUED")
 
 
+def test_a_cases_investigations_are_listed_newest_first(paypal, running):
+    case_id, investigation_id, _ = running
+    listed = paypal.request("GET", "/api/investigations", params={"case_id": str(case_id)})
+    assert listed.status_code == 200, listed.text
+    [summary] = listed.json()
+    assert (summary["investigation_id"], summary["status"]) == (investigation_id, "RUNNING")
+    other = paypal.request("GET", "/api/investigations", params={"case_id": str(uuid4())})
+    assert other.json() == []
+
+
 def test_one_running_investigation_per_case(paypal, running):
     case_id, _, _ = running
     response = start(paypal, case_id)
