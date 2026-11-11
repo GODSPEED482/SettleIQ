@@ -27,7 +27,7 @@ from settleiq_agent.tool_client import ToolClient
 MAX_STEPS = 20
 DEADLINE_SECONDS = 120
 MAX_TOOL_RESULT_CHARS = 20_000
-PROMPT_VERSION = "investigation/1"
+PROMPT_VERSION = "investigation/2"
 # The backend's limits (app/investigation/response.py).
 MAX_SUMMARY, MAX_FACT, MAX_EVIDENCE, MAX_MISSING = 2000, 500, 50, 20
 
@@ -49,8 +49,11 @@ How to work:
 - The classification must be one of the case types the case evidence shows; when unsure, keep
   the case's own type.
 - Cite evidence only with IDs that tools returned: evidence_id may be an observation, entity or
-  case ID; record_id a source record ID; source_id a data source ID. Each fact is one short
-  sentence.
+  case ID; record_id a source record ID; source_id a data source ID. get_case_evidence returns
+  citations, each a matching evidence_id, record_id and source_id: copy those three together.
+  Each fact is one short sentence.
+- You only investigate. Nothing has been executed, so never say the case is resolved, fixed or
+  corrected; describe the discrepancy as it stands now.
 - List what you could not find in missing_evidence. If evidence is thin, say so and lower your
   confidence."""
 

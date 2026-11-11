@@ -108,9 +108,13 @@ def _proposals_for(job: ClaimedJob) -> list[dict[str, Any]]:
         return ground_proposal(
             OntologyProposal.model_validate(output), metadata, job.payload["known_terms"]
         )
-    except ValidationError:
+    except ValidationError as error:
+        # Where the output failed, so a refusal can be diagnosed; never the output itself.
+        logger.warning("agent proposal refused: %s",
+                       [(".".join(map(str, e["loc"])), e["msg"]) for e in error.errors()][:10])
         raise JobFailed("INVALID_AGENT_OUTPUT") from None
-    except UngroundedProposal:
+    except UngroundedProposal as error:
+        logger.warning("agent proposal ungrounded: %s", str(error)[:300])
         raise JobFailed("UNGROUNDED_AGENT_OUTPUT") from None
 
 

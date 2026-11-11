@@ -218,6 +218,12 @@ def test_case_evidence_is_returned_and_traced(paypal, running):
     assert body["result"]["case"]["id"] == str(case_id)
     assert body["result"]["source_record_ids"]
     assert str(case_id) in body["evidence_ids"]
+    # Every citation is a triple of IDs the trace records, so a cited item can pass grounding.
+    citations = body["result"]["citations"]
+    assert citations
+    for citation in citations:
+        assert {citation["evidence_id"], citation["record_id"], citation["source_id"]} <= set(
+            body["evidence_ids"])
     [row] = trace(paypal.tenant, investigation_id)
     assert (row.outcome, row.tool_name, row.permission) == ("OK", "get_case_evidence",
                                                             "case.read")

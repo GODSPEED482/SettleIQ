@@ -37,6 +37,7 @@
       "type": "string"
     },
     "classification": {
+      "pattern": "^[A-Z][A-Z0-9_]*$",
       "title": "Classification",
       "type": "string"
     },
@@ -66,6 +67,7 @@
     "recommended_playbook": {
       "anyOf": [
         {
+          "pattern": "^[a-z][a-z0-9_]*:[A-Za-z0-9_-]+$",
           "type": "string"
         },
         {

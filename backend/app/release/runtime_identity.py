@@ -3,7 +3,7 @@
 Only the runtime-identity container can reach the container runtime. It answers with the
 repository digest of the container at the caller's network address, so the caller cannot name
 its own digest: nothing from a request header, body or environment variable is consulted
-(AC-REL-09). Unreachable, or no digest (a locally built image has none), is a denial.
+(AC-REL-09). Unreachable, or no single repository digest, is a denial.
 """
 
 import re

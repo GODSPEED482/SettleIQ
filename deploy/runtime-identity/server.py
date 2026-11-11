@@ -3,7 +3,9 @@
 The only container with access to the container runtime. `GET /identity` answers with the
 repository digest of the container at the caller's network address, and nothing else: the
 caller cannot name a container, image or digest, and no header or query is read. A container
-without a registry digest (a locally built image) gets 404, so it can never pass POL-14.
+whose image has no repository digest, or more than one, gets 404 and can never pass POL-14. A
+local build may still have a content digest (Docker's containerd image store records one), but
+no attestation names it: they are issued only for the image the workflow pulled from ECR.
 
 Standard library only, so it runs on a stock Python image with the Docker socket mounted
 read-only and no published port.

@@ -251,7 +251,17 @@ def get_case_evidence(run: Run, args: CaseEvidenceArgs) -> Output:
     records = sorted(run.records())
     sources = sorted({o["source_id"] for o in run.snapshot["observations"]
                       if o["source_record_id"] in records})
-    result = {"case": case, "source_record_ids": records, "source_ids": sources}
+    # One ready-made citation per case observation: the spec 8.3 evidence triple, so the
+    # model never has to pair a record with its source itself.
+    case_observations = set(case["observation_ids"])
+    citations = sorted(
+        ({"evidence_id": o["id"], "record_id": o["source_record_id"], "source_id": o["source_id"],
+          "property_iri": o["property_iri"], "value": o["value"]}
+         for o in run.snapshot["observations"] if o["id"] in case_observations),
+        key=lambda c: c["evidence_id"],
+    )
+    result = {"case": case, "source_record_ids": records, "source_ids": sources,
+              "citations": citations}
     ids = {case["id"], *case["observation_ids"], *records, *sources, *case["entity_ids"]}
     if args.include_raw_excerpts:
         rows = run.conn.execute(

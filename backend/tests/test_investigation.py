@@ -167,6 +167,15 @@ def test_the_agent_package_mirrors_the_frozen_schema():
     assert shape(packaged) == shape(ours)
     assert shape(packaged, "EvidenceReference") == shape(ours, "EvidenceReference")
     assert packaged["properties"]["confidence"]["enum"] == ["low", "medium", "high"]
+    # Patterns cannot be clamped by the agent, so structured output must carry them.
+    assert packaged["properties"]["classification"]["pattern"] == (
+        ours["properties"]["classification"]["pattern"])
+
+    def playbook_patterns(schema: dict) -> list[str]:
+        branches = schema["properties"]["recommended_playbook"]["anyOf"]
+        return [branch["pattern"] for branch in branches if "pattern" in branch]
+
+    assert playbook_patterns(packaged) == playbook_patterns(ours)
 
 
 def test_agent_service_has_no_database_path():
@@ -192,3 +201,13 @@ def test_agent_services_publish_no_port(name):
 def test_agent_network_is_limited_to_its_services():
     members = sorted(n for n, s in SERVICES.items() if "agent" in s.get("networks", []))
     assert members == sorted(AGENT_SERVICES)
+
+
+@pytest.mark.parametrize("compose", ["docker-compose.yml", "deploy/compose.yaml"])
+def test_agent_tools_reads_raw_evidence_read_only(compose):
+    """get_case_evidence returns hash-checked raw excerpts, so the tool API needs the evidence
+    store; it only reads it, and the agent itself never gets it."""
+    services = yaml.safe_load((REPO / compose).read_text(encoding="utf-8"))["services"]
+    [mount] = [v for v in services["agent-tools"]["volumes"] if "/data/raw-evidence" in v]
+    assert mount.endswith(":/data/raw-evidence:ro")
+    assert not any("raw" in v for v in services["agent"].get("volumes", []))

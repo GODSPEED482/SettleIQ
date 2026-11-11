@@ -1,6 +1,7 @@
 """Ontology draft generation and the dispatcher queue (task 2.2, AC-ONT-03, AC-ONT-04)."""
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -16,6 +17,7 @@ from app.semantics import generation
 from app.semantics.generation import (
     DiscoveredObject,
     OntologyProposal,
+    ProposedTerm,
     UngroundedProposal,
     ground_proposal,
 )
@@ -465,3 +467,12 @@ def test_dispatcher_role_has_no_other_table_access(as_dispatcher, statement):
     with as_dispatcher.role(), pytest.raises(DBAPIError, match="permission denied"):
         with scoped_tx(uuid4()) as conn:
             conn.execute(text(statement))
+
+
+def test_the_agent_generates_under_the_same_term_id_rule():
+    """The agent repeats the term ID pattern in its structured-output schema, so the model is
+    held to it while generating; the agent cannot import this module, so compare the text."""
+    agent = (Path(__file__).parents[2] / "agent" / "settleiq_agent" / "drafting.py").read_text(
+        encoding="utf-8")
+    pattern = ProposedTerm.model_fields["id"].metadata[0].pattern
+    assert f'TERM_ID = r"{pattern}"' in agent

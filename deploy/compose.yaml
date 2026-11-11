@@ -126,6 +126,9 @@ services:
     environment:
       <<: *backend-env
       AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET:-}
+    volumes:
+      # get_case_evidence reads hash-checked raw excerpts; it never writes evidence.
+      - /data/raw-evidence:/data/raw-evidence:ro
     depends_on:
       db:
         condition: service_healthy
