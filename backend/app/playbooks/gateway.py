@@ -219,12 +219,57 @@ def _view(conn: Connection, request_id: UUID) -> dict[str, Any] | None:
     }
 
 
+def _for_viewer(ctx: TenantContext, conn: Connection, view: dict[str, Any]) -> dict[str, Any]:
+    """What only the reader's own request can say: whether they made it, so a screen can hide
+    approve and reject from the requester (POL-01 still refuses on the server), and the audit
+    records written for it and its execution."""
+    execution = view["execution"]["id"] if view["execution"] else None
+    audit = conn.execute(
+        text(
+            """
+            SELECT id, action, decision, created_at FROM audit_logs
+            WHERE detail ->> 'request_id' = :request
+               OR (CAST(:execution AS text) IS NOT NULL AND detail ->> 'execution_id' = :execution)
+            ORDER BY created_at, id
+            """
+        ),
+        {"request": view["id"], "execution": execution},
+    ).all()
+    return view | {
+        "requested_by_me": view["requested_by"] == str(ctx.principal.id),
+        "audit_refs": [{"id": str(a.id), "action": a.action, "decision": a.decision,
+                        "created_at": _iso(a.created_at)} for a in audit],
+    }
+
+
 def read(ctx: TenantContext, request_id: UUID) -> dict[str, Any]:
     with tenant_tx(ctx) as conn:
         view = _view(conn, request_id)
-    if view is None:
-        raise not_found()
-    return view
+        if view is None:
+            raise not_found()
+        return _for_viewer(ctx, conn, view)
+
+
+def list_requests(ctx: TenantContext, case_id: UUID | None,
+                  status: str | None) -> list[dict[str, Any]]:
+    """Requests newest first, leaving out any playbook the reader is denied (POL-07)."""
+    with tenant_tx(ctx) as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, pack_namespace, playbook_id FROM playbook_requests
+                WHERE (CAST(:case AS uuid) IS NULL OR case_id = :case)
+                  AND (CAST(:status AS text) IS NULL OR status = :status)
+                ORDER BY created_at DESC, id
+                LIMIT 200
+                """
+            ),
+            {"case": case_id, "status": status},
+        ).all()
+        return [
+            _for_viewer(ctx, conn, _view(conn, row.id)) for row in rows
+            if ctx.access.permits("playbook.read", Scope("playbook", _qualified(row)))
+        ]
 
 
 # Request stage

@@ -38,6 +38,15 @@ def create_playbook_request(
     return view
 
 
+@router.get("/playbook-requests")
+def list_playbook_requests(
+    case_id: UUID | None = None, status: str | None = None,
+    ctx: TenantContext = require("playbook.read"),
+) -> list[dict]:
+    """Requests newest first, each with its decisions, approval and execution."""
+    return gateway.list_requests(ctx, case_id, status)
+
+
 @router.get("/playbook-requests/{request_id}")
 def read_playbook_request(
     request_id: UUID, ctx: TenantContext = require("playbook.read")

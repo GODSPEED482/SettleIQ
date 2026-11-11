@@ -102,6 +102,31 @@ def _iso(value: Any) -> str | None:
     return value.isoformat() if value else None
 
 
+def list_for(ctx: TenantContext, case_id: UUID | None) -> list[dict[str, Any]]:
+    """Summaries, newest first, so a screen can find a case's investigations again."""
+    with tenant_tx(ctx) as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, case_id, status, proposed_classification, recommended_playbook,
+                    confidence, error, created_at, finished_at
+                FROM investigations
+                WHERE CAST(:case AS uuid) IS NULL OR case_id = :case
+                ORDER BY created_at DESC, id
+                LIMIT 200
+                """
+            ),
+            {"case": case_id},
+        ).all()
+    return [
+        {"investigation_id": str(r.id), "case_id": str(r.case_id), "status": r.status,
+         "proposed_classification": r.proposed_classification,
+         "recommended_playbook": r.recommended_playbook, "confidence": r.confidence,
+         "error": r.error, "created_at": _iso(r.created_at), "finished_at": _iso(r.finished_at)}
+        for r in rows
+    ]
+
+
 def read(ctx: TenantContext, investigation_id: UUID) -> dict[str, Any]:
     with tenant_tx(ctx) as conn:
         row = conn.execute(
