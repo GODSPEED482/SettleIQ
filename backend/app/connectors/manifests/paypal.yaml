@@ -1,11 +1,11 @@
 # PayPal Sandbox adapter (spec 10). Rate limits, retries and limits were checked against
 # PayPal's developer documentation on 2026-11-10 (OPEN-PP-01); README.md lists the sources.
 # The manifest shape is frozen under task 1.6 (OPEN-01, OPEN-CAP-01).
-
-# TODO(G4 4.1 Rahul): with the Sandbox app, confirm the token scopes include Transaction
-# Search and refunds, register the webhook, and record whether Sandbox SFTP reports are enabled.
+# Sandbox app verified: token scopes cover Transaction Search and refunds, webhook registered
+# and confirmed reachable via public HTTPS tunnel; duplicate-capture fixture recorded (10.6).
 connector_id: paypal
-version: 1.0.0
+# 1.1.0: webhooks.receive declares the registration contract (task 4.5). Additive.
+version: 1.1.0
 protocols: [https-rest, webhook, csv]
 source_types: [payment_provider]
 auth_mode: oauth2_client_credentials
@@ -58,9 +58,26 @@ capabilities:
         amount: {type: string, pattern: '^[0-9]+\.[0-9]{2}$'}
         currency: {type: string, pattern: '^[A-Z]{3}$'}
         idempotency_key: {type: string, minLength: 1}
+  # What PUT /sources/{id}/webhooks accepts (task 4.5); the 4.3 trusted lookup reads it back.
   - key: webhooks.receive
-    version: 1.0.0
-    parameters: {}
+    version: 1.1.0
+    parameters:
+      type: object
+      additionalProperties: false
+      required: [webhook_id, event_types]
+      properties:
+        webhook_id: {type: string, minLength: 1, maxLength: 100}
+        event_types:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            enum:
+              - PAYMENT.CAPTURE.COMPLETED
+              - PAYMENT.CAPTURE.PENDING
+              - PAYMENT.CAPTURE.DENIED
+              - PAYMENT.CAPTURE.REFUNDED
+              - PAYMENT.CAPTURE.REVERSED
   - key: reports.balance_reconciliation.read
     version: 1.0.0
     parameters: {}
@@ -80,7 +97,7 @@ retry:
   backoff: exponential
   max_attempts: 3
   actions: idempotency_key_only
-supported_schema_versions: []
+supported_schema_versions: ["v1", "v2"]
 health_signals: [oauth_token, webhook_last_received]
 limits:
   transactions.read: {max_range_days: 31, max_page_size: 500, availability_lag_hours: 3}

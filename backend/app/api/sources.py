@@ -5,13 +5,21 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, File, Form, UploadFile
 
 from app.authz.guard import TenantContext, require
-from app.connectors.manifest import load_capability_registry
-from app.errors import not_implemented
+from app.connectors.manifest import load_capability_registry, load_connector_manifests
 from app.sources import discovery, file_ingest, merchant_read, registry
+from app.webhooks import processor
 
 router = APIRouter(prefix="/api", tags=["sources"])
 
 SOURCE = ("source", "source_id")
+
+
+# §12.2 omits a connector list; the Sources screen (4.7) offers these when a source is
+# registered. Manifests are declarations only and hold no secret values.
+@router.get("/connectors")
+def list_connectors(ctx: TenantContext = require("connector.read")) -> list[dict]:
+    manifests = load_connector_manifests()
+    return [manifests[key].model_dump() for key in sorted(manifests)]
 
 
 @router.get("/connectors/capabilities")
@@ -55,15 +63,38 @@ async def upload_source_file(
     return file_ingest.ingest(ctx, source_id, await file.read(), file.filename or "file", kind)
 
 
+# AC-PP-10: holding the other source keys, by inheritance or otherwise, never reaches these.
 @router.put("/sources/{source_id}/credentials")
 def put_source_credentials(
-    source_id: str, ctx: TenantContext = require("source.credential.manage", scope=SOURCE)
-) -> None:
-    raise not_implemented("4.5")
+    source_id: str,
+    body: registry.CredentialBody,
+    ctx: TenantContext = require("source.credential.manage", scope=SOURCE),
+) -> dict:
+    return registry.put_credentials(ctx, source_id, body)
 
 
 @router.put("/sources/{source_id}/webhooks")
 def put_source_webhooks(
-    source_id: str, ctx: TenantContext = require("source.webhook.manage", scope=SOURCE)
-) -> None:
-    raise not_implemented("4.5")
+    source_id: str,
+    body: registry.WebhookBody,
+    ctx: TenantContext = require("source.webhook.manage", scope=SOURCE),
+) -> dict:
+    return registry.put_webhooks(ctx, source_id, body)
+
+
+# §12.2 omits these; §10.4 requires failed processing, replay and dead-letter state to be
+# exposed. The list carries status only, never payloads.
+@router.get("/sources/{source_id}/webhook-events")
+def list_webhook_events(
+    source_id: str, ctx: TenantContext = require("source.read", scope=SOURCE)
+) -> list[dict]:
+    return processor.list_inbox_rows(ctx, source_id)
+
+
+@router.post("/sources/{source_id}/webhook-events/{event_id}/replay")
+def replay_webhook_event(
+    source_id: str,
+    event_id: str,
+    ctx: TenantContext = require("source.webhook.manage", scope=SOURCE),
+) -> dict:
+    return processor.replay_webhook(ctx, source_id, event_id)

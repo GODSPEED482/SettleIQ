@@ -6,7 +6,7 @@ SettleIQ is a multi-tenant, ontology-driven business operations platform; Financ
 
 ## Source documents
 
-- `SettleIQ_Authoritative_Specification_v1.6.md` is the sole normative reference. It is 1,591 lines, so grep for the ID you need (`POL-09`, `AC-MERCH-05`, `§9.3`). Requirement changes need a new integrated revision (§22.2), not a sidecar note.
+- `SettleIQ_Authoritative_Specification_v1.7.md` is the sole normative reference. It is 1,615 lines, so grep for the ID you need (`POL-09`, `AC-MERCH-05`, `§9.3`). Requirement changes need a new integrated revision (§22.2), not a sidecar note.
 - `.claude/SettleIQ_3-Day_Delivery_Plan.md` is the delivery plan. It scopes a 3-day vertical slice, not the MVP. Task numbers such as `1.9` in code and stubs refer to it.
 - `.claude/SettleIQ_Tech_Stack.md` is the earlier stack and tooling proposal. Its Node/TypeScript backend is superseded; see below.
 
@@ -72,7 +72,7 @@ Whole stack: `cp .env.example .env`, then `docker compose up --build`. Add `--pr
 
 **Startup validation.** `app/bootstrap.py:finish_app` runs for every app and refuses to start on an undeclared route, unknown permission key, invalid manifest or prohibited agent tool. FastAPI wraps included routers, so `_api_routes` walks `original_router`. Unknown route types fail startup on purpose, and include-level prefixes are refused because they would falsify the route map: put prefixes on the `APIRouter`.
 
-**Three ASGI apps.** `app/main.py` is public. `app/worker_api.py` holds the private Worker route and `app/agent_tools_api.py` the private `/internal/agent-tools` routes; each runs as its own process with no published port. Never mount internal routes on the public app, and never put agent tools on the Worker app.
+**Three ASGI apps.** `app/main.py` is public. `app/worker_api.py` holds the private Worker route and `app/agent_tools_api.py` the private `/internal/agent-tools` routes; each runs as its own process with no published port. Never mount internal routes on the public app, and never put agent tools on the Worker app. `python -m app.webhooks.run` (compose service `webhooks`, no port) drains the webhook inbox: the public webhook route only verifies and stores, and the processor records the event and starts each active pack's run as the tenant's Worker principal.
 
 **Agent service (§8).** `agent/` is a separate package with no backend code, database driver or database credentials. `POST /api/agent/investigate/{case_id}` writes a `RUNNING` row and a job in one transaction and returns 202. `app/investigation/dispatcher.py` claims the job with `FOR UPDATE SKIP LOCKED`, mints a token (`tokens.py`), calls the agent's `/run` and validates the output (`response.py`) before the single terminal write. The agent reads only through the tool API, whose routes are generated from the server-side registry. Tokens carry identity only, so POL-08 is resolved on every tool call. `test_investigation.py` and `test_code_rules.py` enforce this boundary.
 
@@ -84,7 +84,7 @@ The queue (`agent_jobs`) and the `settleiq_dispatcher` role, whose only cross-te
 
 **Core versus packs.** `app/` is domain-neutral and reads `packs/*/manifest.yaml` as data; it must never import `packs`. Finance logic, including `Money`, belongs in `packs/finops`. Connector capability keys are canonical in `app/connectors/capability_registry.yaml`, and manifests declare unsupported capabilities explicitly.
 
-**Test gotchas.** `test_route_guard.py` generates its tables from the route map, so new routes are covered automatically. `test_held_permission_passes_the_gate` accepts only 200 or 501 and uses a fake gateway, so implementing a handler that touches the database will need that test adjusted. `test_catalogue_matches_appendix_a_exactly` fails on any new core key by design.
+**Test gotchas.** `test_route_guard.py` generates its tables from the route map, so new routes are covered automatically. `test_held_permission_passes_the_gate` accepts only 200 or 501 and uses a fake gateway, so implementing a handler that touches the database will need that test adjusted. `test_catalogue_matches_appendix_a_exactly` fails on any new core key by design. A new UUID path parameter must be added to `url()` in `test_route_guard.py`, or the held-permission test sees a 404. Webhook tests sign deliveries with the `paypal_signer` fixture (`tests/paypal_signing.py`) and register webhooks through `PUT /webhooks` as an Integration Admin; the verifier has no test bypass. The webhook queue is shared across tenants, so assert only on your own rows, and stop the compose `webhooks` service before running `db` tests against its database, or it claims the tests' rows.
 
 ## Commits and PRs
 
@@ -106,12 +106,12 @@ These bind code not yet written. The spec sections hold the detail.
 
 ## In-code TODOs
 
-Gates 1 and 2 are closed: every `TODO(G1 ...)` and `TODO(G2 ...)` marker has been removed and their checklist items are ticked. Later gates mark work where it happens, as `TODO(G<n> <task> <owner>): ...`. `<task>` is a plan task number (`2.7`), an OPEN item (`OPEN-10`) or `exit`; `<owner>` is the first name from the checklist below. "Owner review" TODOs mark starter code that its owner has yet to review.
+Gates 1, 2 and 3 are closed: every `TODO(G1 ...)`, `TODO(G2 ...)` and `TODO(G3 ...)` marker has been removed and their checklist items are ticked. Later gates mark work where it happens, as `TODO(G<n> <task> <owner>): ...`. `<task>` is a plan task number (`2.7`), an OPEN item (`OPEN-10`) or `exit`; `<owner>` is the first name from the checklist below. "Owner review" TODOs mark starter code that its owner has yet to review.
 
 ```
-git grep "TODO(G3 "              # all of Gate 3
-git grep "TODO(G3 .* Rahul)"     # one person
-git grep "TODO(G3 3.6 "          # one task
+git grep "TODO(G4 "              # all of Gate 4
+git grep "TODO(G4 .* Rahul)"     # one person
+git grep "TODO(G4 4.3 "          # one task
 ```
 
 Delete a TODO in the same change that completes it. The checklist below stays the record of what is done. Keep permission-set names out of frontend TODOs: the role-name ban matches quoted names in comments too.
@@ -133,7 +133,9 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.5 Invitation backend: hashed single-use tokens, matching-email acceptance (1.5h). `tests/test_invitations.py` covers AC-IAM-02 to 06, 08, 09, 10, AC-OWNER-02, AC-AUTHZ-05, 09, 18.
 - [x] 2.7 Atomic immutable publication; stale or concurrent attempts fail closed; audit (2h). Evidence in `test_publication.py` and `test_mappings.py`.
 - [x] 3.7 RLS and foreign keys on domain tables, `NUMERIC(20,6)`, cross-tenant negative tests (2h). Migration 0011; evidence in `test_rls.py` (domain section), traced under AC-TEN-02.
-- [ ] 4.5 Secret references; credential and webhook routes limited to Integration Admin (2h)
+- [x] 4.5 Secret references; credential and webhook routes limited to Integration Admin (2h). `env:` and `managed:` references (the second rendered from SSM by `deploy/deploy.sh`); evidence in `test_source_credentials.py` (AC-PP-10 both sides) and `test_secrets.py`.
+- [ ] 4.5 follow-up: tenant-namespaced secret references (spec v1.7 §11.3, AC-PP-13). Built 2026-11-11, awaiting Rishav's review: `managed:<NAME>` resolves under `<SOURCE_SECRET_DIR>/<tenant_id>/`, rendered from SSM `/source/<tenant_id>/<NAME>`, and production refuses `env:`. Evidence in `test_secrets.py` and `test_source_credentials.py` (`test_a_reference_names_a_secret_in_its_own_tenant_only`). Any SSM parameter still at the flat `/source/<NAME>` path must move under its tenant before the next deploy.
+- [ ] Write-only PayPal credential intake for tenants beyond the demo (spec v1.7 §11.3, AC-PP-14). Not in this slice; blocked on OPEN-PP-03 (how the API writes to the secret manager).
 - [ ] 5.1 Request, decision, approval, execution, grant and attempt tables with the full FK chain (2h)
 - [ ] 5.2 Two-stage policy gateway, POL-01, single-use grant issuance (2h)
 - [ ] 5.3 Exact-scope execution mode, SHADOW by default (1h)
@@ -146,18 +148,18 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 ### Rahul Pandey: Integrations and Execution (leads G4; demo Integration Admin)
 
 - [x] OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 (Day 1, first hours). Recorded in `README.md`, with evidence in `test_contracts.py` and `test_sources.py`. The Sandbox account checks for OPEN-PP-01 continue under G4 task 4.1.
-- [ ] 4.1 **First task on Day 1:** Sandbox app, public HTTPS tunnel, verify provider access (1.5h)
+- [x] 4.1 **First task on Day 1:** Sandbox app, public HTTPS tunnel, verify provider access (1.5h). Evidence in `scripts/verify_paypal_sandbox.py` and `README.md` (OPEN-PP-01).
 - [x] 1.6 Freeze connector manifest, capability keys and source envelope (1h). Evidence in `test_contracts.py`.
 - [x] 1.7 Source registry, `source_records`, raw evidence store with hashing (3h). Evidence in `test_sources.py`.
 - [x] 2.5 PostgreSQL schema discovery and profiling (2h). Evidence in `test_discovery.py`, `test_profiling.py` and `test_secrets.py`; the merchant read source uses `env:SOURCE_SECRET_*` references until 4.5.
 - [x] 2.6 CSV metadata discovery (1h). Evidence in `test_discovery.py`; discovery reads the hash-checked raw-evidence copy, and the upload route stays with 3.6.
 - [x] 3.5 Merchant PostgreSQL read and normalization (1h). Evidence in `test_sync.py`; reads discovered tables only, preserves every column and decimal precision, and never writes to the merchant.
 - [x] 3.6 Bank CSV and BRR parser on the shared pipeline, with provenance mode (2h). Evidence in `test_ingestion.py`; provider reports, SYNTHETIC fixtures and tenant files share one path, with provenance on the raw evidence.
-- [ ] 4.2 OAuth, capture details, Transaction Search backfill, adapter manifest (2h). Starter: manifest draft exists.
-- [ ] 4.3 Webhook route: signature check, trusted source lookup, tenant derivation, inbox, dedupe (3h)
-- [ ] 4.4 Async processing, retry, replay and dead-letter state (1.5h)
-- [ ] 4.9 Sandbox duplicate-capture setup: two successful capture IDs for one intended order (0.5h)
-- [ ] 4.10 PayPal `refunds.create` and `refunds.read` adapter: versioned parameter contract, exact capture target, provider idempotency key, Sandbox only (2.5h). Starter: capability keys declared in the manifest draft.
+- [x] 4.2 OAuth, capture details, Transaction Search backfill, adapter manifest (2h). Evidence in `test_paypal_g4.py` (AC-PP-01, AC-PP-02).
+- [x] 4.3 Webhook route: signature check, trusted source lookup, tenant derivation, inbox, dedupe (3h). Evidence in `test_paypal_g4.py` (AC-WEBHOOK-01, AC-PP-03, AC-PP-04).
+- [x] 4.4 Async processing, retry, replay and dead-letter state (1.5h). Evidence in `test_paypal_g4.py` (AC-PP-05, AC-PP-06).
+- [x] 4.9 Sandbox duplicate-capture setup: two successful capture IDs for one intended order (0.5h). Evidence in `test_paypal_g4.py` (AC-PLY-02).
+- [x] 4.10 PayPal `refunds.create` and `refunds.read` adapter: versioned parameter contract, exact capture target, provider idempotency key, Sandbox only (2.5h). Evidence in `test_paypal_g4.py` (AC-PP-12).
 - [ ] 5.5 Internal-merchant adapter: conditional update, idempotency, restricted DB role (2.5h). Starter: manifest draft exists.
 - [ ] 5.6 Worker: atomic grant consumption, durable attempts, independent readback (2.5h)
 - [ ] 5.15 Worker refund execution: grant-bound, durable attempts, no blind retry on an ambiguous outcome, verified completion by readback (1.5h)
@@ -180,7 +182,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 3.3 Finance engine: both reconciliation scopes, settlement calculation, decimal-safe money (2h). `packs/finops/engine.py` over the OPEN-10 calculation; evidence in `test_reconciliation.py` and `test_settlement.py`, which also cover the G3 exit criteria.
 - [x] 3.4 Version-pinned `domain_runs`, case lifecycle (1h). Adds `GET /api/domain-runs` and `GET /api/entity-resolution` for 3.9; evidence in `test_domain_runs.py` and `test_case_lifecycle.py`.
 - [x] 3.10 `DUPLICATE_CAPTURE` detection and fixture: two distinct successful captures for one intended order; equal amounts alone never qualify (1.5h). Fixture `seed_reconciliation` in `tests/domain_fixture.py`; evidence in `test_reconciliation.py`.
-- [ ] 4.6 PayPal field mappings and capture-completion authority (1h)
+- [x] 4.6 PayPal field mappings and capture-completion authority (1h). Typed `mapping_hints` in `packs/finops/manifest.yaml`, applied with `hint_bodies`; event records match mappings by event type. Evidence in `test_paypal_mappings.py` (AC-PP-06 from a `PAYMENT.CAPTURE.COMPLETED` event), `test_contracts.py` and `test_domain_projection.py`.
 - [ ] 5.7 AI orchestrator: 6 tools, POL-08 permission intersection, durable tool trace (3h). Starter: tool registry declared; agent service, dispatcher, tokens and tool API stubbed; migration not started.
 - [ ] 5.8 Agent response schema and prohibited-tool registry check (1h). Starter: prohibited-tool check built; draft response schema, evidence check stubbed.
 - [ ] 5.9 PB-001 definition and the request-lifecycle state machine (1h)
@@ -200,8 +202,8 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 2.10 Publish confirmation showing candidate hash and validation run (1h). Evidence in `publish.test.tsx`; draft reads carry the candidate hash (`test_mappings.py`).
 - [x] 3.8 SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum (1h). `packs/finops/fixtures/`, listed in the finops manifest; evidence in `test_brr_fixture.py` (checksum, parser, balances, OPEN-10 treatment per row, upload as `synthetic_reference`).
 - [x] 3.9 Domain Operations screens: cases, observations, resolved values (2h). Runs with pinned versions, cases with triage and reopen, entities with observations and resolved values, identity review; case and observation reads now carry evidence provenance for the SYNTHETIC/REFERENCE label. Evidence in `operations.test.tsx`, `test_domain_observations.py`, `test_reconciliation.py` and `test_case_lifecycle.py`.
-- [ ] 4.7 Source Management screens, including credential status and SYNTHETIC label (1.5h)
-- [ ] 4.8 Failure tests: invalid signature, duplicate and out-of-order events (0.5h)
+- [x] 4.7 Source Management screens, including credential status and SYNTHETIC label (1.5h). Connectors with supported and unsupported capabilities, registration without credentials, credential status (never the reference), scoped actions, webhook registration, SYNTHETIC/REFERENCE upload labels, and each webhook source's inbox with replay (`GET /api/sources/{id}/webhook-events`, `POST .../replay`). Evidence in `sources.test.tsx`, `test_webhook_inbox.py` and `test_sources.py`.
+- [x] 4.8 Failure tests: invalid signature, duplicate and out-of-order events (0.5h). Evidence in `test_webhook_failures.py`: nine forgeries, unknown, unregistered and cross-tenant sources, redelivery before and after processing, arrival-order independence, a late merchant row, and retry with backoff to dead letter. Deliveries are signed with PayPal's algorithm (`tests/paypal_signing.py`); the test-only signature bypass is gone.
 - [ ] 5.10 Investigation screens (1.5h)
 - [ ] 5.11 Playbook Requests screens (1.5h)
 - [ ] 5.12 Safety suite: AC-MERCH-01..07, AC-AUTHZ-06/08/15/16/17, AC-PLY-08..11 (2h)

@@ -31,3 +31,11 @@ def pytest_collection_modifyitems(config, items):
     skip = pytest.mark.skip(reason="no migrated PostgreSQL reachable at DATABASE_URL")
     for item in db_items:
         item.add_marker(skip)
+
+
+@pytest.fixture
+def paypal_signer(monkeypatch):
+    """Signs webhook deliveries with PayPal's algorithm; see tests/paypal_signing.py."""
+    from tests.paypal_signing import install
+
+    return install(monkeypatch)

@@ -19,6 +19,7 @@ dependencies = [
     "rfc8785>=0.1.4",
     "sqlalchemy>=2.0.35",
     "uvicorn[standard]>=0.30",
+    "cryptography>=50.0.2",
 ]
 
 [dependency-groups]

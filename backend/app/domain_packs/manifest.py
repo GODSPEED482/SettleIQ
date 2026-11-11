@@ -1,18 +1,19 @@
 """Domain-pack manifest schema. Core reads manifests as data and never imports a pack."""
 
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
 
 import yaml
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import Version
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.connectors.manifest import SEMVER, load_capability_registry
+from app.connectors.manifest import SEMVER, load_capability_registry, load_connector_manifests
 
 PACKS_DIR = Path(__file__).parents[2] / "packs"
 RESERVED_NAMESPACES = {"core", "platform"}
 PLATFORM_VERSION = "0.1.0"
+TERM = r"^[a-z][a-z0-9_]*:[A-Za-z][A-Za-z0-9_]*$"
 ENTRYPOINT = r"^[a-z_]\w*(\.[a-z_]\w*)*:[A-Za-z_]\w*$"
 # Each segment must start with a word character, which excludes "..", and "/" cannot lead.
 RELATIVE_PATH = r"^[\w-][\w.-]*(/[\w-][\w.-]*)*$"
@@ -66,6 +67,46 @@ class PlaybookTemplate(_Strict):
     capability_dependencies: list[str] = []
 
 
+class HintField(_Strict):
+    """One field of a binding hint, in the shape a mapping takes (app/semantics/mappings.py)."""
+
+    field_path: str = Field(min_length=1, max_length=500)
+    property_iri: str = Field(pattern=TERM)
+    datatype: Literal["decimal", "string", "datetime", "boolean", "integer"]
+    transform: dict[str, Any]
+    value_basis: str = Field(min_length=1, max_length=100)
+    temporal_context: str = Field(min_length=1, max_length=100)
+    currency_field: str | None = None
+    unit: str | None = None
+    nullable: bool = True
+    is_unique: bool = False
+
+
+class BindingHint(_Strict):
+    """Bindings a pack proposes for one connector object. A tenant applies them to a draft for
+    its own source, then validates and publishes them like any mapping, so a hint names neither."""
+
+    kind: Literal["binding"]
+    connector_id: str
+    external_object: str = Field(min_length=1, max_length=300)
+    class_iri: str = Field(pattern=TERM)
+    sync_strategy: Literal["batch", "event", "file"]
+    fields: list[HintField] = Field(min_length=1)
+
+
+class AuthorityHint(_Strict):
+    """The connector a pack proposes as authoritative for one property of one entity type."""
+
+    kind: Literal["authority"]
+    connector_id: str
+    property_iri: str = Field(pattern=TERM)
+    entity_type_iri: str = Field(pattern=TERM)
+    verification_method: str = Field(min_length=1, max_length=200)
+
+
+MappingHint = Annotated[BindingHint | AuthorityHint, Field(discriminator="kind")]
+
+
 class DomainPackManifest(_Strict):
     namespace: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     # The directory under packs/. It can differ from the namespace.
@@ -76,7 +117,7 @@ class DomainPackManifest(_Strict):
     conflicts: list[str]
     ontology_definitions: list[PackFile]
     shacl_shapes: list[PackFile]
-    mapping_hints: list[dict[str, Any]]
+    mapping_hints: list[MappingHint]
     validators: list[PackEntrypoint]
     entity_resolution_policies: list[PackEntrypoint]
     domain_engine: PackEntrypoint | None
@@ -122,6 +163,12 @@ class DomainPackManifest(_Strict):
                 if key not in registry or registry[key].kind != "read":
                     raise ValueError(f"{template.id}: not a canonical read capability: {key}")
 
+    def _check_hints(self) -> None:
+        connectors = load_connector_manifests()
+        for hint in self.mapping_hints:
+            if hint.connector_id not in connectors:
+                raise ValueError(f"mapping hint names an unknown connector: {hint.connector_id}")
+
     @model_validator(mode="after")
     def _check(self) -> "DomainPackManifest":
         if self.namespace in RESERVED_NAMESPACES:
@@ -132,6 +179,7 @@ class DomainPackManifest(_Strict):
         self._check_entrypoints()
         self._check_versions()
         self._check_capabilities()
+        self._check_hints()
         return self
 
     def supports_platform(self, version: str = PLATFORM_VERSION) -> bool:

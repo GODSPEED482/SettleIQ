@@ -911,6 +911,32 @@
         }
       }
     },
+    "/api/connectors": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "List Connectors",
+        "operationId": "list_connectors_api_connectors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Connectors Api Connectors Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/connectors/capabilities": {
       "get": {
         "tags": [
@@ -1164,12 +1190,26 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialBody"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Put Source Credentials Api Sources  Source Id  Credentials Put"
+                }
               }
             }
           },
@@ -1204,12 +1244,126 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookBody"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Put Source Webhooks Api Sources  Source Id  Webhooks Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sources/{source_id}/webhook-events": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "List Webhook Events",
+        "operationId": "list_webhook_events_api_sources__source_id__webhook_events_get",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response List Webhook Events Api Sources  Source Id  Webhook Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sources/{source_id}/webhook-events/{event_id}/replay": {
+      "post": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "Replay Webhook Event",
+        "operationId": "replay_webhook_event_api_sources__source_id__webhook_events__event_id__replay_post",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Id"
+            }
+          },
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Replay Webhook Event Api Sources  Source Id  Webhook Events  Event Id  Replay Post"
+                }
               }
             }
           },
@@ -3031,6 +3185,23 @@
         ],
         "title": "CreateTenantBody"
       },
+      "CredentialBody": {
+        "properties": {
+          "secret_reference": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Secret Reference"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "secret_reference"
+        ],
+        "title": "CredentialBody",
+        "description": "A reference only. There is deliberately no field that could carry a value (spec 11.3)."
+      },
       "EditDraftBody": {
         "properties": {
           "expected_revision": {
@@ -3670,6 +3841,31 @@
           "token"
         ],
         "title": "VerifyEmailBody"
+      },
+      "WebhookBody": {
+        "properties": {
+          "webhook_id": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Webhook Id"
+          },
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Event Types"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "webhook_id",
+          "event_types"
+        ],
+        "title": "WebhookBody"
       }
     }
   }

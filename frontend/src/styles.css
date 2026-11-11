@@ -282,8 +282,14 @@ th {
   border-radius: 4px;
 }
 
+/* StatusBadge shares the sidebar footer's .status class; keep the badge inline. */
+span.status {
+  display: inline-block;
+}
+
 .status-resolved,
 .status-succeeded,
+.status-processed,
 .status-closed {
   color: #2e7d4f;
 }
@@ -292,6 +298,7 @@ th {
 .status-authority_conflict,
 .status-unresolved,
 .status-failed,
+.status-dead_letter,
 .status-open {
   color: #b42318;
   border-color: currentColor;
@@ -521,4 +528,66 @@ textarea {
 
 code.hash {
   overflow-wrap: anywhere;
+}
+
+.source-card {
+  padding: 12px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.source-card:last-child {
+  border-bottom: none;
+}
+
+.source-card h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.source-card h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.event-types {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.source-card .notice p {
+  margin: 0 0 4px;
+}
+
+.webhook-events {
+  margin-top: 12px;
+}
+
+.webhook-events .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
 }

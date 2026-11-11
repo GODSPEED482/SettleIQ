@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, text
 
 from app.audit import write_audit
+from app.authz.access import PrincipalKind
 from app.authz.guard import TenantContext
 from app.db import tenant_tx
 from app.domain import findings, projection, views
@@ -58,11 +59,12 @@ _INSERT_RUN = text(
     INSERT INTO domain_runs (id, tenant_id, pack_namespace, pack_version, ontology_id,
         ontology_version, ontology_content_hash, mapping_versions, authority_versions,
         policy_versions, rule_version, source_snapshots, inputs_hash, status, failure,
-        requested_by, started_at, finished_at)
+        requested_by, requested_by_service, started_at, finished_at)
     VALUES (:id, :tenant, :pack_namespace, :pack_version, :ontology_id, :ontology_version,
         :ontology_content_hash, CAST(:mapping_versions AS jsonb),
         CAST(:authority_versions AS jsonb), CAST(:policy_versions AS jsonb), :rule_version,
-        CAST(:source_snapshots AS jsonb), :inputs_hash, :status, :failure, :user, :started_at,
+        CAST(:source_snapshots AS jsonb), :inputs_hash, :status, :failure, :user, :service,
+        :started_at,
         CASE WHEN :status = 'RUNNING' THEN NULL ELSE now() END)
     """
 )
@@ -71,6 +73,7 @@ _INSERT_RUN = text(
 def _insert_run(conn: Connection, ctx: TenantContext, run_id: UUID, inputs: RunInputs,
                 status: str, failure: str | None = None) -> dict[str, Any]:
     pins = inputs.pins()
+    human = ctx.principal.kind is PrincipalKind.HUMAN
     conn.execute(
         _INSERT_RUN,
         {
@@ -80,7 +83,9 @@ def _insert_run(conn: Connection, ctx: TenantContext, run_id: UUID, inputs: RunI
             "inputs_hash": content_hash(pins),
             "status": status,
             "failure": failure,
-            "user": ctx.principal.id,
+            # A human or a service principal of this tenant (migration 0013).
+            "user": ctx.principal.id if human else None,
+            "service": None if human else ctx.principal.id,
             "started_at": inputs.as_of,
         },
     )
@@ -145,7 +150,8 @@ def start_run(ctx: TenantContext, body: RunBody) -> dict[str, Any]:
 _RUN_COLUMNS = """
     id, pack_namespace, pack_version, ontology_id, ontology_version, ontology_content_hash,
     mapping_versions, authority_versions, policy_versions, rule_version, source_snapshots,
-    inputs_hash, status, findings, failure, requested_by, started_at, finished_at
+    inputs_hash, status, findings, failure,
+    COALESCE(requested_by, requested_by_service) AS requested_by, started_at, finished_at
 """
 
 

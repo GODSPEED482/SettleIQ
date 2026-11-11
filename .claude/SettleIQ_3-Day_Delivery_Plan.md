@@ -2,9 +2,9 @@
 
 ## Context
 
-SettleIQ spec v1.6 is a pre-development baseline written for a ten-day MVP. The workspace holds only the spec: no code, no repo. This plan analyzes the SDLC, splits it into the spec's six gates (G1-G6), breaks each gate into tasks, and assigns those tasks so that **all four people work in every gate**, within **3 days / 12 person-days (96 hours)**.
+SettleIQ spec v1.7 is a pre-development baseline written for a ten-day MVP. The workspace holds only the spec: no code, no repo. This plan analyzes the SDLC, splits it into the spec's six gates (G1-G6), breaks each gate into tasks, and assigns those tasks so that **all four people work in every gate**, within **3 days / 12 person-days (96 hours)**.
 
-**The main constraint.** My rough sizing of the full P0 scope is about 47 person-days, so 12 covers roughly a quarter of it. Spec §23 says the MVP is demonstrable only when all 29 Definition of Done items are true, so this build should be called a **3-day vertical slice, not the MVP**. No requirement changes, so no new spec revision is needed under §22.2. Anything not built stays `NOT STARTED` under §22.3.
+**The main constraint.** My rough sizing of the full P0 scope is about 47 person-days, so 12 covers roughly a quarter of it. Spec §23 says the MVP is demonstrable only when all 29 Definition of Done items are true, so this build should be called a **3-day vertical slice, not the MVP**. The plan itself changes no requirements. Spec v1.7 (2026-11-11) records approach A for PayPal: each tenant connects its own PayPal app, secret references are tenant-namespaced, and partner onboarding is deferred (OPEN-PP-02). Anything not built stays `NOT STARTED` under §22.3.
 
 **Assumption.** I have no data on individual strengths, so the four tracks below are placeholders. Swapping names between tracks changes nothing else in the plan.
 
@@ -38,6 +38,8 @@ SettleIQ spec v1.6 is a pre-development baseline written for a ten-day MVP. The 
 - The remaining discrepancy fixtures (AC-REC-09)
 - Provider-generated BRR retrieval
 - Redis and pgvector (a PostgreSQL job table replaces Redis, which §6.2 allows)
+- Write-only credential intake (AC-PP-14), so only the demo tenant connects PayPal, with credentials the operator stores in SSM under its tenant ID. Its write path is OPEN-PP-03
+- PayPal partner onboarding (OPEN-PP-02)
 
 **Fallback rule (Day 3, hour 7).** If the safety suite is not fully green, CI issues no attestation and the demo stops at step 10 in SHADOW, as §16.7 permits. Nobody bypasses the gate to save the demo.
 
@@ -139,14 +141,14 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 | 4.2 | OAuth, capture details, Transaction Search backfill, adapter manifest | Rahul | 2 |
 | 4.3 | Webhook route: signature check, trusted source lookup, tenant derivation, inbox, dedupe | Rahul | 3 |
 | 4.4 | Async processing, retry, replay and dead-letter state | Rahul | 1.5 |
-| 4.5 | Secret references; credential and webhook routes limited to Integration Admin | Rishav | 2 |
+| 4.5 | Secret references, namespaced per tenant (spec v1.7 §11.3, AC-PP-13); credential and webhook routes limited to Integration Admin | Rishav | 2 |
 | 4.6 | PayPal field mappings and capture-completion authority | Swapnaneel | 1 |
 | 4.7 | Source Management screens, including credential status and SYNTHETIC label | Suprava | 1.5 |
 | 4.8 | Failure tests: invalid signature, duplicate and out-of-order events | Suprava | 0.5 |
 | 4.9 | Sandbox duplicate-capture setup: two successful capture IDs for one intended order (§10.6, demo step 14) | Rahul | 0.5 |
 | 4.10 | PayPal `refunds.create` and `refunds.read` adapter: versioned parameter contract, exact capture target, provider idempotency key, Sandbox only | Rahul | 2.5 |
 
-**Exit:** AC-WEBHOOK-01 and AC-PP-03/04/05/06/10 pass, using a real Sandbox `PAYMENT.CAPTURE.COMPLETED` event.
+**Exit:** AC-WEBHOOK-01 and AC-PP-03/04/05/06/10/13 pass, using a real Sandbox `PAYMENT.CAPTURE.COMPLETED` event.
 
 ### G5: Safe investigation and action (lead: Rishav, 28h)
 
@@ -192,7 +194,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 | Owner | Items | By |
 |---|---|---|
-| Rishav | OPEN-21-19 (no permission cache in this build). OPEN-REL-01 is closed by spec v1.6 §9.7. | G1, Day 1 |
+| Rishav | OPEN-21-19 (no permission cache in this build). OPEN-REL-01 is closed by spec v1.6 §9.7. OPEN-PP-03 (secret-manager write path for credential intake) stays open past this slice. | G1, Day 1 |
 | Rahul | OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 | Day 1, first hours |
 | Swapnaneel | OPEN-03, OPEN-10 (included-in-net semantics for the fixture) | OPEN-03 Day 1; OPEN-10 before 3.3 |
 | Suprava | OPEN-14 (API conventions, auth transport, error envelope) | Day 1, first hours |

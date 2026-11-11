@@ -10,6 +10,7 @@ import { VerifyEmail } from "./pages/auth/VerifyEmail";
 import { CreateTenant } from "./pages/CreateTenant";
 import { OntologyStudio } from "./pages/OntologyStudio";
 import { DomainOperations } from "./pages/operations/DomainOperations";
+import { SourceManagement } from "./pages/sources/SourceManagement";
 import { TeamManagement } from "./pages/team/TeamManagement";
 import { WORKSPACES } from "./pages/workspaces";
 import { Workspace } from "./pages/Workspace";
@@ -106,6 +107,8 @@ function Shell() {
                     <OntologyStudio workspace={workspace} />
                   ) : workspace.path === "/operations" ? (
                     <DomainOperations />
+                  ) : workspace.path === "/sources" ? (
+                    <SourceManagement />
                   ) : (
                     <Workspace workspace={workspace} />
                   )}

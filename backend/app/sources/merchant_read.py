@@ -22,7 +22,7 @@ from app.audit import write_audit
 from app.authz.guard import TenantContext
 from app.connectors.manifest import load_connector_manifests
 from app.db import tenant_tx
-from app.errors import conflict, not_found, not_implemented
+from app.errors import conflict, not_found
 from app.sources import evidence, records
 from app.sources.conventions import database_record_type
 from app.sources.envelope import SourceRecordEnvelope
@@ -59,9 +59,8 @@ def _load_source(conn: Connection, source_id: UUID) -> Any:
     ).first()
     if row is None:
         raise not_found()
-    if row.connector_id != "merchant-postgres":
-        # PayPal and the other adapters get their batch read with task 4.2.
-        raise not_implemented("4.2")
+    if row.connector_id not in ("merchant-postgres", "paypal"):
+        raise conflict("SYNC_UNSUPPORTED", "This connector does not support record reads.")
     manifest = load_connector_manifests().get(row.connector_id)
     if manifest is None or not manifest.supports_batch_extraction:
         raise conflict("SYNC_UNSUPPORTED", "This connector does not support record reads.")
@@ -228,8 +227,11 @@ def sync(ctx: TenantContext, source_id: str) -> dict[str, Any]:
         raise not_found() from None
     with tenant_tx(ctx) as conn:
         source = _load_source(conn, source_uuid)
+        if source.connector_id == "paypal":
+            from app.connectors.paypal.sync import sync_paypal
+            return sync_paypal(ctx, source)
         tables = _tables(conn, source_uuid, source.config or {})
-    secret = resolve_secret(source.secret_reference)
+    secret = resolve_secret(ctx.tenant_id, source.secret_reference)
     reads = _read(secret, tables)
     with tenant_tx(ctx) as conn:
         source = _load_source(conn, source_uuid)

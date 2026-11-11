@@ -54,6 +54,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       SOURCE_SECRET_MERCHANT_DB: ${SOURCE_SECRET_MERCHANT_DB:-}
+      SOURCE_SECRET_PAYPAL_SANDBOX: ${SOURCE_SECRET_PAYPAL_SANDBOX:-}
     volumes:
       - ./backend/app:/srv/app/app
       - ./backend/packs:/srv/app/packs
@@ -68,6 +69,18 @@ services:
   worker:
     build: ./backend
     command: uvicorn app.worker_api:app --host 0.0.0.0 --port 8001
+    environment: *backend-env
+    volumes:
+      - raw_evidence:/data/raw-evidence
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [backend]
+
+  # Drains the webhook inbox apart from receipt (task 4.4). No port.
+  webhooks:
+    build: ./backend
+    command: python -m app.webhooks.run
     environment: *backend-env
     volumes:
       - raw_evidence:/data/raw-evidence

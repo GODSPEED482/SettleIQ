@@ -255,6 +255,26 @@ def test_a_table_row_answers_only_to_its_table():
     assert object_keys(record("payments", "merchant:table/public.payments")) == ["payments"]
 
 
+COMPLETED = record("events", "paypal:event/PAYMENT.CAPTURE.COMPLETED")
+
+
+def test_an_event_answers_to_its_event_type_before_its_stream():
+    assert object_keys(COMPLETED) == ["PAYMENT.CAPTURE.COMPLETED", "events"]
+
+
+@pytest.mark.parametrize(
+    ("available", "chosen"),
+    [
+        (["events", "PAYMENT.CAPTURE.COMPLETED"], "PAYMENT.CAPTURE.COMPLETED"),
+        (["events", "PAYMENT.CAPTURE.REFUNDED"], "events"),
+        (["PAYMENT.CAPTURE.REFUNDED"], None),
+    ],
+)
+def test_an_event_type_mapping_wins_over_the_stream(available, chosen):
+    found = [m["external_object"] for m in inputs(*available).mappings_for(COMPLETED)]
+    assert found == ([chosen] if chosen else [])
+
+
 @pytest.mark.parametrize(
     ("available", "chosen"),
     [

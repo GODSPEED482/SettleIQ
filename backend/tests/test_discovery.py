@@ -13,6 +13,7 @@ from app.db import scoped_tx
 from app.semantics import generation
 from app.sources import evidence
 from app.sources.evidence import RetrievalContext
+from tests.support import grant_set
 from tests.test_semantics_store import Member
 from tests.test_sources import create_ok
 
@@ -62,6 +63,8 @@ def merchant_schema(monkeypatch):
 
 
 def merchant_source(member: Member, schema: str, **overrides) -> dict:
+    # A reference at registration is a credential operation (AC-PP-10).
+    grant_set(member.tenant, member.principal.id, "integration_admin")
     return create_ok(
         member,
         connector_id="merchant-postgres",
