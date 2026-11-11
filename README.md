@@ -137,11 +137,19 @@ Verified with Sandbox app (task 4.1): client-credentials token scopes confirmed 
 `backend/tests/test_g4_exit.py` proves AC-WEBHOOK-01 and AC-PP-03/04/05/06/10 with a Sandbox-shaped `PAYMENT.CAPTURE.COMPLETED` signed by PayPal's algorithm, through the public route, the processor and the run it triggers. What only a live delivery adds is PayPal's own certificate and transport. To check that, with the stack up (`docker compose up --build`, which now includes the `webhooks` processor):
 
 1. Expose the API: `cloudflared tunnel --url http://localhost:8000` (or ngrok), giving `https://<tunnel>`.
-2. In SettleIQ, as Integration Admin, register a PayPal source and store its credential reference: `env:SOURCE_SECRET_PAYPAL_SANDBOX` locally, or `managed:<NAME>` with the value at `/settleiq/prod/source/<tenant_id>/<NAME>` in production. Have the merchant database hold a `pending` payment whose order reference is, say, `ORD-LIVE-1`, synced into the tenant.
+2. In SettleIQ, as Integration Admin, register a PayPal source and connect the Sandbox app on its card (**Connect your PayPal app**, the write-only intake). A `managed:` or, locally, `env:SOURCE_SECRET_PAYPAL_SANDBOX` reference also works.
 3. Register PayPal's side and note the returned webhook ID: `python scripts/verify_paypal_sandbox.py --tunnel-url https://<tunnel> --source-id <source id>`.
 4. On the source's card, register that webhook ID with `PAYMENT.CAPTURE.COMPLETED`. Ingress trusts only this registration.
-5. Make Sandbox emit the event: `python scripts/verify_paypal_sandbox.py --live-capture ORD-LIVE-1`. Without card processing on the app it prints a buyer approval link; approve it, then run `--capture-order <order id>`.
-6. Pass: the source's **Webhook events** panel shows the event `PROCESSED` (a `400` in the tunnel log means the signature was refused, with the reason in `platform_security_ingress_logs`), and Domain Operations shows a `STATUS_MISMATCH` case expecting `COMPLETED` against the `PENDING` payment.
+5. Make Sandbox emit the event: `python scripts/verify_paypal_sandbox.py --live-capture ORD-LIVE-1` (USD 1.00 of Sandbox test money by default; `--amount` changes it). If the seller account cannot take cards it prints a buyer approval link; approve it as a Sandbox buyer in a private window, then run `--capture-order <order id>`.
+6. Pass: the source's **Webhook events** panel shows the event `PROCESSED` (a `400` in the tunnel log means the signature was refused, with the reason in `platform_security_ingress_logs`) and a Worker-requested domain run follows. Once the merchant's `pending` row for that capture ID is synced, the next run raises a `STATUS_MISMATCH` case expecting `COMPLETED` against it. Capture identity is the PayPal capture ID, which exists only after capture, so the merchant row comes second.
+
+Sandbox gotchas met on the way:
+
+- An Indian Sandbox seller cannot take the test card (`PAYEE_NOT_ENABLED_FOR_CARD_PROCESSING`) or an Indian buyer ("doesn't accept payments in your currency"). Use a United States Personal Sandbox buyer, or a United States Business Sandbox seller, which takes the card with no approval step.
+- The checkout page fails without return URLs; the script sets them.
+- A scope enabled on the app, such as Transaction search, only appears in a new token. PayPal reuses a token until it expires (9 hours), so revoke it with `POST /v1/oauth2/token/terminate`.
+
+**Result, 2026-11-11 (local stack, Cloudflare quick tunnel, the team's Sandbox app connected through the write-only intake).** Order `2WU33181EW945092F` (USD 1.00, invoice `ORD-LIVE-8A56926D`) was captured as `58F06780XU2504310`. PayPal delivered `PAYMENT.CAPTURE.COMPLETED` `WH-03J471826Y773845D-3RC97953G74121235` at 18:33:35 UTC, and the route verified it against PayPal's certificate (200). It was `PROCESSED` at 18:33:36.4 (AC-PP-05), and Worker run `a5ad64e5` followed at 18:33:36.7. With the merchant's `pending` row added, run `9e6be5cf` opened a `STATUS_MISMATCH` case expecting `COMPLETED` against observed `COMPLETED` and `PENDING` (AC-PP-06), whose evidence is that event (`provider_event`) and the merchant row (`database`). The tunnel webhook was deleted from PayPal afterwards.
 
 ## Spec gaps found while scaffolding
 
