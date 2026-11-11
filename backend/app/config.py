@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     agent_url: str = "http://agent:8100"
     # dispatcher and agent-tools only: signs delegated tool tokens (app/investigation/tokens.py).
     agent_token_secret: str = ""
+    # Where to ask for the running image digest (spec 9.7.6). The digest itself never comes
+    # from configuration.
+    runtime_identity_url: str = "http://runtime-identity:8010"
     agent_job_concurrency: int = 1
 
 

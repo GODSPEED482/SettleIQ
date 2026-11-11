@@ -6,8 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 
 from app.authz.guard import TenantContext, require
-from app.errors import not_implemented
-from app.execution import mode
+from app.execution import mode, readiness
 from app.mail import MailSender, get_mail_sender
 from app.tenancy import invitations, members, ownership
 
@@ -99,10 +98,8 @@ def set_execution_mode(
     return mode.set_mode(ctx, body)
 
 
-# TODO(G5 5.4 Rishav): report each exact scope's mode and whether its attestation passes the
-# ten runtime checks in spec 9.7.6, with the failing check named. The same verifier runs at
-# the LIVE switch and at every grant; the running image digest comes from the runtime-identity
-# service, never a header or environment variable (AC-REL-09).
 @router.get("/execution-readiness")
-def execution_readiness(ctx: TenantContext = require("execution.read")) -> None:
-    raise not_implemented("5.4")
+def execution_readiness(ctx: TenantContext = require("execution.read")) -> list[dict]:
+    """Each exact scope's mode, and whether a stored attestation passes the ten POL-14 checks,
+    naming the failing one. The image digest comes from the runtime-identity service only."""
+    return readiness.readiness(ctx)

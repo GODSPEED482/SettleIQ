@@ -55,3 +55,21 @@ def exact_scope(conn: Connection, tenant_id: UUID, body: ScopeBody) -> ExactScop
         raise validation_failed("The connector does not declare this action capability.")
     return ExactScope(tenant_id, pack.namespace, pack.version, connector.connector_id,
                       body.action_capability)
+
+
+def declared_scopes(conn: Connection, tenant_id: UUID) -> list[ExactScope]:
+    """Every exact scope this tenant could switch: each action capability of each active pack,
+    with each connector that declares it."""
+    packs = load_domain_packs()
+    connectors = load_connector_manifests()
+    scopes = []
+    for namespace in sorted(active_namespaces(conn)):
+        pack = packs.get(namespace)
+        if pack is None:
+            continue
+        for capability in sorted(pack.connector_action_capabilities):
+            for connector in sorted(connectors.values(), key=lambda c: c.connector_id):
+                if capability in {c.key for c in connector.capabilities}:
+                    scopes.append(ExactScope(tenant_id, pack.namespace, pack.version,
+                                             connector.connector_id, capability))
+    return scopes

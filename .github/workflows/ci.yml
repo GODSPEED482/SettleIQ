@@ -9,12 +9,7 @@ on:
 permissions:
   contents: read
 
-# TODO(G5 5.4 Rishav): POL-14 issuance lives in a separate attestation workflow, not here. Its
-# signing job runs only from prod in a protected environment with a named reviewer, holds no
-# cloud role and runs no code from the image. It signs an RFC 8785 payload for exactly one
-# scope in a DSSE envelope with Ed25519, valid at most 24 hours, after the capability's suite
-# passes in the built image with zero skips (spec 9.7.2-9.7.5, AC-REL-02..08). It publishes a
-# new signed revocation state on every run. Deployment jobs never name its environment.
+# POL-14 issuance is .github/workflows/attest.yml, never this workflow (spec 9.7.4).
 
 jobs:
   backend:

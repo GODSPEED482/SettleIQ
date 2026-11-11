@@ -923,13 +923,21 @@
           "tenants"
         ],
         "summary": "Execution Readiness",
+        "description": "Each exact scope's mode, and whether a stored attestation passes the ten POL-14 checks,\nnaming the failing one. The image digest comes from the runtime-identity service only.",
         "operationId": "execution_readiness_api_tenants__tenant_id__execution_readiness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response Execution Readiness Api Tenants  Tenant Id  Execution Readiness Get"
+                }
               }
             }
           }
