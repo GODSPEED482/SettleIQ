@@ -13,6 +13,8 @@ reaches this code (AC-AUTHZ-17). Then, in order:
    under the same idempotency key. An unknown outcome is settled by reading state back.
 4. VERIFYING: re-read authoritative state independently. Only a matching readback makes the
    execution SUCCEEDED and resolves the case; API success never does (AC-PLY-06).
+
+PB-001's merchant correction is `merchant.py`; PB-002's refund (task 5.15) is `refunds.py`.
 """
 
 import json
@@ -30,6 +32,7 @@ from app.errors import ApiError, conflict, not_found
 from app.execution.executors import Acted, Executor, Job, Refused, Verified, evidence_hash
 from app.execution.lifecycle import move
 from app.execution.merchant import MerchantCorrection
+from app.execution.refunds import DuplicateCaptureRefund
 from app.execution.scope import ExactScope
 from app.playbooks.gateway import _release_gate
 
@@ -37,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 EXECUTORS: dict[tuple[str, str], Executor] = {
     ("internal-merchant", "merchant.payment_status.correct"): MerchantCorrection(),
+    ("paypal", "refunds.create"): DuplicateCaptureRefund(),
 }
 
 # The grant fields that must equal the execution's exactly (spec 9.4).

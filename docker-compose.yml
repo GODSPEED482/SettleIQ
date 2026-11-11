@@ -77,6 +77,9 @@ services:
       # The Worker is the only caller of connector actions (spec 4.4.1), so it resolves the
       # secret references of the sources it acts through.
       SOURCE_SECRET_MERCHANT_WRITE: ${SOURCE_SECRET_MERCHANT_WRITE:-}
+      SOURCE_SECRET_PAYPAL_SANDBOX: ${SOURCE_SECRET_PAYPAL_SANDBOX:-}
+      # Opens the tenant's sealed PayPal credentials for refunds.create (task 5.15).
+      SOURCE_SECRET_KEY: ${SOURCE_SECRET_KEY:-}
     volumes:
       - raw_evidence:/data/raw-evidence
     depends_on:

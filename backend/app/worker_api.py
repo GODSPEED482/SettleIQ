@@ -16,11 +16,6 @@ from app.execution import worker
 router = APIRouter(tags=["internal"])
 
 
-# TODO(G5 5.15 Rahul): the refunds.create path on the same grant and attempt rules. An
-# ambiguous outcome (timeout, network drop, 5xx) goes to OUTCOME_UNKNOWN and is settled by
-# refunds.read and captures.read, never by a retry under a new key; a retry reuses the same
-# PayPal-Request-Id. Resolve only after readback shows the refund COMPLETED against the exact
-# duplicate capture (AC-PP-08).
 @router.post("/internal/executions/{execution_id}/run")
 def run_execution(execution_id: UUID, ctx: TenantContext = require("playbook.execute")) -> dict:
     """Consume the grant, act once, verify by readback and return the execution."""
