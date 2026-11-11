@@ -290,7 +290,10 @@ span.status {
 .status-resolved,
 .status-succeeded,
 .status-processed,
-.status-closed {
+.status-closed,
+.status-approved,
+.status-allow,
+.status-execution_created {
   color: #2e7d4f;
 }
 
@@ -299,7 +302,12 @@ span.status {
 .status-unresolved,
 .status-failed,
 .status-dead_letter,
-.status-open {
+.status-open,
+.status-rejected,
+.status-denied,
+.status-deny,
+.status-manual_review,
+.status-outcome_unknown {
   color: #b42318;
   border-color: currentColor;
 }
@@ -307,7 +315,14 @@ span.status {
 .status-stale,
 .status-human_review,
 .status-investigating,
-.status-action_pending {
+.status-action_pending,
+.status-running,
+.status-needs_approval,
+.status-policy_blocked,
+.status-grant_issued,
+.status-executing,
+.status-retry_pending,
+.status-verifying {
   color: #9a6700;
 }
 
@@ -590,4 +605,39 @@ code.hash {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 6px;
+}
+
+.evidence-proof {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}
+
+.evidence-proof h3,
+.request-detail h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.request-detail section,
+.investigation-detail section {
+  margin-top: 16px;
+}
+
+.trace-output {
+  max-height: 240px;
+  margin: 6px 0 0;
+  padding: 8px;
+  overflow: auto;
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+tr.highlight td {
+  background: var(--panel);
+  outline: 1px solid var(--accent);
 }

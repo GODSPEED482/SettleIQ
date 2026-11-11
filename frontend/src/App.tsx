@@ -8,6 +8,7 @@ import { SignIn } from "./pages/auth/SignIn";
 import { SignUp } from "./pages/auth/SignUp";
 import { VerifyEmail } from "./pages/auth/VerifyEmail";
 import { CreateTenant } from "./pages/CreateTenant";
+import { Investigations } from "./pages/investigations/Investigations";
 import { OntologyStudio } from "./pages/OntologyStudio";
 import { DomainOperations } from "./pages/operations/DomainOperations";
 import { SourceManagement } from "./pages/sources/SourceManagement";
@@ -109,13 +110,9 @@ function Shell() {
                     <DomainOperations />
                   ) : workspace.path === "/sources" ? (
                     <SourceManagement />
+                  ) : workspace.path === "/investigations" ? (
+                    <Investigations />
                   ) : (
-                    // TODO(G5 5.10 Suprava): replace the /investigations placeholder: start an
-                    // investigation from a case (case.investigate), show it RUNNING until the
-                    // terminal write, then the validated result: likely cause, PROPOSED
-                    // classification, evidence links that open the stored evidence, qualitative
-                    // confidence, missing evidence and the recommended playbook, plus the tool
-                    // trace. Nothing here creates a request.
                     // TODO(G5 5.11 Suprava): replace the /playbooks placeholder: requests with
                     // their lifecycle state, the REQUEST- and EXECUTION-stage decisions, the
                     // approval if any, the execution, its attempts, readback verification and
