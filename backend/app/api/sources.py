@@ -5,12 +5,20 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, File, Form, UploadFile
 
 from app.authz.guard import TenantContext, require
-from app.connectors.manifest import load_capability_registry
+from app.connectors.manifest import load_capability_registry, load_connector_manifests
 from app.sources import discovery, file_ingest, merchant_read, registry
 
 router = APIRouter(prefix="/api", tags=["sources"])
 
 SOURCE = ("source", "source_id")
+
+
+# §12.2 omits a connector list; the Sources screen (4.7) offers these when a source is
+# registered. Manifests are declarations only and hold no secret values.
+@router.get("/connectors")
+def list_connectors(ctx: TenantContext = require("connector.read")) -> list[dict]:
+    manifests = load_connector_manifests()
+    return [manifests[key].model_dump() for key in sorted(manifests)]
 
 
 @router.get("/connectors/capabilities")

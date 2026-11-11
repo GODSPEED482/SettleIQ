@@ -911,6 +911,32 @@
         }
       }
     },
+    "/api/connectors": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "summary": "List Connectors",
+        "operationId": "list_connectors_api_connectors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Connectors Api Connectors Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/connectors/capabilities": {
       "get": {
         "tags": [

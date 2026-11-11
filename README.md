@@ -133,5 +133,5 @@ Still to check with the team's Sandbox app (task 4.1): that the token's scopes i
 ## Spec gaps found while scaffolding
 
 - §3.5 gives `platform_security_approver` a "minimum support-request metadata read", but Appendix A has no key for it. The set currently holds only `platform.support.approve`.
-- §12.2 omits sign-in, suspend-member, and mapping, authority and entity reads (plan task 1.10). These routes do not exist yet.
+- §12.2 omits sign-in, suspend-member, and mapping, authority and entity reads; task 1.10 added them. It also omits a connector list: `GET /api/connectors` (`connector.read`, task 4.7) returns each manifest's declared contract for the Sources screen.
 - **Backend stack settled:** the backend is FastAPI, following spec §6.2 (confirmed 2026-11-09). The Node/TypeScript API in `.claude/SettleIQ_Tech_Stack.md` is superseded. That document's frontend library choices (TanStack Router, shadcn/ui, AG Grid) still differ from the current frontend and remain open.

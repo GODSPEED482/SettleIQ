@@ -109,6 +109,21 @@ def test_created_source_carries_the_manifest_capabilities():
 
 
 @pytest.mark.db
+def test_connectors_are_listed_with_their_declared_contract():
+    member = Member()
+    response = member.request("GET", "/api/connectors")
+    assert response.status_code == 200, response.text
+    listed = response.json()
+    manifests = load_connector_manifests()
+    assert [item["connector_id"] for item in listed] == sorted(manifests)
+    for item in listed:
+        manifest = manifests[item["connector_id"]]
+        assert item == manifest.model_dump()
+        assert item["secret_reference_required"] is manifest.secret_reference_required
+        assert [c["key"] for c in item["capabilities"]] == [c.key for c in manifest.capabilities]
+
+
+@pytest.mark.db
 def test_source_is_listed_for_its_tenant():
     member = Member()
     created = create_ok(member)

@@ -10,6 +10,7 @@ import { VerifyEmail } from "./pages/auth/VerifyEmail";
 import { CreateTenant } from "./pages/CreateTenant";
 import { OntologyStudio } from "./pages/OntologyStudio";
 import { DomainOperations } from "./pages/operations/DomainOperations";
+import { SourceManagement } from "./pages/sources/SourceManagement";
 import { TeamManagement } from "./pages/team/TeamManagement";
 import { WORKSPACES } from "./pages/workspaces";
 import { Workspace } from "./pages/Workspace";
@@ -106,15 +107,9 @@ function Shell() {
                     <OntologyStudio workspace={workspace} />
                   ) : workspace.path === "/operations" ? (
                     <DomainOperations />
+                  ) : workspace.path === "/sources" ? (
+                    <SourceManagement />
                   ) : (
-                    // TODO(G4 4.7 Suprava): replace the /sources placeholder with Source
-                    // Management: connectors and their declared capabilities, registered
-                    // sources with credential status (set or not, never the reference or the
-                    // value), webhook registration, sync, file upload, and webhook inbox state
-                    // including failed and dead-lettered events with replay. Label
-                    // SYNTHETIC/REFERENCE evidence wherever it appears. Gate each action on its
-                    // permission key (source.create, source.sync, source.file.upload,
-                    // source.credential.manage, source.webhook.manage).
                     <Workspace workspace={workspace} />
                   )}
                 </RequirePermission>
