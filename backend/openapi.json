@@ -879,13 +879,38 @@
           "tenants"
         ],
         "summary": "Set Execution Mode",
+        "description": "Set one exact scope to SHADOW or LIVE. LIVE needs a POL-14 attestation for that scope.",
         "operationId": "set_execution_mode_api_tenants__tenant_id__execution_mode_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeBody"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Set Execution Mode Api Tenants  Tenant Id  Execution Mode Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -3579,6 +3604,42 @@
           "method"
         ],
         "title": "MappingBody"
+      },
+      "ModeBody": {
+        "properties": {
+          "domain_pack_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Domain Pack Id"
+          },
+          "connector_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "title": "Connector Id"
+          },
+          "action_capability": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+            "title": "Action Capability"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "SHADOW",
+              "LIVE"
+            ],
+            "title": "Mode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "domain_pack_id",
+          "connector_id",
+          "action_capability",
+          "mode"
+        ],
+        "title": "ModeBody"
       },
       "PublishBody": {
         "properties": {
