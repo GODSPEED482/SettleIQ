@@ -5,6 +5,7 @@ and authority assertions, the pack's identity policies and engine, and the sourc
 ingested up to the cut. The same pins give the same inputs hash.
 """
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,11 +26,33 @@ class Record:
     id: UUID
     source_id: UUID
     object_name: str
+    record_type: str
     attributes: dict[str, Any]
     raw_evidence_id: UUID
     payload_hash: str
     occurred_at: datetime | None
     observed_at: datetime
+
+
+_FILE_KIND = re.compile(r"^[^:]+:file/(.+)$")
+
+
+def object_keys(record: Record) -> list[str]:
+    """Names a mapping's `external_object` can use for this record, most specific first.
+
+    Tables, API capabilities and event streams have one stable object name. Each uploaded file
+    is its own object, named `{file name}@{sha16}` (conventions.py), so a mapping can also name
+    the file, or the report kind in the record type (`BRR`, `BANK_CSV`) to cover every upload
+    of that kind. A more specific mapping wins: one file can override its kind.
+    """
+    keys = [record.object_name]
+    name, hashed, _ = record.object_name.partition("@")
+    if hashed:
+        keys.append(name)
+    kind = _FILE_KIND.match(record.record_type)
+    if kind:
+        keys.append(kind.group(1))
+    return keys
 
 
 @dataclass(frozen=True)
@@ -60,12 +83,13 @@ class RunInputs:
         return f"{self.pack.namespace}@{self.pack.version}/{engine}"
 
     def mappings_for(self, record: Record) -> list[dict[str, Any]]:
-        """File objects are named `{name}@{sha16}`, so a mapping names the file by its stem."""
-        return [
-            m for m in self.mappings
-            if m["source_id"] == str(record.source_id)
-            and record.object_name.split("@", 1)[0] == m["external_object"]
-        ]
+        """The mappings for the most specific name this record's object answers to."""
+        mine = [m for m in self.mappings if m["source_id"] == str(record.source_id)]
+        for key in object_keys(record):
+            matched = [m for m in mine if m["external_object"] == key]
+            if matched:
+                return matched
+        return []
 
     def source_snapshots(self) -> dict[str, dict[str, Any]]:
         by_source: dict[str, list[list[str]]] = defaultdict(list)
@@ -126,7 +150,8 @@ def _records(conn: Connection, cut: datetime) -> list[Record]:
     rows = conn.execute(
         text(
             """
-            SELECT r.id, r.source_id, o.object_name, r.attributes, r.raw_evidence_id,
+            SELECT r.id, r.source_id, o.object_name, r.record_type, r.attributes,
+                r.raw_evidence_id,
                 r.payload_hash, r.occurred_at, r.observed_at
             FROM source_records r
             JOIN source_objects o ON o.tenant_id = r.tenant_id AND o.id = r.source_object_id
