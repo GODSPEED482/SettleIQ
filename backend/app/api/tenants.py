@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from app.authz.guard import TenantContext, require
 from app.execution import mode, readiness
 from app.mail import MailSender, get_mail_sender
+from app.playbooks import gateway
 from app.tenancy import invitations, members, ownership
 
 router = APIRouter(prefix="/api/tenants/{tenant_id}", tags=["tenants"])
@@ -91,8 +92,13 @@ def transfer_ownership(
 def set_execution_mode(
     body: mode.ModeBody, ctx: TenantContext = require("execution_mode.manage")
 ) -> dict:
-    """Set one exact scope to SHADOW or LIVE. LIVE needs a POL-14 attestation for that scope."""
-    return mode.set_mode(ctx, body)
+    """Set one exact scope to SHADOW or LIVE. LIVE needs a POL-14 attestation for that scope.
+    After a LIVE switch, requests that scope blocked are evaluated again (spec 18 steps 12-15)."""
+    result = mode.set_mode(ctx, body)
+    if body.mode == "LIVE":
+        result["reevaluated_requests"] = gateway.reevaluate_scope(
+            ctx, body.domain_pack_id, body.connector_id, body.action_capability)
+    return result
 
 
 @router.get("/execution-readiness")

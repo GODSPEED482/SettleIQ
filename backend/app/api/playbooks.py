@@ -6,11 +6,12 @@ approver_id, approval_required, policy-decision IDs, execution_id or grants (spe
 
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, Response
 
 from app import audit
 from app.authz.guard import TenantContext, require
 from app.errors import not_implemented
+from app.playbooks import gateway
 
 router = APIRouter(prefix="/api", tags=["playbooks"])
 
@@ -26,44 +27,45 @@ router = APIRouter(prefix="/api", tags=["playbooks"])
 # trace each criterion in the acceptance sheet (6.5).
 
 
-# TODO(G5 5.2 Rishav): a human with playbook.request creates the request for one case; the body
-# names the case and the playbook's declared parameters only (spec 12.1). In one transaction:
-# the request, its immutable REQUEST-stage decision from tenant policy (NEEDS_APPROVAL or
-# ALLOW_PENDING_PRECONDITIONS; PB-002 always NEEDS_APPROVAL, AC-PLY-08) and the case moved to
-# ACTION_PENDING (spec 9.3). A repeated tenant-scoped idempotency key returns the prior request
-# (AC-PLY-04). Adjust test_held_permission_passes_the_gate and the 501 check.
-@router.post("/playbooks/{playbook_id}/requests")
+@router.post("/playbooks/{playbook_id}/requests", status_code=201)
 def create_playbook_request(
     playbook_id: str,
+    body: gateway.RequestBody,
+    response: Response,
+    idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=200,
+                                  pattern=r"^[!-~]+$"),
     ctx: TenantContext = require("playbook.request", scope=("playbook", "playbook_id")),
-) -> None:
-    raise not_implemented("5.2")
+) -> dict:
+    """Create one request and its REQUEST-stage decision. A repeated Idempotency-Key returns
+    the prior request with 200."""
+    view, created = gateway.create(ctx, playbook_id, body, idempotency_key)
+    if not created:
+        response.status_code = 200
+    return view
 
 
 @router.get("/playbook-requests/{request_id}")
-def read_playbook_request(request_id: str, ctx: TenantContext = require("playbook.read")) -> None:
-    raise not_implemented("5.2")
+def read_playbook_request(
+    request_id: UUID, ctx: TenantContext = require("playbook.read")
+) -> dict:
+    return gateway.read(ctx, request_id)
 
 
-# TODO(G5 5.2 Rishav): approve and reject. POL-01: the approver is a different human from the
-# requester, and the decision references the request and its REQUEST-stage decision. On
-# approval the gateway revalidates preconditions, target, source authority, connector
-# capability, exact-scope mode (5.3) and POL-14 (5.4), then writes a separate immutable
-# EXECUTION-stage decision; only ALLOW creates the execution row, and after commit a
-# single-use grant bound to execution, both decisions, the conditional approval, action, target
-# and idempotency key (POL-09, AC-AUTHZ-08). Rejection is terminal. Audit both as critical.
 @router.post("/playbook-requests/{request_id}/approve")
 def approve_playbook_request(
-    request_id: str, ctx: TenantContext = require("playbook.approve")
-) -> None:
-    raise not_implemented("5.2")
+    request_id: UUID,
+    body: gateway.ApproveBody | None = None,
+    ctx: TenantContext = require("playbook.approve"),
+) -> dict:
+    return gateway.approve(ctx, request_id, body)
 
 
 @router.post("/playbook-requests/{request_id}/reject")
 def reject_playbook_request(
-    request_id: str, ctx: TenantContext = require("playbook.reject")
-) -> None:
-    raise not_implemented("5.2")
+    request_id: UUID, body: gateway.RejectBody,
+    ctx: TenantContext = require("playbook.reject"),
+) -> dict:
+    return gateway.reject(ctx, request_id, body)
 
 
 # TODO(G5 5.6 Rahul): read one execution with its state, both decision IDs, the approval if
