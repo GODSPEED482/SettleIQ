@@ -2671,6 +2671,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Case Id"
             }
           }
@@ -2705,6 +2706,7 @@
           "investigation"
         ],
         "summary": "Read Investigation",
+        "description": "The investigation, its validated result, PROPOSED classification and tool trace. Evidence\nIDs come from the trace, so they resolve without trusting the model's text (AC-AI-04).",
         "operationId": "read_investigation_api_investigations__investigation_id__get",
         "parameters": [
           {
@@ -2713,6 +2715,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Investigation Id"
             }
           }
@@ -2722,7 +2725,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Read Investigation Api Investigations  Investigation Id  Get"
+                }
               }
             }
           },

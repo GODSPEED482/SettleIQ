@@ -127,7 +127,9 @@ case_types:
   - {code: LEDGER_MISMATCH, default_severity: medium}
 
 agent_tools:
-  - {name: calculate_settlement_variance, permission: domain.compute}
+  - name: calculate_settlement_variance
+    permission: domain.compute
+    entrypoint: packs.finops.agent_tools:settlement_variance
 
 permissions: []
 

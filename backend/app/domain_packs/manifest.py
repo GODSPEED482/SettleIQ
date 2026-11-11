@@ -55,6 +55,8 @@ class CaseType(_Strict):
 class AgentTool(_Strict):
     name: str
     permission: str
+    # Pack code that implements a pack tool. Core tools are implemented in app/investigation.
+    entrypoint: str | None = Field(default=None, pattern=ENTRYPOINT)
 
 
 class PlaybookTemplate(_Strict):
@@ -130,7 +132,9 @@ class DomainPackManifest(_Strict):
 
     def entrypoints(self) -> list[PackEntrypoint]:
         engine = [self.domain_engine] if self.domain_engine else []
-        return [*self.validators, *self.entity_resolution_policies, *engine]
+        tools = [PackEntrypoint(id=t.name, entrypoint=t.entrypoint)
+                 for t in self.agent_tools if t.entrypoint]
+        return [*self.validators, *self.entity_resolution_policies, *engine, *tools]
 
     def files(self) -> list[str]:
         declared = [item.path for item in [*self.ontology_definitions, *self.shacl_shapes]]
@@ -176,6 +180,9 @@ class DomainPackManifest(_Strict):
         for key in self.permissions:
             if not key.startswith(f"{self.namespace}."):
                 raise ValueError(f"permission {key} is outside namespace {self.namespace}")
+        for tool in self.agent_tools:
+            if tool.entrypoint is None:
+                raise ValueError(f"agent tool {tool.name} names no entrypoint")
         self._check_entrypoints()
         self._check_versions()
         self._check_capabilities()

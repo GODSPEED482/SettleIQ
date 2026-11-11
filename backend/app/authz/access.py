@@ -113,6 +113,11 @@ class AccessGateway(Protocol):
     def resolve_platform(self, principal: Principal) -> EffectiveAccess | None:
         """Return platform access. No path grants this until break-glass is built."""
 
+    def resolve_agent(
+        self, agent: Principal, tenant_id: UUID, invoker_id: UUID
+    ) -> EffectiveAccess | None:
+        """POL-08: the Agent's set intersected with the invoker's current access."""
+
     def record_decision(self, decision: Decision) -> None:
         """Durably audit a sensitive or critical decision (AUTHZ-09)."""
 
@@ -133,6 +138,18 @@ _GRANTS_SQL = text(
     JOIN permission_set_items i ON i.permission_set_id = s.id
     WHERE g.tenant_id = :tenant_id AND g.user_id = :user_id AND g.revoked_at IS NULL
       AND (g.expires_at IS NULL OR g.expires_at > now())
+    """
+)
+
+_AGENT_GRANTS_SQL = text(
+    """
+    SELECT i.permission_key, i.effect, g.scope_type, g.scope_id
+    FROM service_principals p
+    JOIN member_grants g ON g.tenant_id = p.tenant_id AND g.service_principal_id = p.id
+    JOIN permission_sets s ON s.id = g.permission_set_id AND s.status = 'ACTIVE'
+    JOIN permission_set_items i ON i.permission_set_id = s.id
+    WHERE p.id = :agent_id AND p.kind = 'agent' AND p.status = 'ACTIVE'
+      AND g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at > now())
     """
 )
 
@@ -165,10 +182,7 @@ class PostgresAccessGateway:
         self._catalogue = catalogue
 
     def resolve(self, principal: Principal, tenant_id: UUID) -> EffectiveAccess | None:
-        # Agent and Worker resolution arrive with POL-08 and POL-09 in G5; until then
-        # they resolve to nothing.
-        # TODO(G5 5.7 Swapnaneel): resolve the Agent as its service set intersected with the
-        # invoking member's current permissions (POL-08), on every tool call.
+        # The Agent resolves only through resolve_agent, on behalf of one invoker.
         # TODO(G5 5.6 Rahul): resolve the Worker only through a valid grant (POL-09); its keys
         # can never be granted to a human (AC-AUTHZ-06).
         if principal.kind is not PrincipalKind.HUMAN:
@@ -187,6 +201,33 @@ class PostgresAccessGateway:
 
     def resolve_platform(self, principal: Principal) -> EffectiveAccess | None:
         return None
+
+    def resolve_agent(
+        self, agent: Principal, tenant_id: UUID, invoker_id: UUID
+    ) -> EffectiveAccess | None:
+        """POL-08, resolved afresh on every tool call. A key a human may also hold survives only
+        if the invoker holds it tenant-wide right now; agent-only keys remain. A DENY on either
+        side wins, and an invoker who is no longer an ACTIVE member leaves the Agent nothing.
+        """
+        if agent.kind is not PrincipalKind.AGENT:
+            return None
+        invoker = self.resolve(Principal(invoker_id, PrincipalKind.HUMAN, True), tenant_id)
+        if invoker is None:
+            return None
+        with scoped_tx(tenant_id) as conn:
+            rows = [_to_row(row) for row in conn.execute(_AGENT_GRANTS_SQL,
+                                                         {"agent_id": agent.id})]
+        if not rows:
+            return None
+        kept = []
+        for row in rows:
+            spec = self._catalogue.get(row.permission)
+            human_data = "human" in spec.principal_types
+            if row.effect == "DENY" or not human_data or invoker.permits(row.permission):
+                kept.append(row)
+            if human_data and not invoker.permits(row.permission):
+                kept.append(GrantRow(row.permission, "DENY"))
+        return EffectiveAccess(kept, self._catalogue)
 
     def record_decision(self, decision: Decision) -> None:
         scope = (

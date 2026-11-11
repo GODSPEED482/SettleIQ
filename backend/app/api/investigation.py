@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.authz.guard import TenantContext, require
-from app.errors import not_implemented
+from app.investigation import service
 
 router = APIRouter(prefix="/api", tags=["investigation"])
 
@@ -19,26 +19,20 @@ class InvestigationStarted(BaseModel):
     status: Literal["RUNNING"]
 
 
-# TODO(G5 5.7 Swapnaneel): migration 0017 adds investigations and investigation_tool_calls,
-# append-only, with a write-once terminal trigger on the investigation (see CLAUDE.md: never
-# an empty placeholder migration). Write the RUNNING row and an INVESTIGATION agent_jobs row in
-# one transaction and return 202. Each stored result and trace carries tenant, case, invoker,
-# model, prompt and tool versions, evidence references and outcome (AC-INV-01).
 @router.post(
     "/agent/investigate/{case_id}", status_code=202, response_model=InvestigationStarted
 )
 def start_investigation(
-    case_id: str, ctx: TenantContext = require("case.investigate")
-) -> InvestigationStarted:
+    case_id: UUID, ctx: TenantContext = require("case.investigate")
+) -> dict:
     """Write the RUNNING investigation and its job in one transaction; never run it here."""
-    raise not_implemented("5.7")
+    return service.start(ctx, case_id)
 
 
-# TODO(G5 5.7 Swapnaneel): read the investigation with its validated result, PROPOSED
-# classification and tool trace. Evidence IDs resolve independently of the model's text
-# (AC-AI-04).
 @router.get("/investigations/{investigation_id}")
 def read_investigation(
-    investigation_id: str, ctx: TenantContext = require("investigation.read")
-) -> None:
-    raise not_implemented("5.7")
+    investigation_id: UUID, ctx: TenantContext = require("investigation.read")
+) -> dict:
+    """The investigation, its validated result, PROPOSED classification and tool trace. Evidence
+    IDs come from the trace, so they resolve without trusting the model's text (AC-AI-04)."""
+    return service.read(ctx, investigation_id)

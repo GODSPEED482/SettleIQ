@@ -9,6 +9,7 @@ import json
 import logging
 import threading
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -18,8 +19,14 @@ from sqlalchemy import text
 
 from app.audit import write_audit
 from app.authz.access import Principal, PrincipalKind
+from app.authz.catalogue import get_catalogue
 from app.config import get_settings
 from app.db import global_tx, scoped_tx
+from app.domain_packs.manifest import load_domain_packs
+from app.investigation.response import Expectations, ResponseRefused, validate_response
+from app.investigation.tokens import DelegatedToken, TokenError, mint_token
+from app.investigation.tool_impl import tool_specs
+from app.investigation.tools import build_tool_registry
 from app.semantics.generation import (
     DiscoveredObject,
     OntologyProposal,
@@ -161,27 +168,141 @@ def _complete_draft(job: ClaimedJob, proposals: list[dict[str, Any]]) -> None:
         _finish(conn, job, "SUCCEEDED", None)
 
 
+def _investigation(conn: Any, job: ClaimedJob) -> Any:
+    return conn.execute(
+        text(
+            """
+            SELECT id, case_id, invoked_by, pack_namespace, status
+            FROM investigations WHERE id = :id AND job_id = :job
+            """
+        ),
+        {"id": job.subject_id, "job": job.id},
+    ).one_or_none()
+
+
+def _expectations(conn: Any, run: Any) -> Expectations:
+    """What the agent's answer must agree with, read from the server-written trace: the IDs
+    tools returned, and the eligibility and approval answers of the dry-run playbook tools."""
+    calls = conn.execute(
+        text(
+            """
+            SELECT tool_name, output, evidence_ids FROM investigation_tool_calls
+            WHERE investigation_id = :id AND outcome = 'OK' ORDER BY created_at, id
+            """
+        ),
+        {"id": run.id},
+    ).all()
+    returned: set[UUID] = set()
+    eligible: dict[str, bool] = {}
+    for call in calls:
+        returned.update(call.evidence_ids)
+        if call.tool_name == "recommend_playbook":
+            for item in call.output.get("eligible", []):
+                eligible[item["playbook"]] = bool(item["requires_approval"])
+        elif call.tool_name == "validate_playbook" and call.output.get("eligible"):
+            eligible[call.output["playbook"]] = bool(call.output["requires_approval"])
+    pack = load_domain_packs().get(run.pack_namespace)
+    case_types = frozenset(c.code for c in pack.case_types) if pack else frozenset()
+    return Expectations(run.case_id, case_types, eligible, frozenset(returned))
+
+
+def _label(output: dict[str, Any], key: str) -> str:
+    value = output.get(key)
+    if not isinstance(value, str) or not 0 < len(value) <= 200:
+        raise JobFailed("INVALID_AGENT_OUTPUT")
+    return value
+
+
+def _investigate(job: ClaimedJob) -> None:
+    """Run one investigation through the agent and make its single terminal write."""
+    with scoped_tx(job.tenant_id) as conn:
+        run = _investigation(conn, job)
+    if run is None or run.status != "RUNNING":
+        raise JobFailed("INVESTIGATION_NOT_RUNNING")
+    expires = datetime.now(UTC) + timedelta(minutes=LEASE_MINUTES)
+    try:
+        token = mint_token(
+            DelegatedToken(run.id, job.tenant_id, run.case_id, run.invoked_by, expires)
+        )
+    except TokenError:
+        raise JobFailed("TOKEN_UNAVAILABLE") from None
+    tools = tool_specs(build_tool_registry(load_domain_packs(), get_catalogue()))
+    output = _call_agent("/run", {
+        "investigation_id": str(run.id), "case_id": str(run.case_id), "tool_token": token,
+        "tools": tools,
+    })
+    if not isinstance(output, dict):
+        raise JobFailed("INVALID_AGENT_OUTPUT")
+    model, prompt_version = _label(output, "model"), _label(output, "prompt_version")
+    with scoped_tx(job.tenant_id) as conn:
+        if not _still_running(conn, job):
+            return
+        try:
+            result = validate_response(output.get("result"), _expectations(conn, run))
+        except ResponseRefused as refused:
+            # Refused output is never stored; the reason is a fixed code (spec 8.5).
+            raise JobFailed(f"REFUSED_{refused.reason}") from None
+        conn.execute(
+            text(
+                """
+                UPDATE investigations
+                SET status = 'SUCCEEDED', model = :model, prompt_version = :prompt,
+                    result = CAST(:result AS jsonb), proposed_classification = :classification,
+                    recommended_playbook = :playbook, confidence = :confidence,
+                    finished_at = now()
+                WHERE id = :id AND status = 'RUNNING'
+                """
+            ),
+            {"id": run.id, "model": model, "prompt": prompt_version,
+             "result": result.model_dump_json(), "classification": result.classification,
+             "playbook": result.recommended_playbook, "confidence": result.confidence},
+        )
+        write_audit(
+            conn, job.tenant_id, _agent_principal(conn), "investigation.completed",
+            "investigation",
+            {"investigation_id": str(run.id), "case_id": str(run.case_id),
+             "job_id": str(job.id), "proposed_classification": result.classification,
+             "recommended_playbook": result.recommended_playbook},
+            invoker_user_id=job.requested_by,
+        )
+        _finish(conn, job, "SUCCEEDED", None)
+
+
+def _fail_investigation(conn: Any, investigation_id: UUID, reason: str) -> None:
+    conn.execute(
+        text(
+            """
+            UPDATE investigations SET status = 'FAILED', error = :reason, finished_at = now()
+            WHERE id = :id AND status = 'RUNNING'
+            """
+        ),
+        {"id": investigation_id, "reason": reason},
+    )
+
+
 def _fail(job: ClaimedJob, reason: str) -> None:
     with scoped_tx(job.tenant_id) as conn:
+        if job.kind == "INVESTIGATION" and _still_running(conn, job):
+            _fail_investigation(conn, job.subject_id, reason)
         _finish(conn, job, "FAILED", reason)
 
 
 def run_job(job: ClaimedJob) -> None:
     """Call the agent, validate its output and write the terminal state once."""
     try:
-        if job.kind != "ONTOLOGY_DRAFT":
-            # Investigations join this queue under task 5.7.
-            # TODO(G5 5.7 Swapnaneel): for an INVESTIGATION job, mint the delegated token,
-            # call the agent's /run, validate the output with response.py (5.8) and make the
-            # single terminal write; a refused output is FAILED, never stored as a result.
+        if job.kind == "ONTOLOGY_DRAFT":
+            _complete_draft(job, _proposals_for(job))
+        elif job.kind == "INVESTIGATION":
+            _investigate(job)
+        else:
             raise JobFailed("UNSUPPORTED_JOB_KIND")
-        _complete_draft(job, _proposals_for(job))
     except JobFailed as failure:
         _fail(job, failure.reason)
 
 
 def expire_stale_leases() -> int:
-    """Mark jobs whose dispatcher died as FAILED. A retry is a new job."""
+    """Mark jobs whose dispatcher died as FAILED, with their investigations. A retry is a new
+    job."""
     with global_tx() as conn:
         expired = conn.execute(
             text(
@@ -189,10 +310,15 @@ def expire_stale_leases() -> int:
                 UPDATE agent_jobs
                 SET status = 'FAILED', error = 'LEASE_EXPIRED', finished_at = now()
                 WHERE status = 'RUNNING' AND lease_expires_at < now()
+                RETURNING tenant_id, kind, subject_id
                 """
             )
-        )
-    return expired.rowcount
+        ).all()
+    for job in expired:
+        if job.kind == "INVESTIGATION":
+            with scoped_tx(job.tenant_id) as conn:
+                _fail_investigation(conn, job.subject_id, "LEASE_EXPIRED")
+    return len(expired)
 
 
 def main() -> None:

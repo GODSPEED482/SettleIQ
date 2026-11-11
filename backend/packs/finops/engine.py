@@ -14,11 +14,17 @@ invariant is simply not evaluated. Equal amounts never make a duplicate (AC-PLY-
 """
 
 from collections import defaultdict
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
 from packs.finops.money import Money, MoneyError
-from packs.finops.settlement import SettlementLine, settlement_variance, treatment
+from packs.finops.settlement import (
+    SettlementLine,
+    SettlementResult,
+    settlement_variance,
+    treatment,
+)
 
 F = "finops:"
 COMPARED = {
@@ -134,48 +140,70 @@ def _view_ids(index: _Index, entity: str, properties: list[str]) -> list[str]:
     return sorted(ids)
 
 
+ENTRY_PROPERTIES = [f"{F}entryType", f"{F}amount", f"{F}feeAmount", f"{F}netAmount"]
+
+
+@dataclass(frozen=True)
+class BatchSettlement:
+    batch: str
+    bank: str
+    bank_credit: Money
+    result: SettlementResult
+    included: list[dict]
+    settled: list[dict]
+
+
+def batch_settlement(index: _Index, batch: str) -> BatchSettlement | None:
+    """One batch against its bank credit, or None when any input is unresolved or the batch mixes
+    currencies: nothing is guessed (AC-REC-15). Used by the engine and the agent tool alike."""
+    included = index.subjects(f"{F}includedInSettlement", batch)
+    settled = index.objects(f"{F}settledThrough", batch)
+    if not included or len(settled) != 1:
+        return None
+    bank = settled[0]["object"]
+    bank_credit = _money(index.resolved(bank, f"{F}amount"))
+    if bank_credit is None:
+        return None
+    lines = []
+    for relationship in included:
+        entry = relationship["subject"]
+        entry_type = index.resolved(entry, f"{F}entryType")
+        gross = _money(index.resolved(entry, f"{F}amount"))
+        fee_ok, fee = _optional_money(index, entry, f"{F}feeAmount")
+        net_ok, net = _optional_money(index, entry, f"{F}netAmount")
+        if entry_type is None or gross is None or not (fee_ok and net_ok):
+            return None
+        lines.append(SettlementLine(entry, entry_type["value"], gross, fee, net))
+    try:
+        result = settlement_variance(lines, bank_credit)
+    except MoneyError:
+        return None  # different currencies are never compared (AC-REC-15)
+    return BatchSettlement(batch, bank, bank_credit, result, included, settled)
+
+
+def batch_observations(index: _Index, settlement: BatchSettlement) -> list[str]:
+    observations = _view_ids(index, settlement.bank, [f"{F}amount"])
+    for relationship in settlement.included:
+        observations += _view_ids(index, relationship["subject"], ENTRY_PROPERTIES)
+    return sorted(set(observations))
+
+
 def _settlement(index: _Index) -> list[dict]:
     findings = []
-    entry_properties = [f"{F}entryType", f"{F}amount", f"{F}feeAmount", f"{F}netAmount"]
     for batch in index.of_class(f"{F}SettlementBatch"):
-        included = index.subjects(f"{F}includedInSettlement", batch)
-        settled = index.objects(f"{F}settledThrough", batch)
-        if not included or len(settled) != 1:
+        settlement = batch_settlement(index, batch)
+        if settlement is None or settlement.result.variance.amount == 0:
             continue
-        bank = settled[0]["object"]
-        bank_credit = _money(index.resolved(bank, f"{F}amount"))
-        if bank_credit is None:
-            continue
-        lines, usable = [], True
-        for relationship in included:
-            entry = relationship["subject"]
-            entry_type = index.resolved(entry, f"{F}entryType")
-            gross = _money(index.resolved(entry, f"{F}amount"))
-            fee_ok, fee = _optional_money(index, entry, f"{F}feeAmount")
-            net_ok, net = _optional_money(index, entry, f"{F}netAmount")
-            if entry_type is None or gross is None or not (fee_ok and net_ok):
-                usable = False
-                break
-            lines.append(SettlementLine(entry, entry_type["value"], gross, fee, net))
-        if not usable:
-            continue
-        try:
-            result = settlement_variance(lines, bank_credit)
-        except MoneyError:
-            continue  # different currencies are never compared (AC-REC-15)
-        if result.variance.amount == 0:
-            continue
-        entries = sorted(r["subject"] for r in included)
-        observations = _view_ids(index, bank, [f"{F}amount"])
-        for entry in entries:
-            observations += _view_ids(index, entry, entry_properties)
+        result, bank_credit = settlement.result, settlement.bank_credit
+        entries = sorted(r["subject"] for r in settlement.included)
         findings.append({
             "case_type": "SETTLEMENT_VARIANCE",
             "scope": "INTER_ENTITY",
-            "entity_ids": [batch, bank, *entries],
+            "entity_ids": [batch, settlement.bank, *entries],
             "property_iris": [f"{F}amount", f"{F}netAmount", f"{F}feeAmount"],
-            "observation_ids": sorted(set(observations)),
-            "relationship_ids": sorted(r["id"] for r in [*included, *settled]),
+            "observation_ids": batch_observations(index, settlement),
+            "relationship_ids": sorted(
+                r["id"] for r in [*settlement.included, *settlement.settled]),
             "expected": {"expected_net": format(result.expected_net.amount, "f")},
             "observed": {"bank_credit": format(bank_credit.amount, "f")},
             "expected_amount": format(result.expected_net.amount, "f"),
