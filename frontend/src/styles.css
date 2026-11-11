@@ -334,3 +334,91 @@ th {
     padding: 16px;
   }
 }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  font-size: 13px;
+  list-style: none;
+}
+
+.legend li::before {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  content: "";
+  border: 2px solid var(--layer);
+  border-radius: 3px;
+}
+
+.layer-core {
+  --layer: #8a8a84;
+}
+
+.layer-pack {
+  --layer: var(--accent);
+}
+
+.layer-tenant {
+  --layer: #2e7d4f;
+}
+
+@media (prefers-color-scheme: dark) {
+  .layer-tenant {
+    --layer: #7cc79a;
+  }
+}
+
+.react-flow__node.onto-node {
+  color: var(--text);
+  background: var(--panel);
+  border: 2px solid var(--layer);
+}
+
+.react-flow__edge.layer-tenant .react-flow__edge-path {
+  stroke: var(--layer);
+  stroke-width: 2;
+}
+
+.react-flow__edge.subclass .react-flow__edge-path {
+  stroke-dasharray: 4 3;
+}
+
+.evidence {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence li + li {
+  margin-top: 4px;
+}
+
+.basis {
+  padding: 1px 6px;
+  font-size: 12px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+
+.basis-observed {
+  color: #2e7d4f;
+}
+
+.basis-inferred {
+  color: #9a6700;
+}
+
+@media (prefers-color-scheme: dark) {
+  .basis-observed {
+    color: #7cc79a;
+  }
+
+  .basis-inferred {
+    color: #e3b341;
+  }
+}

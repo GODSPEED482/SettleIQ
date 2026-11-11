@@ -195,7 +195,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.11 App shell, sign-up and sign-in, tenant creation, permission-driven UI (2h). Evidence in `session.test.tsx`, `tenants.test.tsx`, `RequirePermission.test.tsx`, `client.test.ts` and `can.test.ts`.
 - [x] 1.12 Team Management screens (1h). Members, grants, suspension, invitations, ownership transfer and invitation acceptance; evidence in `team.test.tsx` and `accept.test.tsx`.
 - [x] 1.13 IAM and cross-tenant tests (1h). `test_iam_acceptance.py` traces AC-IAM-01..11 and AC-TEN-01..03 to their tests and fails if one is renamed away.
-- [ ] 2.8 Ontology Studio graph in React Flow, view and edit relationships (2.5h). Starter: empty canvas.
+- [x] 2.8 Ontology Studio graph in React Flow, view and edit relationships (2.5h). Evidence in `studio.test.tsx` and `graph.test.ts`.
 - [ ] 2.9 Binding and authority editors (1.5h)
 - [ ] 2.10 Publish confirmation showing candidate hash and validation run (1h)
 - [ ] 3.8 SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum (1h)
