@@ -57,11 +57,11 @@ PB-002 has its own attestation and safety suite. If only that scope is not green
 |---|---|---|---|---|---|---|---|
 | Rishav | 9 | 2 | 2 | 2 | 8 | 2.5 | **25.5** |
 | Rahul | 4 | 3 | 3 | 11 | 6.5 | 1 | **28.5** |
-| Swapnaneel | 3 | 7 | 7.5 | 1 | 6 | 2 | **26.5** |
+| Swapnaneel | 3 | 7 | 7.5 | 1 | 8 | 2 | **28.5** |
 | Suprava | 5 | 5 | 3 | 2 | 7.5 | 4.5 | **27** |
-| **Total** | **21** | **17** | **15.5** | **16** | **28** | **10** | **107.5** |
+| **Total** | **21** | **17** | **15.5** | **16** | **30** | **10** | **109.5** |
 
-**Over capacity.** PB-002 was added on 2026-11-09, taking planned work to 107.5 hours against 96 available. Its task hours are estimates. Task 5.4 is also about 8 hours over budget under the OPEN-REL-01 decision record, which makes roughly 115.5. The team must add time or move work before Day 1.
+**Over capacity.** PB-002 was added on 2026-11-09, taking planned work to 107.5 hours against 96 available. Its task hours are estimates. Task 5.4 is also about 8 hours over budget under the OPEN-REL-01 decision record, which makes roughly 115.5. On 2026-11-12 task 5.7 grew from 3 to 5 hours to cover all 11 registry tools, taking the table to 109.5 and the estimate to roughly 117.5. The team must add time or move work before Day 1.
 
 ## Timeline
 
@@ -150,7 +150,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 **Exit:** AC-WEBHOOK-01 and AC-PP-03/04/05/06/10/13 pass, using a real Sandbox `PAYMENT.CAPTURE.COMPLETED` event.
 
-### G5: Safe investigation and action (lead: Rishav, 28h)
+### G5: Safe investigation and action (lead: Rishav, 30h)
 
 | ID | Task | Owner | Hours |
 |---|---|---|---|
@@ -160,7 +160,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 | 5.4 | Signed POL-14 attestation job, checked at LIVE switch and at grant issue | Rishav | 2 |
 | 5.5 | Internal-merchant adapter: conditional update, idempotency, restricted DB role | Rahul | 2.5 |
 | 5.6 | Worker: atomic grant consumption, durable attempts, independent readback | Rahul | 2.5 |
-| 5.7 | AI orchestrator: all 11 registry tools (spec 8.2), POL-08 permission intersection, durable tool trace | Swapnaneel | 3 |
+| 5.7 | AI orchestrator: all 11 registry tools (spec 8.2), POL-08 permission intersection, durable tool trace | Swapnaneel | 5 |
 | 5.8 | Agent response schema and prohibited-tool registry check | Swapnaneel | 1 |
 | 5.9 | PB-001 definition and the request-lifecycle state machine | Swapnaneel | 1 |
 | 5.10 | Investigation screens | Suprava | 1.5 |
