@@ -1,5 +1,6 @@
 """Agent service boundary (spec 8): the private tool API, output contract and Compose isolation."""
 
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,7 +13,12 @@ from app.agent_tools_api import TOOL_PREFIX, create_agent_tools_app
 from app.authz.catalogue import get_catalogue
 from app.authz.guard import TENANT_HEADER, build_route_map
 from app.domain_packs.manifest import load_domain_packs
-from app.investigation.response import AgentResponse
+from app.investigation.response import (
+    AgentResponse,
+    Expectations,
+    ResponseRefused,
+    validate_response,
+)
 from app.investigation.tools import build_tool_registry
 from app.main import create_app
 from app.worker_api import create_worker_app
@@ -73,6 +79,94 @@ def test_agent_response_accepts_the_contract():
 def test_agent_response_cannot_carry_workflow_ids(field):
     with pytest.raises(ValidationError):
         AgentResponse.model_validate(valid_response(**{field: str(uuid4())}))
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("confidence", "certain"),
+    ("classification", "duplicate capture"),
+    ("recommended_playbook", "refund everything"),
+    ("root_cause_summary", ""),
+    ("evidence", [{"evidence_id": "not-a-uuid", "source_id": str(uuid4()),
+                   "record_id": str(uuid4()), "fact": "x"}]),
+])
+def test_agent_response_fields_are_frozen(field, value):
+    with pytest.raises(ValidationError):
+        AgentResponse.model_validate(valid_response(**{field: value}))
+
+
+@pytest.mark.parametrize("field", ["case_id", "classification", "root_cause_summary", "evidence",
+                                   "recommended_playbook", "requires_approval", "confidence",
+                                   "missing_evidence"])
+def test_every_ac_ai_02_field_is_required(field):
+    body = valid_response()
+    body.pop(field)
+    with pytest.raises(ValidationError):
+        AgentResponse.model_validate(body)
+
+
+# AC-AI-02, AC-AI-04, AC-AGENT-02: output must agree with deterministic state
+
+CASE = uuid4()
+EVIDENCE, RECORD, SOURCE = uuid4(), uuid4(), uuid4()
+
+
+def expectations(**changes) -> Expectations:
+    values = {"case_id": CASE, "case_types": frozenset({"DUPLICATE_CAPTURE", "STATUS_MISMATCH"}),
+              "eligible_playbooks": {"finops:PB-002": True},
+              "returned_ids": frozenset({EVIDENCE, RECORD, SOURCE})}
+    return Expectations(**(values | changes))
+
+
+def output(**changes) -> dict:
+    grounded = {"case_id": str(CASE), "recommended_playbook": "finops:PB-002",
+                "evidence": [{"evidence_id": str(EVIDENCE), "record_id": str(RECORD),
+                              "source_id": str(SOURCE), "fact": "capture status"}]}
+    return valid_response(**(grounded | changes))
+
+
+def test_a_grounded_response_is_accepted():
+    response = validate_response(output(), expectations())
+    assert response.recommended_playbook == "finops:PB-002"
+
+
+@pytest.mark.parametrize(("changes", "expected", "reason"), [
+    ({"request_id": str(uuid4())}, {}, "SCHEMA"),
+    ({"case_id": str(uuid4())}, {}, "WRONG_CASE"),
+    ({"classification": "MADE_UP"}, {}, "UNREGISTERED_CLASSIFICATION"),
+    ({"recommended_playbook": "finops:PB-001"}, {}, "INELIGIBLE_PLAYBOOK"),
+    ({}, {"eligible_playbooks": {}}, "INELIGIBLE_PLAYBOOK"),
+    ({"requires_approval": False}, {}, "WRONG_APPROVAL_REQUIREMENT"),
+    ({"recommended_playbook": None}, {}, "APPROVAL_WITHOUT_PLAYBOOK"),
+    ({}, {"returned_ids": frozenset({EVIDENCE, SOURCE})}, "UNRETURNED_EVIDENCE"),
+    ({"evidence": [{"evidence_id": str(uuid4()), "record_id": str(RECORD),
+                    "source_id": str(SOURCE), "fact": "invented"}]}, {}, "UNRETURNED_EVIDENCE"),
+])
+def test_an_ungrounded_response_is_refused(changes, expected, reason):
+    with pytest.raises(ResponseRefused) as refused:
+        validate_response(output(**changes), expectations(**expected))
+    assert refused.value.reason == reason
+
+
+def test_no_playbook_means_nothing_to_approve():
+    response = validate_response(
+        output(recommended_playbook=None, requires_approval=False), expectations()
+    )
+    assert response.requires_approval is False
+
+
+def test_the_agent_package_mirrors_the_frozen_schema():
+    packaged = json.loads(
+        (REPO / "agent" / "settleiq_agent" / "response_schema.json").read_text(encoding="utf-8")
+    )
+    ours = AgentResponse.model_json_schema()
+
+    def shape(schema: dict, name: str | None = None) -> tuple:
+        node = schema["$defs"][name] if name else schema
+        return sorted(node["properties"]), sorted(node["required"]), node["additionalProperties"]
+
+    assert shape(packaged) == shape(ours)
+    assert shape(packaged, "EvidenceReference") == shape(ours, "EvidenceReference")
+    assert packaged["properties"]["confidence"]["enum"] == ["low", "medium", "high"]
 
 
 def test_agent_service_has_no_database_path():
