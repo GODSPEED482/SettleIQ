@@ -555,6 +555,10 @@ def test_grants_do_not_leak_across_tenants(tenant, gateway):
     assert not in_second.permits("playbook.approve")
 
 
-def test_services_resolve_to_nothing_until_g5(tenant, gateway):
+def test_a_worker_without_a_live_grant_resolves_to_nothing(tenant, gateway):
+    """POL-09, AC-AUTHZ-06: the Worker's keys come only from an unconsumed, unexpired grant,
+    which test_worker.py issues and consumes through the routes."""
     worker = Principal(uuid4(), PrincipalKind.WORKER)
     assert gateway.resolve(worker, tenant) is None
+    assert gateway.resolve(Principal(worker.id, PrincipalKind.WORKER, grant_id=uuid4()),
+                           tenant) is None

@@ -3014,6 +3014,7 @@
           "playbooks"
         ],
         "summary": "Read Execution",
+        "description": "One execution with its state, both decision IDs, the approval if any, every attempt and\nthe readback evidence that verified it.",
         "operationId": "read_execution_api_executions__execution_id__get",
         "parameters": [
           {
@@ -3022,6 +3023,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Execution Id"
             }
           }
@@ -3031,7 +3033,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Read Execution Api Executions  Execution Id  Get"
+                }
               }
             }
           },

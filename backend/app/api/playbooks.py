@@ -10,7 +10,7 @@ from fastapi import APIRouter, Header, Response
 
 from app import audit
 from app.authz.guard import TenantContext, require
-from app.errors import not_implemented
+from app.execution import worker
 from app.playbooks import gateway
 
 router = APIRouter(prefix="/api", tags=["playbooks"])
@@ -68,11 +68,13 @@ def reject_playbook_request(
     return gateway.reject(ctx, request_id, body)
 
 
-# TODO(G5 5.6 Rahul): read one execution with its state, both decision IDs, the approval if
-# any, its attempts and the readback evidence that verified it.
 @router.get("/executions/{execution_id}")
-def read_execution(execution_id: str, ctx: TenantContext = require("execution.read")) -> None:
-    raise not_implemented("5.6")
+def read_execution(
+    execution_id: UUID, ctx: TenantContext = require("execution.read")
+) -> dict:
+    """One execution with its state, both decision IDs, the approval if any, every attempt and
+    the readback evidence that verified it."""
+    return worker.read(ctx, execution_id)
 
 
 @router.get("/audit/{audit_id}")

@@ -69,6 +69,8 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       # Seals credentials from the write-only intake (spec v1.7 §11.3). Unset closes the intake.
       SOURCE_SECRET_KEY: ${SOURCE_SECRET_KEY:-}
+      # Each execution grant is handed to the private Worker here (task 5.6).
+      WORKER_URL: http://worker:8001
     volumes:
       - /data/raw-evidence:/data/raw-evidence
       - ./source-secrets:/run/source-secrets:ro
