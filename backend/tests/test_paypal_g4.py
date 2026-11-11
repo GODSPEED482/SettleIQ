@@ -39,6 +39,7 @@ from packs.finops.fixtures.duplicate_capture_sandbox import (
     get_duplicate_capture_fixture,
     verify_duplicate_proof,
 )
+from tests.test_ingestion import evidence_root  # noqa: F401
 from tests.test_semantics_store import Member
 
 PAYPAL = "paypal"
@@ -161,7 +162,8 @@ def test_ac_pp_10_permission_sets_catalogue():
 
 
 @pytest.fixture
-def db_member():
+def db_member(evidence_root):  # noqa: F811
+    # Ingress writes raw evidence; keep it under tmp_path, not the deployment RAW_EVIDENCE_DIR.
     return Member("PayPal-Test-Tenant")
 
 

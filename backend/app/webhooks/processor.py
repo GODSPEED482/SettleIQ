@@ -71,24 +71,11 @@ def _get_worker_principal(conn: Connection, tenant_id: UUID) -> Principal:
 
 
 def claim_inbox_row(conn: Connection) -> ClaimedInboxRow | None:
-    """Claim one pending or retryable webhook inbox row across all tenants."""
-    row = conn.execute(
-        text(
-            """
-            UPDATE webhook_inbox
-            SET status = 'PROCESSING', attempts = attempts + 1
-            WHERE id = (
-                SELECT id FROM webhook_inbox
-                WHERE status IN ('RECEIVED', 'FAILED') AND attempts < max_attempts
-                ORDER BY received_at
-                FOR UPDATE SKIP LOCKED
-                LIMIT 1
-            )
-            RETURNING id, tenant_id, source_id, provider_event_id, event_type,
-                      raw_evidence_id, attempts, max_attempts
-            """
-        )
-    ).first()
+    """Claim one pending or retryable webhook inbox row across all tenants.
+
+    RLS hides inbox rows without tenant context, so the claim goes through the
+    `claim_webhook_inbox()` SECURITY DEFINER function (migration 0012)."""
+    row = conn.execute(text("SELECT * FROM claim_webhook_inbox()")).first()
     if row is None:
         return None
     return ClaimedInboxRow(
