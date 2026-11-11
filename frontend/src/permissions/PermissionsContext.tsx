@@ -75,7 +75,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (session.status === "signed-out") setTenantId(null);
   }, [session.status, setTenantId]);
-  const [status, setStatus] = useState<Status>("no-tenant");
+  // The status of the last load and the tenant it was for. A tenant selected since then has
+  // not been asked about yet, so it reads as loading rather than as holding nothing.
+  const [loaded, setLoaded] = useState<{ tenantId: string | null; status: Status }>({
+    tenantId: null,
+    status: "no-tenant",
+  });
   const loadedTenant = useRef<string | null>(null);
 
   useEffect(() => {
@@ -85,28 +90,34 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     loadedTenant.current = tenantId;
     if (switched) setPermissions([]);
     if (!tenantId) {
-      setStatus("no-tenant");
+      setLoaded({ tenantId, status: "no-tenant" });
       return;
     }
     let current = true;
-    if (switched) setStatus("loading");
+    if (switched) setLoaded({ tenantId, status: "loading" });
     apiFetch<{ permissions: EffectivePermission[] }>(
       `/api/me/permissions?tenant_id=${encodeURIComponent(tenantId)}`,
     )
       .then((body) => {
         if (!current) return;
         setPermissions(body.permissions);
-        setStatus("ready");
+        setLoaded({ tenantId, status: "ready" });
       })
       .catch((error) => {
         if (!current) return;
         const signedOut = error instanceof ApiError && error.status === 401;
-        setStatus(signedOut ? "signed-out" : "unavailable");
+        setLoaded({ tenantId, status: signedOut ? "signed-out" : "unavailable" });
       });
     return () => {
       current = false;
     };
   }, [tenantId, version]);
+
+  const status: Status = !tenantId
+    ? "no-tenant"
+    : loaded.tenantId === tenantId
+      ? loaded.status
+      : "loading";
 
   const value = useMemo(
     () => ({ tenantId, setTenantId, reload, permissions, status }),

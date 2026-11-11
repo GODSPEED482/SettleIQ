@@ -1,0 +1,34 @@
+# Tenant-supplied CSV files (spec 4.4, 14.2 step 3). Each distinct file is one CSV object
+# (app/sources/conventions.py); discovery reads the stored raw-evidence copy, never the upload.
+
+connector_id: tenant-csv
+version: 1.0.0
+protocols: [csv]
+source_types: [tenant_file]
+auth_mode: none
+secret_reference_required: false
+
+supports_discovery: true
+supports_metadata: true
+supports_batch_extraction: false
+supports_incremental: false
+supports_events: false
+supports_file_ingestion: true
+supports_detail_lookup: false
+
+extraction_modes: []
+capabilities:
+  - key: files.upload
+    version: 1.0.0
+    parameters: {}
+
+rate_limit: {status: not_applicable}
+retry:
+  retry_on: []
+  honour_retry_after: false
+  backoff: none
+  max_attempts: 1
+  actions: never
+supported_schema_versions: []
+health_signals: [last_file_received]
+limits: {}

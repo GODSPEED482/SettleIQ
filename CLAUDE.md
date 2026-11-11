@@ -149,8 +149,8 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [ ] 4.1 **First task on Day 1:** Sandbox app, public HTTPS tunnel, verify provider access (1.5h)
 - [x] 1.6 Freeze connector manifest, capability keys and source envelope (1h). Evidence in `test_contracts.py`.
 - [x] 1.7 Source registry, `source_records`, raw evidence store with hashing (3h). Evidence in `test_sources.py`.
-- [ ] 2.5 PostgreSQL schema discovery and profiling (2h)
-- [ ] 2.6 CSV metadata discovery (1h)
+- [x] 2.5 PostgreSQL schema discovery and profiling (2h). Evidence in `test_discovery.py`, `test_profiling.py` and `test_secrets.py`; the merchant read source uses `env:SOURCE_SECRET_*` references until 4.5.
+- [x] 2.6 CSV metadata discovery (1h). Evidence in `test_discovery.py`; discovery reads the hash-checked raw-evidence copy, and the upload route stays with 3.6.
 - [ ] 3.5 Merchant PostgreSQL read and normalization (1h)
 - [ ] 3.6 Bank CSV and BRR parser on the shared pipeline, with provenance mode (2h)
 - [ ] 4.2 OAuth, capture details, Transaction Search backfill, adapter manifest (2h). Starter: manifest draft exists.
@@ -195,9 +195,9 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] 1.11 App shell, sign-up and sign-in, tenant creation, permission-driven UI (2h). Evidence in `session.test.tsx`, `tenants.test.tsx`, `RequirePermission.test.tsx`, `client.test.ts` and `can.test.ts`.
 - [x] 1.12 Team Management screens (1h). Members, grants, suspension, invitations, ownership transfer and invitation acceptance; evidence in `team.test.tsx` and `accept.test.tsx`.
 - [x] 1.13 IAM and cross-tenant tests (1h). `test_iam_acceptance.py` traces AC-IAM-01..11 and AC-TEN-01..03 to their tests and fails if one is renamed away.
-- [ ] 2.8 Ontology Studio graph in React Flow, view and edit relationships (2.5h). Starter: empty canvas.
-- [ ] 2.9 Binding and authority editors (1.5h)
-- [ ] 2.10 Publish confirmation showing candidate hash and validation run (1h)
+- [x] 2.8 Ontology Studio graph in React Flow, view and edit relationships (2.5h). Evidence in `studio.test.tsx` and `graph.test.ts`.
+- [x] 2.9 Binding and authority editors (1.5h). Evidence in `bindings.test.tsx`.
+- [x] 2.10 Publish confirmation showing candidate hash and validation run (1h). Evidence in `publish.test.tsx`; draft reads carry the candidate hash (`test_mappings.py`).
 - [ ] 3.8 SYNTHETIC/REFERENCE BRR fixture with manifest, version and checksum (1h)
 - [ ] 3.9 Domain Operations screens: cases, observations, resolved values (2h)
 - [ ] 4.7 Source Management screens, including credential status and SYNTHETIC label (1.5h)

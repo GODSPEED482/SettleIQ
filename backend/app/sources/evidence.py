@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, text
 
 from app.config import get_settings
-from app.errors import validation_failed
+from app.errors import conflict, not_found, validation_failed
 
 EvidenceType = Literal["WEBHOOK", "REPORT", "RECORD", "FILE"]
 
@@ -134,3 +134,22 @@ def store_bytes(
             params,
         ).one()
     return EvidenceRef(row.id, row.content_hash, row.storage_key, row.byte_size)
+
+
+def read_verified(conn: Connection, evidence_id: UUID, root: Path | None = None) -> bytes:
+    """The stored bytes of one evidence row, refused unless they still match its hash."""
+    row = conn.execute(
+        text("SELECT storage_key, content_hash FROM raw_evidence WHERE id = :id"),
+        {"id": evidence_id},
+    ).first()
+    if row is None:
+        raise not_found()
+    try:
+        data = (_root(root) / row.storage_key).read_bytes()
+    except OSError:
+        data = None
+    if data is None or hashlib.sha256(data).hexdigest() != row.content_hash:
+        raise conflict(
+            "EVIDENCE_INTEGRITY", "Stored evidence is missing or does not match its hash."
+        )
+    return data
