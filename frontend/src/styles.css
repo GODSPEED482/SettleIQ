@@ -422,3 +422,34 @@ th {
     color: #e3b341;
   }
 }
+
+.form h3 {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+
+.form label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.form label.check input {
+  width: auto;
+}
+
+textarea {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.row-messages {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}

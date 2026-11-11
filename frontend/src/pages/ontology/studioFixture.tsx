@@ -39,6 +39,7 @@ export const DRAFT: Draft = {
         "@graph": [
           { "@id": "pk:Thing", "@type": "owl:Class", "rdfs:label": "Thing", "rdfs:subClassOf": "core:DomainEntity" },
           { "@id": "pk:Part", "@type": "owl:Class", "rdfs:label": "Part", "rdfs:subClassOf": "pk:Thing" },
+          { "@id": "pk:size", "@type": "owl:DatatypeProperty", "rdfs:label": "size", "rdfs:domain": "pk:Thing" },
           { "@id": "pk:hasPart", "@type": "owl:ObjectProperty", "rdfs:label": "has part", "rdfs:domain": "pk:Thing", "rdfs:range": "pk:Part" },
         ],
       },
