@@ -59,6 +59,8 @@ def test_observations_carry_raw_and_normalized_values(resolved):
     statuses = {o["raw_value"]: o["normalized_value"]
                 for o in observed(entity, "finops:lifecycleStatus")}
     assert statuses == {"COMPLETED": "COMPLETED", "pending": "PENDING"}
+    # Provenance comes from the raw evidence, so the UI can label reference data.
+    assert {o["provenance"] for o in entity["observations"]} == {"synthetic_reference"}
 
 
 def test_authority_resolves_without_dropping_other_observations(resolved):

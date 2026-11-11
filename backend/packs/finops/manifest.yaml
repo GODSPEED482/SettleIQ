@@ -57,9 +57,7 @@ playbook_templates:
     title: Settlement / chargeback workflow
     executable: false
 
-# TODO(G3 3.8 Suprava): a SYNTHETIC/REFERENCE BRR CSV, with SYNTHETIC in its filename, built
-# against PayPal's published Balance Report layout (spec 10.3.1). Include sales, fees, refunds
-# and adjustments, and no real credentials or personal data. Its manifest states version,
-# SHA-256, opening and closing balance and each row's included-in-net treatment (OPEN-10). Add
-# a test that fails when the file and its checksum disagree, and list the fixture here.
-test_fixtures: []
+# The SYNTHETIC/REFERENCE BRR fixture (spec 10.3.1, task 3.8). Paths are relative to this pack.
+test_fixtures:
+  - fixtures/SYNTHETIC_REFERENCE_balance_report_v1.csv
+  - fixtures/SYNTHETIC_REFERENCE_balance_report_v1.manifest.yaml

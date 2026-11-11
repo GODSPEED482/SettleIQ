@@ -55,6 +55,7 @@ def test_cases_are_listed_with_their_finding(operator):
     assert (case["expected_amount"], case["observed_amount"], case["currency"]) == (
         "100.000001", "99.500000", "USD"
     )
+    assert case["evidence_provenance"] == []  # the seeded case names no source records
     filtered = operator.request("GET", "/api/domain-cases", params={"status": "CLOSED"})
     assert filtered.json() == []
 

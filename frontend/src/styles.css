@@ -269,6 +269,71 @@ th {
   border-radius: 4px;
 }
 
+.badge.synthetic {
+  color: #9a6700;
+  border-color: currentColor;
+  font-weight: 600;
+}
+
+.status {
+  padding: 1px 6px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.status-resolved,
+.status-succeeded,
+.status-closed {
+  color: #2e7d4f;
+}
+
+.status-conflict,
+.status-authority_conflict,
+.status-unresolved,
+.status-failed,
+.status-open {
+  color: #b42318;
+  border-color: currentColor;
+}
+
+.status-stale,
+.status-human_review,
+.status-investigating,
+.status-action_pending {
+  color: #9a6700;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.chip.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.entity-detail h4 {
+  margin: 16px 0 8px;
+}
+
+.triage,
+.decision {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
 .notice {
   padding: 8px 12px;
   background: var(--panel);
