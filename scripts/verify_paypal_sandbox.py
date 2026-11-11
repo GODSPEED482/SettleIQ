@@ -125,13 +125,16 @@ def _capture(client: httpx.Client, headers: dict[str, str], order_id: str) -> di
     return capture
 
 
-def live_capture(client_id: str, client_secret: str, order_ref: str) -> dict | None:
+def live_capture(
+    client_id: str, client_secret: str, order_ref: str, amount: str = "1.00"
+) -> dict | None:
     """G4 live exit step: make PayPal Sandbox emit a real PAYMENT.CAPTURE.COMPLETED.
 
-    Creates a USD 100.00 order whose invoice_id is `order_ref`, so the event reconciles against
-    a merchant row with that order reference, then captures it. A Sandbox card captures at
-    once where the app has card processing; otherwise the buyer approval link is printed and
-    `--capture-order` finishes the capture after approval.
+    Creates a USD order for `amount` (Sandbox test money, USD 1.00 by default) whose invoice_id
+    is `order_ref`, so the event reconciles against a merchant row with that order reference,
+    then captures it. A Sandbox card captures at once where the app has card processing;
+    otherwise the buyer approval link is printed and `--capture-order` finishes the capture
+    after approval.
     """
     with httpx.Client(base_url=f"https://{SANDBOX_HOST}", timeout=30.0) as client:
         headers = _bearer(client, client_id, client_secret)
@@ -141,7 +144,7 @@ def live_capture(client_id: str, client_secret: str, order_ref: str) -> dict | N
                 "reference_id": order_ref,
                 "invoice_id": order_ref,
                 "custom_id": order_ref,
-                "amount": {"currency_code": "USD", "value": "100.00"},
+                "amount": {"currency_code": "USD", "value": amount},
             }],
             "payment_source": {"card": {
                 "number": "4111111111111111", "expiry": "2030-12",
@@ -153,8 +156,15 @@ def live_capture(client_id: str, client_secret: str, order_ref: str) -> dict | N
             headers=headers | {"PayPal-Request-Id": f"settleiq-order-{order_ref}"},
         )
         if resp.status_code not in (200, 201):
-            # Without card processing, fall back to a buyer-approved PayPal checkout.
-            del order["payment_source"]
+            # Without card processing (PAYEE_NOT_ENABLED_FOR_CARD_PROCESSING), fall back to a
+            # buyer-approved PayPal checkout. Sandbox checkout fails without return URLs.
+            order["payment_source"] = {"paypal": {"experience_context": {
+                "return_url": "https://example.com/settleiq/approved",
+                "cancel_url": "https://example.com/settleiq/cancelled",
+                "user_action": "PAY_NOW",
+                "shipping_preference": "NO_SHIPPING",
+                "brand_name": "SettleIQ Sandbox",
+            }}}
             resp = client.post(
                 "/v2/checkout/orders", json=order,
                 headers=headers | {"PayPal-Request-Id": f"settleiq-order-wallet-{order_ref}"},
@@ -193,6 +203,7 @@ def main():
         metavar="ORDER_REF",
         help="create and capture a Sandbox order with this invoice_id (G4 live exit step)",
     )
+    parser.add_argument("--amount", default="1.00", help="USD amount for --live-capture")
     parser.add_argument("--capture-order", metavar="ORDER_ID", help="capture an approved order")
     args = parser.parse_args()
 
@@ -206,7 +217,7 @@ def main():
             headers = _bearer(client, args.client_id, args.client_secret)
             sys.exit(0 if _capture(client, headers, args.capture_order) else 1)
     if args.live_capture:
-        live_capture(args.client_id, args.client_secret, args.live_capture)
+        live_capture(args.client_id, args.client_secret, args.live_capture, args.amount)
         return
 
     result = verify_sandbox(args.client_id, args.client_secret, args.tunnel_url, args.source_id)

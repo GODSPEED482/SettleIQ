@@ -73,6 +73,16 @@ def put_source_credentials(
     return registry.put_credentials(ctx, source_id, body)
 
 
+# Spec v1.7 §11.3, AC-PP-14: the write-only intake. The value is accepted once and never returned.
+@router.put("/sources/{source_id}/credential-value")
+def put_source_credential_value(
+    source_id: str,
+    body: registry.CredentialValueBody,
+    ctx: TenantContext = require("source.credential.manage", scope=SOURCE),
+) -> dict:
+    return registry.put_credential_value(ctx, source_id, body)
+
+
 @router.put("/sources/{source_id}/webhooks")
 def put_source_webhooks(
     source_id: str,

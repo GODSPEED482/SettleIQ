@@ -1,7 +1,9 @@
 """Resolve a source's opaque secret reference within its tenant (spec 11.3, ARCH-03).
 
-Two schemes, both resolved server-side, never by the browser, a model or an agent tool:
+Three schemes, all resolved server-side, never by the browser, a model or an agent tool:
 
+- `stored:<source_id>`, a credential the tenant submitted through the write-only intake, sealed
+  in `source_credential_values` under the tenant's RLS (app/sources/credential_store.py).
 - `managed:<NAME>`, read from `<SOURCE_SECRET_DIR>/<tenant_id>/<NAME>`. In production deploy.sh
   renders that read-only directory on the host from SSM Parameter Store
   (`<PARAM_PATH>/source/<tenant_id>/<NAME>`), because containers are deliberately unable to reach
@@ -13,7 +15,7 @@ The tenant comes from the caller's trusted context, never from the reference, so
 only name a secret in its own tenant's namespace: the same `managed:PAYPAL` is a different secret
 in every tenant, and a reference cannot be written to reach another tenant's.
 
-A reference that is in neither form, or names an unset or empty secret, fails closed. Neither
+A reference in none of these forms, or naming an unset or empty secret, fails closed. Neither
 the reference nor the value is ever echoed into an error, log or audit row.
 """
 
@@ -24,10 +26,14 @@ from uuid import UUID
 
 from app.config import get_settings
 from app.errors import conflict
+from app.sources import credential_store
 
 _ENV_REFERENCE = re.compile(r"^env:(SOURCE_SECRET_[A-Z0-9_]+)$")
 # Upper case and underscores only, so a name can never be a path.
 _MANAGED_REFERENCE = re.compile(r"^managed:([A-Z][A-Z0-9_]{0,99})$")
+_STORED_REFERENCE = re.compile(
+    r"^stored:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$"
+)
 
 
 def _managed_value(tenant_id: UUID, name: str) -> str:
@@ -43,6 +49,8 @@ def _managed_value(tenant_id: UUID, name: str) -> str:
 def _value(tenant_id: UUID, reference: str | None) -> str:
     if not isinstance(tenant_id, UUID):
         return ""
+    if match := _STORED_REFERENCE.match(reference or ""):
+        return credential_store.stored_value(tenant_id, UUID(match.group(1)))
     if match := _MANAGED_REFERENCE.match(reference or ""):
         return _managed_value(tenant_id, match.group(1))
     if match := _ENV_REFERENCE.match(reference or ""):

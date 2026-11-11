@@ -1,22 +1,24 @@
 """Tenant-scoped source registry (spec 6.3, 12.2, AC-OPEN-01).
 
 A source stores the connector's declared capabilities as data, so registering a new
-connector needs no source-model change. Configuration holds opaque secret references only;
-secret values never enter the database (spec 11.3).
+connector needs no source-model change. Configuration holds opaque secret references only.
+A secret value enters the database only sealed, through the write-only intake, under a key the
+database never holds (spec v1.7 §11.3, app/sources/credential_store.py).
 """
 
 import json
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 from sqlalchemy import text
 
 from app.audit import write_audit
 from app.authz.guard import TenantContext
 from app.connectors.manifest import load_connector_manifests, select_binding
 from app.db import global_tx, tenant_tx
-from app.errors import conflict, missing_permission, not_found, validation_failed
+from app.errors import ApiError, conflict, missing_permission, not_found, validation_failed
+from app.sources import credential_store
 from app.sources.secrets import is_resolvable
 
 CREDENTIAL_KEY = "source.credential.manage"
@@ -195,6 +197,91 @@ def put_credentials(ctx: TenantContext, source_id: str, body: CredentialBody) ->
                 "WHERE id = :id"
             ),
             {"id": source_uuid, "secret": body.secret_reference},
+        )
+        # Moving off this source's intake credential revokes it (spec 11.3).
+        if body.secret_reference != credential_store.reference_for(source_uuid):
+            credential_store.discard(conn, source_uuid)
+        action = "created" if previous.secret_reference is None else "rotated"
+        write_audit(
+            conn, ctx.tenant_id, ctx.principal, f"source.credential.{action}", "source",
+            {"source_id": str(source_uuid)},
+        )
+        row = conn.execute(
+            text(f"SELECT {_SOURCE_COLUMNS} FROM data_sources WHERE id = :id"),
+            {"id": source_uuid},
+        ).one()
+    return _view(row)
+
+
+class CredentialValueBody(_Body):
+    """The credential itself, accepted once and never returned (spec v1.7 §11.3, AC-PP-14).
+
+    For PayPal, JSON `{"client_id", "client_secret"}` or `client_id:client_secret`.
+    """
+
+    value: SecretStr = Field(min_length=1, max_length=4000)
+
+
+def _check_with_provider(connector_id: str, value: str) -> None:
+    """Prove the credential authenticates before it is stored (spec 14.2 step 2).
+
+    The provider's reply is never echoed: it can quote what was sent.
+    """
+    if connector_id != "paypal":
+        return
+    from app.connectors.paypal.client import PayPalClient, PayPalError
+    from app.connectors.paypal.sync import _parse_credentials
+
+    try:
+        PayPalClient(*_parse_credentials(value)).get_token()
+    except (ApiError, PayPalError, ValueError):
+        raise ApiError(
+            422, "CREDENTIAL_REJECTED",
+            "PayPal Sandbox did not accept these credentials, or could not be reached.",
+        ) from None
+
+
+def put_credential_value(
+    ctx: TenantContext, source_id: str, body: CredentialValueBody
+) -> dict[str, Any]:
+    """Write-only intake: seal the tenant's credential and point the source at it (AC-PP-14).
+
+    The value goes to the sealed store only. The response, the audit row and any error carry
+    the source ID at most, never the value or the reference.
+    """
+    source_uuid = _source_uuid(source_id)
+    if not credential_store.available():
+        raise conflict(
+            "CREDENTIAL_STORE_UNAVAILABLE", "Credential intake is not configured on this server."
+        )
+    with tenant_tx(ctx) as conn:
+        source = conn.execute(
+            text("SELECT connector_id FROM data_sources WHERE id = :id"), {"id": source_uuid}
+        ).first()
+    if source is None:
+        raise not_found()
+    manifest = load_connector_manifests().get(source.connector_id)
+    if manifest is None or not manifest.secret_reference_required:
+        raise conflict("CREDENTIALS_UNSUPPORTED", "This source takes no credentials.")
+    value = body.value.get_secret_value().strip()
+    if not value:
+        raise validation_failed("A credential is required.")
+    _check_with_provider(source.connector_id, value)
+    reference = credential_store.reference_for(source_uuid)
+    with tenant_tx(ctx) as conn:
+        previous = conn.execute(
+            text("SELECT secret_reference FROM data_sources WHERE id = :id FOR UPDATE"),
+            {"id": source_uuid},
+        ).first()
+        if previous is None:
+            raise not_found()
+        credential_store.store(conn, ctx.tenant_id, source_uuid, value)
+        conn.execute(
+            text(
+                "UPDATE data_sources SET secret_reference = :secret, updated_at = now() "
+                "WHERE id = :id"
+            ),
+            {"id": source_uuid, "secret": reference},
         )
         action = "created" if previous.secret_reference is None else "rotated"
         write_audit(

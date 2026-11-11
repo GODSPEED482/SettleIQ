@@ -38,7 +38,6 @@ SettleIQ spec v1.7 is a pre-development baseline written for a ten-day MVP. The 
 - The remaining discrepancy fixtures (AC-REC-09)
 - Provider-generated BRR retrieval
 - Redis and pgvector (a PostgreSQL job table replaces Redis, which §6.2 allows)
-- Write-only credential intake (AC-PP-14), so only the demo tenant connects PayPal, with credentials the operator stores in SSM under its tenant ID. Its write path is OPEN-PP-03
 - PayPal partner onboarding (OPEN-PP-02)
 
 **Fallback rule (Day 3, hour 7).** If the safety suite is not fully green, CI issues no attestation and the demo stops at step 10 in SHADOW, as §16.7 permits. Nobody bypasses the gate to save the demo.
@@ -133,7 +132,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 **Exit:** deterministic fixtures are stable; fees already in net are not double-subtracted (AC-REC-07); ambiguous matches are never forced.
 
-### G4: Provider lifecycle (lead: Rahul, 16h)
+### G4: Provider lifecycle (lead: Rahul, 17.5h)
 
 | ID | Task | Owner | Hours |
 |---|---|---|---|
@@ -147,6 +146,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 | 4.8 | Failure tests: invalid signature, duplicate and out-of-order events | Suprava | 0.5 |
 | 4.9 | Sandbox duplicate-capture setup: two successful capture IDs for one intended order (§10.6, demo step 14) | Rahul | 0.5 |
 | 4.10 | PayPal `refunds.create` and `refunds.read` adapter: versioned parameter contract, exact capture target, provider idempotency key, Sandbox only | Rahul | 2.5 |
+| 4.11 | Write-only credential intake so a tenant connects its own PayPal app (spec v1.7 §11.3, AC-PP-14); sealed store decided for this build under OPEN-PP-03. Added 2026-11-11 | Rishav | 1.5 |
 
 **Exit:** AC-WEBHOOK-01 and AC-PP-03/04/05/06/10/13 pass, using a real Sandbox `PAYMENT.CAPTURE.COMPLETED` event.
 
@@ -194,7 +194,7 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 | Owner | Items | By |
 |---|---|---|
-| Rishav | OPEN-21-19 (no permission cache in this build). OPEN-REL-01 is closed by spec v1.6 §9.7. OPEN-PP-03 (secret-manager write path for credential intake) stays open past this slice. | G1, Day 1 |
+| Rishav | OPEN-21-19 (no permission cache in this build). OPEN-REL-01 is closed by spec v1.6 §9.7. OPEN-PP-03 is decided for this build (a sealed store under an api-only key) and stays open for production. | G1, Day 1 |
 | Rahul | OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 | Day 1, first hours |
 | Swapnaneel | OPEN-03, OPEN-10 (included-in-net semantics for the fixture) | OPEN-03 Day 1; OPEN-10 before 3.3 |
 | Suprava | OPEN-14 (API conventions, auth transport, error envelope) | Day 1, first hours |

@@ -35,6 +35,9 @@ export function sourcesApi(tenantId: string) {
         method: "PUT",
         json: { secret_reference: secretReference },
       }),
+    // Write-only (spec v1.7 §11.3): the value is sent once and no route ever returns it.
+    connectCredential: (sourceId: string, value: string) =>
+      call<Source>(`/api/sources/${sourceId}/credential-value`, { method: "PUT", json: { value } }),
     registerWebhook: (sourceId: string, body: WebhookConfig) =>
       call<Source>(`/api/sources/${sourceId}/webhooks`, { method: "PUT", json: body }),
     webhookEvents: (sourceId: string) =>

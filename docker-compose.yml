@@ -55,6 +55,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       SOURCE_SECRET_MERCHANT_DB: ${SOURCE_SECRET_MERCHANT_DB:-}
       SOURCE_SECRET_PAYPAL_SANDBOX: ${SOURCE_SECRET_PAYPAL_SANDBOX:-}
+      SOURCE_SECRET_KEY: ${SOURCE_SECRET_KEY:-}
     volumes:
       - ./backend/app:/srv/app/app
       - ./backend/packs:/srv/app/packs

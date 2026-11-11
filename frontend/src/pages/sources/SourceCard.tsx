@@ -44,6 +44,7 @@ export function SourceCard({ source, manifest, permissions, api, busy, run }: Pr
   const canSync = allowed("source.sync") && supports(manifest?.supports_batch_extraction);
   const canUpload = allowed("source.file.upload") && supports(manifest?.supports_file_ingestion);
   const canCredential = allowed("source.credential.manage");
+  const takesCredential = manifest?.secret_reference_required ?? true;
   const canWebhook = allowed("source.webhook.manage") && eventTypes !== null;
 
   async function discover() {
@@ -120,6 +121,19 @@ export function SourceCard({ source, manifest, permissions, api, busy, run }: Pr
             if (value) setResult({ kind: "upload", value });
             return value !== undefined;
           }}
+        />
+      )}
+      {canCredential && takesCredential && (
+        <ConnectForm
+          busy={busy}
+          paypal={source.connector_id === "paypal"}
+          replacing={source.has_secret_reference}
+          onConnect={async (value) =>
+            (await run(
+              () => api.connectCredential(source.id, value),
+              `${source.display_name}: credentials connected.`,
+            )) !== undefined
+          }
         />
       )}
       {canCredential && (
@@ -325,6 +339,77 @@ function UploadForm({
   );
 }
 
+// Write-only intake (spec v1.7 §11.3, AC-PP-14): the tenant's own credentials go to the server
+// once, sealed there, and are never shown again. The fields clear once they are accepted.
+function ConnectForm({
+  busy,
+  paypal,
+  replacing,
+  onConnect,
+}: {
+  busy: boolean;
+  paypal: boolean;
+  replacing: boolean;
+  onConnect: (value: string) => Promise<boolean>;
+}) {
+  const [clientId, setClientId] = useState("");
+  const [secret, setSecret] = useState("");
+  const hintId = useId();
+  const ready = secret.trim() !== "" && (!paypal || clientId.trim() !== "");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const value = paypal
+      ? JSON.stringify({ client_id: clientId.trim(), client_secret: secret.trim() })
+      : secret.trim();
+    if (await onConnect(value)) {
+      setClientId("");
+      setSecret("");
+    }
+  }
+
+  return (
+    <form className="form inline" onSubmit={(event) => void submit(event)}>
+      <h4>{paypal ? "Connect your PayPal app" : "Connect credentials"}</h4>
+      {paypal && (
+        <label>
+          Client ID
+          <input
+            value={clientId}
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={500}
+            onChange={(event) => setClientId(event.target.value)}
+          />
+        </label>
+      )}
+      <label>
+        {paypal ? "Client secret" : "Credential"}
+        <input
+          type="password"
+          value={secret}
+          autoComplete="new-password"
+          spellCheck={false}
+          maxLength={3000}
+          aria-describedby={hintId}
+          onChange={(event) => setSecret(event.target.value)}
+        />
+      </label>
+      <span id={hintId} className="hint">
+        {paypal
+          ? "From a dedicated REST app in your own PayPal Sandbox account, with Transaction search and Accept payments enabled. "
+          : ""}
+        Sealed on the server and never shown again.
+      </span>
+      <div className="actions">
+        <button type="submit" disabled={busy || !ready}>
+          {replacing ? "Replace credentials" : "Connect"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // Write-only: the field is empty on every render and cleared once the reference is stored.
 function CredentialForm({
   busy,
@@ -345,7 +430,7 @@ function CredentialForm({
 
   return (
     <form className="form inline" onSubmit={(event) => void submit(event)}>
-      <h4>{rotating ? "Rotate credential reference" : "Store credential reference"}</h4>
+      <h4>{rotating ? "Rotate credential reference" : "Or use a platform-managed reference"}</h4>
       <label>
         Secret reference
         <input
