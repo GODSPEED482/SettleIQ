@@ -1,7 +1,9 @@
 """Connector, domain-pack, envelope and agent-tool contracts."""
 
+import json
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -28,6 +30,11 @@ from app.domain_packs.registry import (
     resolve_pack_entrypoints,
 )
 from app.investigation.tools import ToolRegistryError, build_tool_registry, validate_tools
+from app.semantics.mappings import (
+    comparability_violations,
+    hint_bodies,
+    unknown_term_violations,
+)
 from app.sources import conventions
 from app.sources.envelope import SourceRecordEnvelope
 from app.sources.evidence import RetrievalContext
@@ -241,6 +248,82 @@ def test_pack_must_reference_canonical_action_capabilities():
         DomainPackManifest(**pack_data(connector_action_capabilities=["refund_money"]))
     with pytest.raises(ValidationError, match="canonical action"):
         DomainPackManifest(**pack_data(connector_action_capabilities=["captures.read"]))
+
+
+# Mapping hints (task 4.6)
+
+
+BACKEND = Path(__file__).parents[1]
+
+
+def _ontology_terms(*paths: str) -> set[str]:
+    terms = set()
+    for path in paths:
+        document = json.loads((BACKEND / path).read_text(encoding="utf-8"))
+        terms |= {node["@id"] for node in document.get("@graph", [])}
+    return terms
+
+
+FINOPS_TERMS = _ontology_terms("app/semantics/core.jsonld", "packs/finops/ontology/finops.jsonld")
+
+
+def finops_hints(connector: str):
+    pack = load_domain_packs()["finops"]
+    return hint_bodies(pack, connector, uuid4(), uuid4(), datetime(2026, 1, 1, tzinfo=UTC))
+
+
+def test_finops_hints_bind_paypal_with_known_comparable_terms():
+    bindings, authority = finops_hints("paypal")
+    rows = [b.model_dump(mode="json") for b in bindings]
+    assert unknown_term_violations(rows, [a.model_dump() for a in authority], FINOPS_TERMS) == []
+    assert comparability_violations(rows) == []
+    objects = {b.external_object for b in bindings}
+    assert {"captures.read", "refunds.read", "PAYMENT.CAPTURE.COMPLETED",
+            "PAYMENT.CAPTURE.REFUNDED"} <= objects
+    # Every event hint names an event type the PayPal webhook contract accepts.
+    contract = {c.key: c for c in load_connector_manifests()["paypal"].capabilities}
+    accepted = contract["webhooks.receive"].parameters["properties"]["event_types"]["items"]
+    events = {b.external_object for b in bindings if b.sync_strategy == "event"}
+    assert events <= set(accepted["enum"])
+
+
+def test_paypal_is_the_capture_completion_authority_and_the_merchant_the_internal_one():
+    _, paypal = finops_hints("paypal")
+    _, merchant = finops_hints("merchant-postgres")
+    assert ("finops:lifecycleStatus", "finops:Capture") in {
+        (a.property_iri, a.entity_type_iri) for a in paypal
+    }
+    assert {(a.property_iri, a.entity_type_iri) for a in merchant} == {
+        ("finops:lifecycleStatus", "finops:Order"), ("finops:lifecycleStatus", "finops:Payment"),
+    }
+
+
+def test_finops_event_hint_matches_the_merchant_status_binding():
+    """The comparability an event status needs to be checked against a merchant row."""
+    bindings, _ = finops_hints("paypal")
+    [event_status] = [b for b in bindings if b.external_object == "PAYMENT.CAPTURE.COMPLETED"
+                      and b.property_iri == "finops:lifecycleStatus"]
+    assert (event_status.value_basis, event_status.temporal_context) == ("status", "current")
+
+
+@pytest.mark.parametrize(
+    "hint",
+    [
+        {"kind": "binding", "connector_id": "no-such-connector", "external_object": "x",
+         "class_iri": "finops:Capture", "sync_strategy": "batch",
+         "fields": [{"field_path": "$.id", "property_iri": "finops:providerReference",
+                     "datatype": "string", "transform": {"name": "identity"},
+                     "value_basis": "identifier", "temporal_context": "any"}]},
+        {"kind": "authority", "connector_id": "paypal", "property_iri": "not a term",
+         "entity_type_iri": "finops:Capture", "verification_method": "x"},
+        {"kind": "guess", "connector_id": "paypal"},
+        {"kind": "binding", "connector_id": "paypal", "external_object": "x",
+         "class_iri": "finops:Capture", "sync_strategy": "batch", "fields": []},
+    ],
+)
+def test_invalid_mapping_hint_is_rejected(hint):
+    with pytest.raises(ValidationError):
+        DomainPackManifest(**pack_data(mapping_hints=[hint]))
 
 
 def test_pb_003_is_not_executable():

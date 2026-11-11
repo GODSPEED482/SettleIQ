@@ -10,13 +10,102 @@ ontology_definitions:
   - {id: finops.ontology, path: ontology/finops.jsonld}
 shacl_shapes:
   - {id: finops.shapes, path: ontology/finops.shacl.ttl}
-# TODO(G4 4.6 Swapnaneel): map PayPal capture, refund and event fields (capture ID, order
-# reference, status, amount, currency, create and update times) to finops terms. Assert PayPal
-# as the authority for capture completion, with the merchant database the authority for
-# internal order and payment state (spec 10.5 step 4). Ship them as hints here and publish
-# them as mappings, so the 4.3 event and the merchant row give comparable observations and
-# STATUS_MISMATCH is raised (AC-PP-06).
-mapping_hints: []
+# PayPal bindings and authority (task 4.6, spec 10.5 step 4). A tenant applies these to a draft
+# for its own source (app/semantics/mappings.py:hint_bodies), then validates and publishes them.
+# A webhook event and a captures.read response bind the same capture properties with the same
+# meaning, so either is comparable with the merchant's row and a disagreement raises
+# STATUS_MISMATCH (AC-PP-06). PayPal is the authority for capture and refund completion; the
+# merchant database is the authority for internal order and payment state. Merchant bindings are
+# not hinted: every merchant schema differs, and discovery proposes them (task 2.2).
+# update_time is not bound: finops has no term for it, and each record's own observed time
+# already orders observations of one property.
+mapping_hints:
+  - kind: binding
+    connector_id: paypal
+    external_object: captures.read
+    class_iri: finops:Capture
+    sync_strategy: batch
+    fields: &api_fields
+      - &capture_id {field_path: $.id, property_iri: finops:providerReference, datatype: string,
+          transform: {name: identity}, value_basis: identifier, temporal_context: any}
+      - &order_ref {field_path: $.invoice_id, property_iri: finops:orderReference,
+          datatype: string, transform: {name: identity}, value_basis: identifier,
+          temporal_context: any}
+      - &status {field_path: $.status, property_iri: finops:lifecycleStatus, datatype: string,
+          transform: {name: upper}, value_basis: status, temporal_context: current}
+      - &amount {field_path: $.amount.value, property_iri: finops:amount, datatype: decimal,
+          transform: {name: decimal_string}, value_basis: signed, temporal_context: at_event,
+          currency_field: $.amount.currency_code}
+      - &created {field_path: $.create_time, property_iri: finops:occurredAt,
+          datatype: datetime, transform: {name: iso8601}, value_basis: timestamp,
+          temporal_context: at_event}
+  - kind: binding
+    connector_id: paypal
+    external_object: refunds.read
+    class_iri: finops:Refund
+    sync_strategy: batch
+    fields: *api_fields
+  # The same fields inside a webhook event, whose resource is the capture or refund.
+  - kind: binding
+    connector_id: paypal
+    external_object: PAYMENT.CAPTURE.COMPLETED
+    class_iri: finops:Capture
+    sync_strategy: event
+    fields: &event_fields
+      - {<<: *capture_id, field_path: $.resource.id}
+      - {<<: *order_ref, field_path: $.resource.invoice_id}
+      - {<<: *status, field_path: $.resource.status}
+      - {<<: *amount, field_path: $.resource.amount.value,
+          currency_field: $.resource.amount.currency_code}
+      - {<<: *created, field_path: $.resource.create_time}
+  - kind: binding
+    connector_id: paypal
+    external_object: PAYMENT.CAPTURE.PENDING
+    class_iri: finops:Capture
+    sync_strategy: event
+    fields: *event_fields
+  - kind: binding
+    connector_id: paypal
+    external_object: PAYMENT.CAPTURE.DENIED
+    class_iri: finops:Capture
+    sync_strategy: event
+    fields: *event_fields
+  - kind: binding
+    connector_id: paypal
+    external_object: PAYMENT.CAPTURE.REFUNDED
+    class_iri: finops:Refund
+    sync_strategy: event
+    fields: *event_fields
+  - kind: authority
+    connector_id: paypal
+    property_iri: finops:lifecycleStatus
+    entity_type_iri: finops:Capture
+    verification_method: PayPal capture status from a verified webhook or captures.read
+  - kind: authority
+    connector_id: paypal
+    property_iri: finops:amount
+    entity_type_iri: finops:Capture
+    verification_method: PayPal capture amount from a verified webhook or captures.read
+  - kind: authority
+    connector_id: paypal
+    property_iri: finops:lifecycleStatus
+    entity_type_iri: finops:Refund
+    verification_method: PayPal refund status from a verified webhook or refunds.read
+  - kind: authority
+    connector_id: paypal
+    property_iri: finops:amount
+    entity_type_iri: finops:Refund
+    verification_method: PayPal refund amount from a verified webhook or refunds.read
+  - kind: authority
+    connector_id: merchant-postgres
+    property_iri: finops:lifecycleStatus
+    entity_type_iri: finops:Order
+    verification_method: Merchant order state read from the merchant database
+  - kind: authority
+    connector_id: merchant-postgres
+    property_iri: finops:lifecycleStatus
+    entity_type_iri: finops:Payment
+    verification_method: Merchant payment state read from the merchant database
 validators:
   - {id: finops.settlement_cardinality, entrypoint: "packs.finops.validators:check_settlement_cardinality"}
   - {id: finops.required_terms, entrypoint: "packs.finops.validators:check_required_terms"}

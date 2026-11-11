@@ -16,6 +16,7 @@ from sqlalchemy import Connection, text
 from app.audit import write_audit
 from app.authz.guard import TenantContext
 from app.db import tenant_tx
+from app.domain_packs.manifest import AuthorityHint, BindingHint, DomainPackManifest
 from app.errors import conflict, not_found, validation_failed
 
 TERM =r"^[a-z][a-z0-9_]*:[A-Za-z][A-Za-z0-9_]*$"
@@ -339,3 +340,37 @@ def unknown_term_violations(
     referenced |= {a["property_iri"] for a in authority}
     referenced |= {a["entity_type_iri"] for a in authority}
     return [f"Unknown ontology term: {term}" for term in sorted(referenced - known_terms)]
+
+
+def hint_bodies(
+    pack: DomainPackManifest,
+    connector_id: str,
+    draft_id: UUID,
+    source_id: UUID,
+    valid_from: datetime,
+) -> tuple[list[MappingBody], list[AuthorityBody]]:
+    """A pack's mapping and authority hints for one connector, as bodies for one source.
+
+    Applying them is an ordinary save into an open draft, so they are validated and published
+    like any other binding and covered by the candidate hash.
+    """
+    mappings = [
+        MappingBody(
+            draft_id=draft_id, source_id=source_id, external_object=hint.external_object,
+            class_iri=hint.class_iri, sync_strategy=hint.sync_strategy,
+            method="accepted_proposal", **field.model_dump(),
+        )
+        for hint in pack.mapping_hints
+        if isinstance(hint, BindingHint) and hint.connector_id == connector_id
+        for field in hint.fields
+    ]
+    authority = [
+        AuthorityBody(
+            draft_id=draft_id, source_id=source_id, property_iri=hint.property_iri,
+            entity_type_iri=hint.entity_type_iri, valid_from=valid_from,
+            verification_method=hint.verification_method,
+        )
+        for hint in pack.mapping_hints
+        if isinstance(hint, AuthorityHint) and hint.connector_id == connector_id
+    ]
+    return mappings, authority

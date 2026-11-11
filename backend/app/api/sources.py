@@ -6,7 +6,6 @@ from fastapi import APIRouter, File, Form, UploadFile
 
 from app.authz.guard import TenantContext, require
 from app.connectors.manifest import load_capability_registry
-from app.errors import not_implemented
 from app.sources import discovery, file_ingest, merchant_read, registry
 
 router = APIRouter(prefix="/api", tags=["sources"])
@@ -62,24 +61,20 @@ async def upload_source_file(
     return file_ingest.ingest(ctx, source_id, await file.read(), file.filename or "file", kind)
 
 
-# TODO(G4 4.5 Rishav): store or rotate a source's opaque secret reference (spec 11.3). Accept a
-# reference, never a value, and reject one that does not resolve. Return only whether a
-# reference is set. Audit create and rotate without the reference or the value. Only a grant
-# holding source.credential.manage may do this: a set that inherits the other source keys but
-# not this one is refused (AC-PP-10), with a test for each side. Adjust
-# test_held_permission_passes_the_gate and the 501 check in test_route_guard.py.
+# AC-PP-10: holding the other source keys, by inheritance or otherwise, never reaches these.
 @router.put("/sources/{source_id}/credentials")
 def put_source_credentials(
-    source_id: str, ctx: TenantContext = require("source.credential.manage", scope=SOURCE)
-) -> None:
-    raise not_implemented("4.5")
+    source_id: str,
+    body: registry.CredentialBody,
+    ctx: TenantContext = require("source.credential.manage", scope=SOURCE),
+) -> dict:
+    return registry.put_credentials(ctx, source_id, body)
 
 
-# TODO(G4 4.5 Rishav): register the PayPal webhook ID and subscribed event types for this
-# source; the 4.3 trusted lookup reads them. Audit the change. Same AC-PP-10 boundary as the
-# credentials route, under source.webhook.manage.
 @router.put("/sources/{source_id}/webhooks")
 def put_source_webhooks(
-    source_id: str, ctx: TenantContext = require("source.webhook.manage", scope=SOURCE)
-) -> None:
-    raise not_implemented("4.5")
+    source_id: str,
+    body: registry.WebhookBody,
+    ctx: TenantContext = require("source.webhook.manage", scope=SOURCE),
+) -> dict:
+    return registry.put_webhooks(ctx, source_id, body)

@@ -35,16 +35,24 @@ class Record:
 
 
 _FILE_KIND = re.compile(r"^[^:]+:file/(.+)$")
+_EVENT_TYPE = re.compile(r"^[^:]+:event/(.+)$")
 
 
 def object_keys(record: Record) -> list[str]:
     """Names a mapping's `external_object` can use for this record, most specific first.
 
-    Tables, API capabilities and event streams have one stable object name. Each uploaded file
-    is its own object, named `{file name}@{sha16}` (conventions.py), so a mapping can also name
-    the file, or the report kind in the record type (`BRR`, `BANK_CSV`) to cover every upload
-    of that kind. A more specific mapping wins: one file can override its kind.
+    Tables and API capabilities have one stable object name. Each uploaded file is its own
+    object, named `{file name}@{sha16}` (conventions.py), so a mapping can also name the file,
+    or the report kind in the record type (`BRR`, `BANK_CSV`) to cover every upload of that
+    kind. A more specific mapping wins: one file can override its kind.
+
+    Every event of a source shares the `events` object, but events of different types carry
+    different resources, so a mapping can name the event type (`PAYMENT.CAPTURE.COMPLETED`),
+    which wins over one for the whole stream.
     """
+    event = _EVENT_TYPE.match(record.record_type)
+    if event:
+        return [event.group(1), record.object_name]
     keys = [record.object_name]
     name, hashed, _ = record.object_name.partition("@")
     if hashed:
