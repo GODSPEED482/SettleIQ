@@ -241,3 +241,28 @@ def test_other_tenant_cannot_discover_or_read_objects(discovered):
     with scoped_tx(intruder.tenant) as conn:
         assert conn.execute(text("SELECT count(*) FROM source_objects")).scalar_one() == 0
 
+
+# Generation reads what discovery stored
+
+
+@pytest.mark.db
+def test_generation_drafts_from_discovered_metadata(discovered):
+    member, source, _ = discovered
+    member.activate("finops")
+    assert member.create_draft().status_code == 201
+    response = member.request("POST", "/api/ontology/generate")
+    assert response.status_code == 202, response.text
+    with scoped_tx(member.tenant) as conn:
+        payload = conn.execute(
+            text("SELECT payload FROM agent_jobs WHERE id = :i"), {"i": response.json()["job_id"]}
+        ).scalar_one()
+    objects = {item["object"]: item for item in payload["metadata"]}
+    assert set(objects) == {"customers", "payments", "completed_payments"}
+    payments = objects["payments"]
+    assert payments["source_id"] == source["id"]
+    assert payments["foreign_keys"] == [{"field": "customer_id", "references": "customers.id"}]
+    fields = {field["name"]: field for field in payments["fields"]}
+    assert fields["payment_id"]["unique"] is True
+    assert fields["note"]["nullable"] is True
+    assert fields["currency"]["profile"]["currency_distribution"] == {"USD": 3, "EUR": 1}
+    assert "PAY-1" not in str(payload)
