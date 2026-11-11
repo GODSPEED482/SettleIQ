@@ -365,6 +365,119 @@ def test_mappings_and_authority_are_append_only(draft_member, statement):
 
 
 @pytest.mark.db
+def test_a_binding_or_assertion_needs_a_registered_source(draft_member):
+    member, draft = draft_member
+    missing = str(uuid4())
+    assert save(member, mapping(draft, source_id=missing)).status_code == 422
+    assert assert_authority(member, authority(draft, source_id=missing)).status_code == 422
+    assert listed(member, draft) == []
+
+
+@pytest.mark.db
+def test_another_tenants_source_looks_like_a_missing_one(draft_member):
+    member, draft = draft_member
+    other = Member("Other")
+    foreign = str(uuid4())
+    with scoped_tx(other.tenant) as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO data_sources (id, tenant_id, connector_id, connector_version,
+                    source_type, protocol, display_name, created_by)
+                VALUES (:id, :tenant, 'paypal', '1.0.0', 'payment_provider', 'http', 'x', :user)
+                """
+            ),
+            {"id": foreign, "tenant": other.tenant, "user": other.principal.id},
+        )
+    refused = save(member, mapping(draft, source_id=foreign))
+    absent = save(member, mapping(draft, source_id=str(uuid4())))
+    assert refused.status_code == 422
+    assert refused.json() == absent.json()
+
+
+def insert_mapping_row(member: Member, draft: str, source: str | UUID) -> None:
+    """Straight into the table as the runtime role, past the route's own checks."""
+    with scoped_tx(member.tenant) as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO source_mappings (id, tenant_id, draft_id, source_id,
+                    external_object, field_path, property_iri, class_iri, version, status,
+                    datatype, transform, nullable, is_unique, sync_strategy, value_basis,
+                    temporal_context, method, created_by)
+                VALUES (:id, :tenant, :draft, :source, 'o', 'f', 'finops:amount',
+                    'finops:Capture', 1, 'ACTIVE', 'decimal', '{}', false, false, 'event',
+                    'captured', 'at_capture', 'human', :user)
+                """
+            ),
+            {"id": uuid4(), "tenant": member.tenant, "draft": draft, "source": source,
+             "user": member.principal.id},
+        )
+
+
+def insert_authority_row(member: Member, draft: str, source: str | UUID) -> None:
+    with scoped_tx(member.tenant) as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO authority_assertions (id, tenant_id, draft_id, property_iri,
+                    entity_type_iri, source_id, version, status, valid_from,
+                    verification_method, created_by)
+                VALUES (:id, :tenant, :draft, 'finops:amount', 'finops:Capture', :source, 1,
+                    'ACTIVE', now(), 'read', :user)
+                """
+            ),
+            {"id": uuid4(), "tenant": member.tenant, "draft": draft, "source": source,
+             "user": member.principal.id},
+        )
+
+
+def mark_published(member: Member, draft: str) -> None:
+    with scoped_tx(member.tenant) as conn:
+        conn.execute(
+            text("UPDATE ontology_drafts SET status = 'PUBLISHED' WHERE id = :id"), {"id": draft}
+        )
+
+
+@pytest.mark.db
+def test_the_database_also_refuses_an_unknown_source(draft_member):
+    member, draft = draft_member
+    with pytest.raises(DBAPIError, match="source_mappings_source_fk"):
+        insert_mapping_row(member, draft, uuid4())
+
+
+@pytest.mark.db
+def test_an_open_draft_still_takes_bindings_at_the_database(draft_member):
+    member, draft = draft_member
+    insert_mapping_row(member, draft, PAYPAL)
+    insert_authority_row(member, draft, PAYPAL)
+
+
+@pytest.mark.db
+@pytest.mark.parametrize("insert", [insert_mapping_row, insert_authority_row])
+def test_a_published_draft_takes_no_new_bindings(draft_member, insert):
+    member, draft = draft_member
+    mark_published(member, draft)
+    with pytest.raises(DBAPIError, match="immutable"):
+        insert(member, draft, PAYPAL)
+
+
+@pytest.mark.db
+@pytest.mark.parametrize(
+    "assignment",
+    ["status = 'OPEN'", "revision = 99", "tenant_extension = '{}'", "proposals = '[]'"],
+)
+def test_a_published_draft_cannot_be_updated(draft_member, assignment):
+    member, draft = draft_member
+    mark_published(member, draft)
+    with pytest.raises(DBAPIError, match="immutable"):
+        with scoped_tx(member.tenant) as conn:
+            conn.execute(
+                text(f"UPDATE ontology_drafts SET {assignment} WHERE id = :id"), {"id": draft}
+            )
+
+
+@pytest.mark.db
 def test_other_tenants_cannot_use_or_see_a_draft(draft_member):
     member, draft = draft_member
     created = save(member, mapping(draft)).json()
@@ -372,3 +485,19 @@ def test_other_tenants_cannot_use_or_see_a_draft(draft_member):
     assert save(other, mapping(draft)).status_code == 404
     assert listed(other, draft) == []
     assert other.request("POST", f"/api/mappings/{created['id']}/retire").status_code == 404
+
+
+def open_draft(member: Member) -> dict:
+    return member.request("GET", "/api/ontology/drafts/open").json()
+
+
+@pytest.mark.db
+def test_draft_reads_carry_the_hash_a_validation_run_must_match(draft_member):
+    member, draft = draft_member
+    before = open_draft(member)
+    assert before["content_hash"] == validate(member, draft)["content_hash"]
+    assert save(member, mapping(draft)).status_code == 201
+    after = open_draft(member)
+    assert after["revision"] == before["revision"]
+    assert after["content_hash"] != before["content_hash"]
+    assert after["content_hash"] == validate(member, draft)["content_hash"]

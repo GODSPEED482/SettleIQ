@@ -71,6 +71,9 @@ describe("AcceptInvitation", () => {
     });
     renderAt("/invitations/accept#token=abc");
     const accept = await screen.findByRole("button", { name: "Accept invitation" });
+    // The button renders disabled until the token is read from the fragment; a click before
+    // then does nothing.
+    await waitFor(() => expect((accept as HTMLButtonElement).disabled).toBe(false));
     expect(api.sent("POST /api/invitations/abc/accept")).toHaveLength(0);
     fireEvent.click(accept);
     expect(await screen.findByText(`at /team from - tenant ${T}`)).toBeTruthy();

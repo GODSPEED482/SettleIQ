@@ -77,11 +77,45 @@ class UngroundedProposal(ValueError):
     pass
 
 
+def _discovered_object(row: Any) -> DiscoveredObject:
+    snapshot, profile = row.schema_snapshot, row.profile.get("columns", {})
+    return DiscoveredObject(
+        source_id=str(row.source_id),
+        object=row.object_name,
+        fields=[
+            DiscoveredField(
+                name=column["name"],
+                datatype=column["datatype"],
+                nullable=column["nullable"],
+                unique=column["unique"],
+                profile=profile.get(column["name"], {}),
+            )
+            for column in snapshot.get("columns", [])
+        ],
+        # Composite keys stay in the snapshot; a proposal cites one field as evidence.
+        foreign_keys=[
+            DiscoveredForeignKey(
+                field=key["columns"][0],
+                references=f"{key['references']['table']}.{key['references']['columns'][0]}",
+            )
+            for key in snapshot.get("foreign_keys", [])
+            if len(key["columns"]) == 1
+        ],
+    )
+
+
 def load_discovered_metadata(conn: Connection) -> list[DiscoveredObject]:
     """The tenant's discovered schema and profile aggregates, with no raw rows or secrets."""
-    # TODO(G2 2.5 Rahul): return real rows from source_objects once discovery lands. Until then
-    # generation refuses with NO_DISCOVERED_METADATA rather than drafting from invented input.
-    return []
+    rows = conn.execute(
+        text(
+            """
+            SELECT source_id, object_name, schema_snapshot, profile FROM source_objects
+            WHERE schema_snapshot ? 'columns'
+            ORDER BY source_id, object_name
+            """
+        )
+    ).all()
+    return [_discovered_object(row) for row in rows]
 
 
 def _composition_terms(conn: Connection, composition: list[dict[str, str]]) -> list[str]:
@@ -164,6 +198,12 @@ def read_generation_job(ctx: TenantContext, job_id: UUID) -> dict[str, Any]:
     }
 
 
+_OBSERVED_DETAIL = {
+    "foreign_key": "{field} is a foreign key in the discovered metadata.",
+    "field_profile": "{field} is a field in the discovered metadata.",
+}
+
+
 def _label_evidence(
     evidence: tuple[ProposedEvidence, ...] | list[ProposedEvidence],
     fields: set[str],
@@ -175,8 +215,20 @@ def _label_evidence(
             raise UngroundedProposal(f"no foreign key on {item.field}")
         if item.kind != "name_similarity" and item.field not in fields:
             raise UngroundedProposal(f"unknown field {item.field}")
-        basis = "inferred" if item.kind == "name_similarity" else "observed"
-        labelled.append(item.model_dump() | {"basis": basis})
+        if item.kind == "name_similarity":
+            labelled.append(item.model_dump() | {"basis": "inferred"})
+            continue
+        # The server confirmed the field, not the model's reading of it, so that text is kept
+        # apart from what is labelled observed.
+        labelled.append(
+            {
+                "kind": item.kind,
+                "field": item.field,
+                "detail": _OBSERVED_DETAIL[item.kind].format(field=item.field),
+                "rationale": item.detail,
+                "basis": "observed",
+            }
+        )
     return labelled
 
 

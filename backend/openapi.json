@@ -1027,7 +1027,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Discover Source Api Sources  Source Id  Discover Post"
+                }
               }
             }
           },
@@ -1429,12 +1433,36 @@
         ],
         "summary": "Publish Ontology",
         "operationId": "publish_ontology_api_ontology_publish_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishBody"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Publish Ontology Api Ontology Publish Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -2952,6 +2980,32 @@
           "method"
         ],
         "title": "MappingBody"
+      },
+      "PublishBody": {
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Draft Id"
+          },
+          "validation_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Validation Run Id"
+          },
+          "confirm_publish": {
+            "type": "boolean",
+            "title": "Confirm Publish"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft_id",
+          "validation_run_id",
+          "confirm_publish"
+        ],
+        "title": "PublishBody"
       },
       "RegisterBody": {
         "properties": {

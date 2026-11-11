@@ -59,6 +59,28 @@ def test_merchant_correction_schema_only_allows_pending_to_completed():
     assert action.parameters["properties"]["requested_status"] == {"const": "COMPLETED"}
 
 
+def test_merchant_read_source_is_separate_from_the_write_adapter():
+    read_source = load_connector_manifests()["merchant-postgres"]
+    assert read_source.protocols == ["postgresql"]
+    assert read_source.supports_discovery and read_source.supports_metadata
+    assert "merchant.payment_status.correct" not in keys_of(read_source)
+    assert read_source.retry.actions == "never"
+
+
+def test_tenant_csv_declares_file_ingestion_and_discovery():
+    csv_files = load_connector_manifests()["tenant-csv"]
+    assert keys_of(csv_files) == {"files.upload"}
+    assert csv_files.protocols == ["csv"]
+    assert csv_files.supports_discovery and csv_files.supports_file_ingestion
+    assert not csv_files.secret_reference_required
+
+
+@pytest.mark.parametrize("connector_id", ["paypal", "internal-merchant"])
+def test_adapters_without_discovery_say_so(connector_id):
+    manifest = load_connector_manifests()[connector_id]
+    assert not manifest.supports_discovery and not manifest.supports_metadata
+
+
 def test_legacy_capability_spelling_is_rejected():
     paypal = load_connector_manifests()["paypal"]
     data = paypal.model_dump()

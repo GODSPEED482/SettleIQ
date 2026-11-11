@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from app.authz.guard import TenantContext, require
 from app.connectors.manifest import load_capability_registry
 from app.errors import not_implemented
-from app.sources import registry
+from app.sources import discovery, registry
 
 router = APIRouter(prefix="/api", tags=["sources"])
 
@@ -32,8 +32,8 @@ def create_source(
 @router.post("/sources/{source_id}/discover")
 def discover_source(
     source_id: str, ctx: TenantContext = require("source.discover", scope=SOURCE)
-) -> None:
-    raise not_implemented("2.5")
+) -> dict:
+    return discovery.discover(ctx, source_id)
 
 
 @router.post("/sources/{source_id}/sync")
