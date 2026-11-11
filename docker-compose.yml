@@ -3,8 +3,7 @@
 # The worker has no published port and shares no network with `web`: the private
 # route in app/worker_api.py must be unreachable from browsers (AC-AUTHZ-17).
 #
-# Investigations are stubs until task 5.7. The agent, agent-tools and dispatcher services only
-# start with `--profile agent`. The agent must never join `backend` or use *backend-env.
+# The agent, agent-tools and dispatcher services only start with `--profile agent`. The agent must never join `backend` or use *backend-env.
 
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD:?copy .env.example to .env}@db:5432/${POSTGRES_DB:?copy .env.example to .env}
@@ -90,6 +89,17 @@ services:
         condition: service_completed_successfully
     networks: [backend]
 
+  # Answers the running image digest for POL-14 (spec 9.7.6). Locally built images have no
+  # registry digest, so every scope stays SHADOW on this stack.
+  runtime-identity:
+    image: python:3.12-alpine
+    command: python /srv/server.py
+    read_only: true
+    volumes:
+      - ./deploy/runtime-identity/server.py:/srv/server.py:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [backend]
+
   agent-tools:
     profiles: [agent]
     build: ./backend
@@ -97,6 +107,9 @@ services:
     environment:
       <<: *backend-env
       AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET:-}
+    volumes:
+      # get_case_evidence reads hash-checked raw excerpts; it never writes evidence.
+      - raw_evidence:/data/raw-evidence:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

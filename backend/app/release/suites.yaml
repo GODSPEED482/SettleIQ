@@ -1,0 +1,39 @@
+# Required safety suites, one per state-changing capability (spec 9.7.2). Packaged data: the
+# attestation workflow runs exactly these pytest node IDs in the built image, and the signer
+# refuses to issue while any category is empty or any listed test failed or was skipped
+# (AC-REL-02). The verifier checks the suite ID and version an attestation names (check 9).
+#
+# Categories are the eight spec 9.7.2 names. Bump `version` whenever a list changes.
+suites:
+  - capability: refunds.create
+    connector_id: paypal
+    suite_id: paypal-refunds-create
+    version: 1
+    categories:
+      authorization_enforcement: []
+      tenant_isolation: []
+      transitions: []
+      idempotency: []
+      concurrency_and_stale_state: []
+      failure_recovery: []
+      shadow_side_effect_prevention: []
+      post_action_verification: []
+    # TODO(G5 5.17 Suprava): fill every category from the refund safety suite (AC-PP-08,
+    # AC-PLY-02, PB-002 parts of AC-PLY-08, AC-EXEC-MODE-03); until then no refunds.create
+    # attestation can be issued.
+
+  - capability: merchant.payment_status.correct
+    connector_id: internal-merchant
+    suite_id: internal-merchant-status-correct
+    version: 1
+    categories:
+      authorization_enforcement: []
+      tenant_isolation: []
+      transitions: []
+      idempotency: []
+      concurrency_and_stale_state: []
+      failure_recovery: []
+      shadow_side_effect_prevention: []
+      post_action_verification: []
+    # TODO(G5 5.12 Suprava): fill every category from the safety suite (AC-MERCH-01..07,
+    # AC-AUTHZ-06/08/15/16/17, AC-PLY-08..11); the capability also needs Rahul's 5.5 adapter.

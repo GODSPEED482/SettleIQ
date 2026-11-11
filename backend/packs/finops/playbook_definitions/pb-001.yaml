@@ -1,0 +1,25 @@
+# PB-001 Payment-state recovery (spec 9.2, 4.4.1). Immutable: a change is a new version.
+# PayPal's capture is authoritatively COMPLETED while the mapped merchant payment is PENDING.
+# The action is one conditional PENDING -> COMPLETED update of the merchant's own payment row,
+# never a replayed event. Approval comes from tenant policy data, REQUIRED unless the tenant
+# has recorded NOT_REQUIRED; the primary demo uses REQUIRED.
+id: PB-001
+version: 1.0.0
+trigger_case_types: [STATUS_MISMATCH]
+required_evidence:
+  - PayPal capture status COMPLETED, authoritative, from a verified webhook or captures.read
+  - Merchant payment status PENDING from the merchant database
+  - Amount and currency observed by both, and equal
+  - Order reference observed by both, and equal
+preconditions: "packs.finops.playbooks:payment_state_recovery"
+approval_policy: TENANT_POLICY
+parameters: {}
+action: {connector_id: internal-merchant, capability: merchant.payment_status.correct}
+idempotency: {strategy: per_target, target_fields: [merchant_source_id, payment_id]}
+steps:
+  - Re-check preconditions against current evidence at the execution stage
+  - Call merchant.payment_status.correct with expected_current_status PENDING and requested_status COMPLETED
+failure_path: {on_failure: HUMAN_REVIEW, on_ambiguous_outcome: MANUAL_REVIEW, blind_retry: false}
+verification:
+  readbacks: [merchant.payment.read]
+  condition: The merchant payment reads back COMPLETED; PayPal and merchant evidence are kept

@@ -37,9 +37,10 @@ flowchart LR
 | agent-tools | `backend`, `app.agent_tools_api` | Python, FastAPI | 8002, private | same image as api | TCP | yes, `settleiq_app` | plus `AGENT_TOKEN_SECRET` |
 | dispatcher | `backend`, `app.investigation.dispatcher` | Python | none | same image as api | none | yes, `settleiq_dispatcher` | `AGENT_TOKEN_SECRET`, `AGENT_URL` |
 | agent | `agent` | Python, FastAPI | 8100, private | `Dockerfile` | TCP | **never** | `LLM_API_KEY`, `AGENT_TOOLS_URL` |
+| runtime-identity | `backend`, `runtime-identity/server.py` | Python, standard library | 8010, private | `python:3.12-alpine` | none | **never** | none; Docker socket read-only |
 | db | upstream image | PostgreSQL 16 | 5432, private | upstream image | `pg_isready` | n/a | `POSTGRES_*` |
 
-agent-tools, dispatcher and agent are stubs until task 5.7, so they sit behind the `agent` Compose profile, as they do locally.
+agent-tools, dispatcher and agent sit behind the `agent` Compose profile, as they do locally. runtime-identity is the only container with the Docker socket: it answers api and worker with the registry digest of their own container, for POL-14 check 5 (spec 9.7.6).
 
 Isolation matches the local stack: `edge` holds proxy, web and api; `backend` holds the database and its clients; `agent` holds the agent and its two peers. Secrets are passed per service rather than with one shared `env_file`, because spec section 8 forbids the agent from holding database credentials.
 

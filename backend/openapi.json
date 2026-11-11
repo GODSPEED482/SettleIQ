@@ -879,13 +879,38 @@
           "tenants"
         ],
         "summary": "Set Execution Mode",
+        "description": "Set one exact scope to SHADOW or LIVE. LIVE needs a POL-14 attestation for that scope.\nAfter a LIVE switch, requests that scope blocked are evaluated again (spec 18 steps 12-15).",
         "operationId": "set_execution_mode_api_tenants__tenant_id__execution_mode_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeBody"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Set Execution Mode Api Tenants  Tenant Id  Execution Mode Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -898,13 +923,21 @@
           "tenants"
         ],
         "summary": "Execution Readiness",
+        "description": "Each exact scope's mode, and whether a stored attestation passes the ten POL-14 checks,\nnaming the failing one. The image digest comes from the runtime-identity service only.",
         "operationId": "execution_readiness_api_tenants__tenant_id__execution_readiness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response Execution Readiness Api Tenants  Tenant Id  Execution Readiness Get"
+                }
               }
             }
           }
@@ -2671,6 +2704,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Case Id"
             }
           }
@@ -2705,6 +2739,7 @@
           "investigation"
         ],
         "summary": "Read Investigation",
+        "description": "The investigation, its validated result, PROPOSED classification and tool trace. Evidence\nIDs come from the trace, so they resolve without trusting the model's text (AC-AI-04).",
         "operationId": "read_investigation_api_investigations__investigation_id__get",
         "parameters": [
           {
@@ -2713,6 +2748,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Investigation Id"
             }
           }
@@ -2722,7 +2758,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Read Investigation Api Investigations  Investigation Id  Get"
+                }
               }
             }
           },
@@ -2745,6 +2785,7 @@
           "playbooks"
         ],
         "summary": "Create Playbook Request",
+        "description": "Create one request and its REQUEST-stage decision. A repeated Idempotency-Key returns\nthe prior request with 200.",
         "operationId": "create_playbook_request_api_playbooks__playbook_id__requests_post",
         "parameters": [
           {
@@ -2755,14 +2796,40 @@
               "type": "string",
               "title": "Playbook Id"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[!-~]+$",
+              "title": "Idempotency-Key"
+            }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestBody"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Create Playbook Request Api Playbooks  Playbook Id  Requests Post"
+                }
               }
             }
           },
@@ -2793,6 +2860,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Request Id"
             }
           }
@@ -2802,7 +2870,11 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Read Playbook Request Api Playbook Requests  Request Id  Get"
+                }
               }
             }
           },
@@ -2833,16 +2905,38 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Request Id"
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ApproveBody"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Approve Playbook Request Api Playbook Requests  Request Id  Approve Post"
+                }
               }
             }
           },
@@ -2873,16 +2967,31 @@
             "required": true,
             "schema": {
               "type": "string",
+              "format": "uuid",
               "title": "Request Id"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectBody"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Reject Playbook Request Api Playbook Requests  Request Id  Reject Post"
+                }
               }
             }
           },
@@ -3067,6 +3176,26 @@
   },
   "components": {
     "schemas": {
+      "ApproveBody": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ApproveBody"
+      },
       "AuthorityBody": {
         "properties": {
           "draft_id": {
@@ -3573,6 +3702,42 @@
         ],
         "title": "MappingBody"
       },
+      "ModeBody": {
+        "properties": {
+          "domain_pack_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Domain Pack Id"
+          },
+          "connector_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "title": "Connector Id"
+          },
+          "action_capability": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+            "title": "Action Capability"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "SHADOW",
+              "LIVE"
+            ],
+            "title": "Mode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "domain_pack_id",
+          "connector_id",
+          "action_capability",
+          "mode"
+        ],
+        "title": "ModeBody"
+      },
       "PublishBody": {
         "properties": {
           "draft_id": {
@@ -3621,6 +3786,22 @@
         ],
         "title": "RegisterBody"
       },
+      "RejectBody": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "RejectBody"
+      },
       "ReopenBody": {
         "properties": {
           "reason": {
@@ -3636,6 +3817,28 @@
           "reason"
         ],
         "title": "ReopenBody"
+      },
+      "RequestBody": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Case Id"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Parameters",
+            "default": {}
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_id"
+        ],
+        "title": "RequestBody",
+        "description": "The case and the playbook's declared parameters. Nothing here can name a tenant, a\nprincipal, an approval requirement, a decision, an execution or a grant (spec 12.1)."
       },
       "ResendVerificationBody": {
         "properties": {

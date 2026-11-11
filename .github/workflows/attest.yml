@@ -1,0 +1,226 @@
+name: release-attestation
+
+# POL-14 issuance and revocation (spec 9.7.2-9.7.5). Started by hand, on prod only.
+#
+# - prepare: pulls the certified api image by tag, records its registry digest, builds a test
+#   harness FROM it that adds only test code, proves the image's layers are unchanged, and runs
+#   the capability's packaged suite in the harness against a fresh database. It copies the
+#   capability manifest, suites and pack manifest out of the image for the signer.
+# - sign: the only job that can reach the signing key, through the protected
+#   `release-attestation` environment and its named reviewer. It holds no cloud role
+#   (no id-token), checks out only .github/attest, and runs no code from the image.
+# - publish: writes the signed envelopes to the Object Lock bucket by content hash.
+#
+# deploy.yml and ci.yml must never name `release-attestation`; test_attest_workflow.py checks.
+# Importing into the database is a separate step on the host (README, "Release attestation").
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: issue a new attestation, or only revoke
+        type: choice
+        options: [issue, revoke]
+        required: true
+      tenant_id:
+        description: the one tenant this attestation certifies (issue)
+        type: string
+      domain_pack_id:
+        description: for example finops (issue)
+        type: string
+      connector_id:
+        description: for example paypal (issue)
+        type: string
+      action_capability:
+        description: for example refunds.create (issue)
+        type: string
+      image_tag:
+        description: the settleiq-api tag to certify, normally the deployed commit SHA (issue)
+        type: string
+      revoke:
+        description: comma-separated attestation IDs to revoke
+        type: string
+        default: ""
+
+concurrency:
+  group: release-attestation
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  AWS_REGION: ap-south-1
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/prod'
+    runs-on: ubuntu-latest
+    environment: release-publish
+    permissions:
+      id-token: write # ECR pull and the revocation state, through the attest role
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: settleiq
+          POSTGRES_USER: settleiq_owner
+          POSTGRES_PASSWORD: attest-owner
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U settleiq_owner -d settleiq"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      ACTION: ${{ inputs.action }}
+      TENANT_ID: ${{ inputs.tenant_id }}
+      PACK_ID: ${{ inputs.domain_pack_id }}
+      CONNECTOR_ID: ${{ inputs.connector_id }}
+      CAPABILITY: ${{ inputs.action_capability }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      ATTEST_BUCKET: ${{ vars.ATTEST_BUCKET }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_ATTEST_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Fetch the current revocation state
+        run: |
+          mkdir -p in
+          if aws s3api head-object --bucket "$ATTEST_BUCKET" --key revocation/latest.json >/dev/null 2>&1; then
+            aws s3 cp "s3://$ATTEST_BUCKET/revocation/latest.json" in/previous-state.json
+          else
+            echo "no revocation state yet: this run starts the chain at sequence 1"
+          fi
+
+      - id: ecr
+        if: inputs.action == 'issue'
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      - name: Pull the subject image and build the harness
+        if: inputs.action == 'issue'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          for value in "$TENANT_ID" "$PACK_ID" "$CONNECTOR_ID" "$CAPABILITY" "$IMAGE_TAG"; do
+            [ -n "$value" ] || { echo "every scope input is required to issue"; exit 1; }
+          done
+          docker pull "$REGISTRY/settleiq-api:$IMAGE_TAG"
+          subject=$(docker image inspect --format '{{index .RepoDigests 0}}' "$REGISTRY/settleiq-api:$IMAGE_TAG")
+          docker build -f .github/attest/Harness.Dockerfile --build-arg "SUBJECT=$subject" -t attest-harness .
+          docker image inspect "$subject" > subject-inspect.json
+          docker image inspect attest-harness > harness-inspect.json
+          python3 .github/attest/check_layers.py subject-inspect.json harness-inspect.json
+          {
+            echo "SUBJECT_IMAGE=${subject%@*}"
+            echo "SUBJECT_DIGEST=${subject#*@}"
+            echo "HARNESS_DIGEST=$(docker image inspect --format '{{.Id}}' attest-harness)"
+          } > in/digests.env
+          docker run --rm --entrypoint cat "$subject" /srv/app/app/release/capability-manifest.json > in/capability-manifest.json
+          docker run --rm --entrypoint cat "$subject" /srv/app/app/release/suites.yaml > in/suites.yaml
+          docker run --rm --entrypoint cat "$subject" "/srv/app/packs/$PACK_ID/manifest.yaml" > in/pack-manifest.yaml
+
+      - name: Run the capability's suite in the harness
+        if: inputs.action == 'issue'
+        run: |
+          set -euo pipefail
+          docker run --rm -e CONNECTOR_ID -e CAPABILITY attest-harness python -c '
+          import os, yaml
+          suites = yaml.safe_load(open("app/release/suites.yaml"))["suites"]
+          [suite] = [s for s in suites if (s["connector_id"], s["capability"]) == (os.environ["CONNECTOR_ID"], os.environ["CAPABILITY"])]
+          nodes = sorted({n for tests in suite["categories"].values() for n in tests})
+          print("\n".join(nodes))' > nodes.txt
+          [ -s nodes.txt ] || { echo "the suite lists no tests: no attestation can be issued"; exit 1; }
+          docker run --rm --network host -v "$PWD/in:/out" \
+            -e DATABASE_URL=postgresql+psycopg://settleiq_app:attest-app@localhost:5432/settleiq \
+            -e MIGRATION_DATABASE_URL=postgresql+psycopg://settleiq_owner:attest-owner@localhost:5432/settleiq \
+            -e APP_DB_PASSWORD=attest-app -e DISPATCHER_DB_PASSWORD=attest-dispatcher \
+            -e REQUIRE_DB_TESTS=1 \
+            attest-harness sh -c "alembic upgrade head && python -m app.authz.seed && python -m pytest -p no:cacheprovider --junitxml=/out/junit.xml $(tr '\n' ' ' < nodes.txt)"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: attest-input
+          path: in/
+          if-no-files-found: ignore
+
+  sign:
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: release-attestation # holds the key; a named reviewer approves each run
+    permissions:
+      contents: read # no id-token: this job can reach no cloud role
+    env:
+      ACTION: ${{ inputs.action }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/attest
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: attest-input
+          path: in
+      - run: python3 -m pip install -r .github/attest/requirements.txt
+      - name: Sign
+        env:
+          ATTESTATION_SIGNING_KEY: ${{ secrets.ATTESTATION_SIGNING_KEY }}
+          ATTESTATION_KEY_ID: ${{ vars.ATTESTATION_KEY_ID }}
+          REVOKE: ${{ inputs.revoke }}
+          TENANT_ID: ${{ inputs.tenant_id }}
+          CONNECTOR_ID: ${{ inputs.connector_id }}
+          CAPABILITY: ${{ inputs.action_capability }}
+        run: |
+          set -euo pipefail
+          previous=()
+          [ -f in/previous-state.json ] && previous=(--previous-state in/previous-state.json)
+          if [ "$ACTION" = issue ]; then
+            . in/digests.env
+            python3 .github/attest/sign.py --action issue --out out "${previous[@]}" \
+              --revoke "$REVOKE" --manifest in/capability-manifest.json --suites in/suites.yaml \
+              --pack-manifest in/pack-manifest.yaml --junit in/junit.xml \
+              --tenant-id "$TENANT_ID" --connector-id "$CONNECTOR_ID" --capability "$CAPABILITY" \
+              --subject-image "$SUBJECT_IMAGE" --subject-digest "$SUBJECT_DIGEST" \
+              --harness-digest "$HARNESS_DIGEST" --commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+              --workflow "$GITHUB_WORKFLOW_REF"
+          else
+            python3 .github/attest/sign.py --action revoke --out out "${previous[@]}" --revoke "$REVOKE"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: attest-output
+          path: out/
+
+  publish:
+    needs: sign
+    runs-on: ubuntu-latest
+    environment: release-publish
+    permissions:
+      id-token: write
+    env:
+      ATTEST_BUCKET: ${{ vars.ATTEST_BUCKET }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: attest-output
+          path: out
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_ATTEST_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Store by content hash in write-once storage
+        run: |
+          set -euo pipefail
+          if [ -f out/attestation.json ]; then
+            sha=$(sha256sum out/attestation.json | cut -d' ' -f1)
+            aws s3 cp out/attestation.json "s3://$ATTEST_BUCKET/attestations/$sha.json"
+            echo "attestation: attestations/$sha.json" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          sha=$(sha256sum out/revocation.json | cut -d' ' -f1)
+          aws s3 cp out/revocation.json "s3://$ATTEST_BUCKET/revocation/$sha.json"
+          aws s3 cp out/revocation.json "s3://$ATTEST_BUCKET/revocation/latest.json"
+          echo "revocation state: revocation/$sha.json" >> "$GITHUB_STEP_SUMMARY"

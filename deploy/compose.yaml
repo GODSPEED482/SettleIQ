@@ -116,8 +116,8 @@ services:
         condition: service_healthy
     networks: [backend]
 
-  # Ontology generation needs these; investigations are stubs until task 5.7. Enable them with
-  # COMPOSE_PROFILES=agent in SSM.
+  # Ontology generation and investigations need these. Enable them with COMPOSE_PROFILES=agent
+  # in SSM.
   agent-tools:
     <<: *python
     profiles: [agent]
@@ -126,6 +126,9 @@ services:
     environment:
       <<: *backend-env
       AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET:-}
+    volumes:
+      # get_case_evidence reads hash-checked raw excerpts; it never writes evidence.
+      - /data/raw-evidence:/data/raw-evidence:ro
     depends_on:
       db:
         condition: service_healthy
@@ -167,6 +170,19 @@ services:
       retries: 6
       start_period: 20s
     networks: [agent]
+
+  # The only container with the Docker socket (spec 9.7.6, AC-REL-09). It tells api and worker
+  # the registry digest of their own container, by their network address; nothing they send can
+  # change the answer. No port is published, and it shares only the backend network.
+  runtime-identity:
+    <<: *app
+    image: python:3.12-alpine
+    command: ["python", "/srv/server.py"]
+    read_only: true
+    volumes:
+      - ./runtime-identity/server.py:/srv/server.py:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [backend]
 
   migrate:
     <<: *python

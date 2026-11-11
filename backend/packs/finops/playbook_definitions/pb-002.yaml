@@ -1,0 +1,27 @@
+# PB-002 Duplicate-capture refund (spec 9.2, 10.6). Immutable: a change is a new version.
+# Two distinct successful PayPal captures for one intended order: refund the later one, in
+# PayPal Sandbox, after independent approval. Approval is always required in V1 and the approver
+# is never the requester (POL-01). Equal amounts alone are never proof (AC-PLY-02).
+id: PB-002
+version: 1.0.0
+trigger_case_types: [DUPLICATE_CAPTURE]
+required_evidence:
+  - Two distinct PayPal capture references linked to one order
+  - Both captures authoritatively COMPLETED by PayPal
+  - PayPal capture times that tell the original from the duplicate
+  - Equal amount and currency on both captures
+  - The order known to the merchant
+  - No refund for the order or either capture, and no linked dispute or chargeback
+preconditions: "packs.finops.playbooks:duplicate_capture_refund"
+approval_policy: ALWAYS_REQUIRED
+parameters: {}
+action: {connector_id: paypal, capability: refunds.create}
+idempotency: {strategy: per_target, target_fields: [paypal_source_id, capture_id]}
+steps:
+  - Re-check preconditions against current evidence at the execution stage
+  - Before refunding, read refunds.read and captures.read to prove no refund exists on the target
+  - Call refunds.create for the duplicate capture's full amount with the provider idempotency key
+failure_path: {on_failure: HUMAN_REVIEW, on_ambiguous_outcome: MANUAL_REVIEW, blind_retry: false}
+verification:
+  readbacks: [refunds.read, captures.read]
+  condition: The refund reads back COMPLETED for the duplicate capture and the original is untouched

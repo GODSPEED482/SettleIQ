@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 
 from app.authz.guard import TenantContext, require
-from app.errors import not_implemented
+from app.execution import mode, readiness
 from app.mail import MailSender, get_mail_sender
+from app.playbooks import gateway
 from app.tenancy import invitations, members, ownership
 
 router = APIRouter(prefix="/api/tenants/{tenant_id}", tags=["tenants"])
@@ -87,23 +88,21 @@ def transfer_ownership(
     return ownership.transfer_ownership(ctx, body.new_owner_user_id)
 
 
-# TODO(G5 5.3 Rishav): set one exact scope (domain_pack_id, connector_id, action_capability)
-# to SHADOW or LIVE; the tenant comes from the context. Reject an omitted, wildcard or
-# ambiguous field (AC-EXEC-MODE-02). An absent row resolves to SHADOW with no inheritance
-# (AC-EXEC-MODE-01). LIVE needs a valid POL-14 attestation for that exact scope (5.4) and
-# records its attestation ID; SHADOW never does. Audit every switch.
-# TODO(G5 5.14 Rishav): the PayPal refunds.create scope is independent of PB-001's
-# merchant.payment_status.correct scope: switching one leaves the other unchanged, proved for
-# both directions (AC-EXEC-MODE-03). POL-14 is checked per capability.
 @router.put("/execution-mode")
-def set_execution_mode(ctx: TenantContext = require("execution_mode.manage")) -> None:
-    raise not_implemented("5.3")
+def set_execution_mode(
+    body: mode.ModeBody, ctx: TenantContext = require("execution_mode.manage")
+) -> dict:
+    """Set one exact scope to SHADOW or LIVE. LIVE needs a POL-14 attestation for that scope.
+    After a LIVE switch, requests that scope blocked are evaluated again (spec 18 steps 12-15)."""
+    result = mode.set_mode(ctx, body)
+    if body.mode == "LIVE":
+        result["reevaluated_requests"] = gateway.reevaluate_scope(
+            ctx, body.domain_pack_id, body.connector_id, body.action_capability)
+    return result
 
 
-# TODO(G5 5.4 Rishav): report each exact scope's mode and whether its attestation passes the
-# ten runtime checks in spec 9.7.6, with the failing check named. The same verifier runs at
-# the LIVE switch and at every grant; the running image digest comes from the runtime-identity
-# service, never a header or environment variable (AC-REL-09).
 @router.get("/execution-readiness")
-def execution_readiness(ctx: TenantContext = require("execution.read")) -> None:
-    raise not_implemented("5.4")
+def execution_readiness(ctx: TenantContext = require("execution.read")) -> list[dict]:
+    """Each exact scope's mode, and whether a stored attestation passes the ten POL-14 checks,
+    naming the failing one. The image digest comes from the runtime-identity service only."""
+    return readiness.readiness(ctx)

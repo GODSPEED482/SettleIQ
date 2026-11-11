@@ -100,6 +100,7 @@ The starter needed a working default for these. Each owner should confirm or cha
 | Decision | Default chosen | Owner | Spec item |
 |---|---|---|---|
 | Error envelope | Decided for this build. `{"error": {"code", "message", ...}}` from `app/errors.py`; extra keys sit beside `code` and `message`, and clients read only those two. An inaccessible tenant or resource is always the same 404 | Suprava | OPEN-14 |
+| Idempotency header | Decided for this build. `POST /api/playbooks/{id}/requests` requires an `Idempotency-Key` header of 1 to 200 printable ASCII characters, unique per tenant. A repeat with the same case, playbook and parameters returns the prior request with 200 and writes nothing; the same key for a different intent is `409 IDEMPOTENCY_KEY_REUSED`. The execution key is separate and server-derived from the playbook and its idempotency target fields, so one target is acted on at most once whatever request asks (spec 9.4) | Suprava, Rishav | OPEN-14, §9.4, AC-PLY-04 |
 | Tenant selector on routes without a tenant path | Decided for this build. The `X-Tenant-Id` header. It only selects a tenant; membership proves access | Suprava | OPEN-14 |
 | API versioning | Decided for this build. `/api` is version 1, stated in the OpenAPI `info.version` and in an `API-Version: 1` response header. Version 1 changes are additive only; a breaking change ships under `/api/v2` alongside it | Suprava | OPEN-14, §12.1 |
 | Connector manifest, negotiation and lifecycle | Decided for this build. Fields frozen in `app/connectors/manifest.py`; unsupported capabilities are required booleans, and rate limits and retries are typed, so an unverified provider value cannot ship. Keys are canonical (`capability_registry.yaml`); a legacy spelling loads only through a registered, versioned alias. A source binds one declared protocol and source type and snapshots the capabilities; callers negotiate by key presence, because packs reference keys without versions. A source stays pinned to its registration version: minor and patch are additive, and a different major or an older manifest fails closed. There is no upgrade route: disable and re-register. Discovery runs only for a manifest with `supports_discovery`: `merchant-postgres` (the read source §4.4.1 keeps apart from the `internal-merchant` write adapter) and `tenant-csv` | Rahul | OPEN-01, OPEN-CAP-01 |
@@ -150,6 +151,43 @@ Sandbox gotchas met on the way:
 - A scope enabled on the app, such as Transaction search, only appears in a new token. PayPal reuses a token until it expires (9 hours), so revoke it with `POST /v1/oauth2/token/terminate`.
 
 **Result, 2026-11-11 (local stack, Cloudflare quick tunnel, the team's Sandbox app connected through the write-only intake).** Order `2WU33181EW945092F` (USD 1.00, invoice `ORD-LIVE-8A56926D`) was captured as `58F06780XU2504310`. PayPal delivered `PAYMENT.CAPTURE.COMPLETED` `WH-03J471826Y773845D-3RC97953G74121235` at 18:33:35 UTC, and the route verified it against PayPal's certificate (200). It was `PROCESSED` at 18:33:36.4 (AC-PP-05), and Worker run `a5ad64e5` followed at 18:33:36.7. With the merchant's `pending` row added, run `9e6be5cf` opened a `STATUS_MISMATCH` case expecting `COMPLETED` against observed `COMPLETED` and `PENDING` (AC-PP-06), whose evidence is that event (`provider_event`) and the merchant row (`database`). The tunnel webhook was deleted from PayPal afterwards.
+
+## Release attestation (POL-14)
+
+Task 5.4 implements spec §9.7 in the repo. Until the steps below are done, every exact scope fails POL-14 at `SIGNATURE` or `KEY_STATUS`, so every scope stays in SHADOW. That is the intended fail-closed state.
+
+| Piece | Where |
+|---|---|
+| Capability manifest, regenerated in the image and checked at startup | `backend/app/release/capability_manifest.py`, `capability-manifest.json` |
+| Ten-check verifier, used by the LIVE switch and `GET /execution-readiness` | `backend/app/release/verifier.py` |
+| Packaged public keys (empty) and per-capability suites (categories empty until 5.12 and 5.17) | `backend/app/release/keys.json`, `suites.yaml` |
+| Running image digest, never from a header, body or environment variable | `deploy/runtime-identity/server.py` (compose service `runtime-identity`) |
+| Issuing and revoking, by hand on `prod` only | `.github/workflows/attest.yml`, `.github/attest/sign.py` |
+| Write-once envelope store | `aws_s3_bucket.attestations` in `infra/envs/prod/main.tf` (Object Lock, COMPLIANCE, 30 days) |
+
+The steps below are not done yet. Rishav owns them.
+
+1. **Environments.** In the repository settings, create `release-attestation` with Rishav as its required reviewer, and `release-publish`. Limit both to the `prod` branch. Only the `sign` job names `release-attestation`; `test_attest_workflow.py` checks this.
+2. **Key.** Generate an Ed25519 seed offline and store it as the `release-attestation` environment secret `ATTESTATION_SIGNING_KEY`. Never put it in a file in the repo:
+   ```
+   python -c "import base64,os; print(base64.b64encode(os.urandom(32)).decode())"
+   ```
+   Set the environment variable `ATTESTATION_KEY_ID` to a name such as `rel-2026-11`.
+3. **Public key.** Derive the public key from the seed. Add it to `backend/app/release/keys.json` as `{"key_id", "public_key" (base64), "not_before", "not_after"}` with UTC times at most 90 days apart. Then record the key on the principal:
+   ```
+   UPDATE platform_service_principals SET key_id = '<key id>' WHERE kind = 'release_attestor';
+   ```
+   A new key ships in a new image. Rotation adds the next key before the old one's `not_after`.
+4. **Infrastructure.** Run `terraform apply` in `infra/envs/prod`. Set the repository variables `ATTEST_BUCKET` and `AWS_ATTEST_ROLE_ARN` from the `attest_bucket` and `attest_role_arn` outputs.
+5. **Issue.** Run **release-attestation** from `prod` with `action: issue`, the tenant, `finops`, the connector, the capability and the deployed image tag (the commit SHA). The `prepare` job proves the harness only adds layers to that image and runs the capability's suite in it. The signer refuses a failed or skipped test or an empty category. The signer runs only once the reviewer approves. Each run also signs the next revocation state.
+6. **Import on the host.** Copy the run's envelopes from the bucket and import them as the owner role. The state comes first, because the verifier needs a current state:
+   ```
+   docker compose run --rm -v "$PWD:/in:ro" migrate python -m app.release.store revocation /in/revocation.json
+   docker compose run --rm -v "$PWD:/in:ro" migrate python -m app.release.store attestation /in/attestation.json
+   ```
+   The import refuses a state that does not chain onto the newest one, and the high-water mark never goes down.
+7. **Keep it current.** An attestation lasts at most 24 hours, and so does a revocation state. Run the workflow with `action: revoke` (an empty `revoke` list is fine) and import the new state at least daily. Otherwise every LIVE scope fails `REVOCATION` at its next grant.
+8. **Switch.** `PUT /api/tenants/{tenant_id}/execution-mode` with `mode: LIVE`. It re-runs the verifier and records the attestation ID. Any later code change gives a new image digest, so the attestation stops matching (`IMAGE_DIGEST`) and a new one is needed.
 
 ## Spec gaps found while scaffolding
 

@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 _INSERT_SQL = text(
     """
     INSERT INTO audit_logs (id, tenant_id, principal_kind, principal_id, invoker_user_id, action,
-        resource, detail)
-    VALUES (:id, :tenant_id, :kind, :principal_id, :invoker, :action, :resource,
-        CAST(:detail AS jsonb))
+        permission_key, resource, decision, policy_rules, detail)
+    VALUES (:id, :tenant_id, :kind, :principal_id, :invoker, :action, :permission, :resource,
+        :decision, :rules, CAST(:detail AS jsonb))
     """
 )
 
@@ -31,7 +31,13 @@ def write_audit(
     resource: str,
     detail: dict[str, Any] | None = None,
     invoker_user_id: UUID | None = None,
+    *,
+    permission_key: str | None = None,
+    decision: str | None = None,
+    policy_rules: list[str] | tuple[str, ...] = (),
 ) -> None:
+    """`permission_key`, `decision` and `policy_rules` record a policy decision with the
+    permission and policy IDs it applied (AC-AUTHZ-14)."""
     conn.execute(
         _INSERT_SQL,
         {
@@ -41,7 +47,10 @@ def write_audit(
             "principal_id": principal.id,
             "invoker": invoker_user_id,
             "action": action,
+            "permission": permission_key,
             "resource": resource,
+            "decision": decision,
+            "rules": list(policy_rules),
             "detail": json.dumps(detail or {}),
         },
     )
