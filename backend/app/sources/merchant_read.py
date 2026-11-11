@@ -60,7 +60,7 @@ def _load_source(conn: Connection, source_id: UUID) -> Any:
     if row is None:
         raise not_found()
     if row.connector_id != "merchant-postgres":
-        # PayPal and the other adapters get their batch read with task 4.2.
+        # TODO(G4 4.2 Rahul): route PayPal sources to the PayPal batch read instead of 501.
         raise not_implemented("4.2")
     manifest = load_connector_manifests().get(row.connector_id)
     if manifest is None or not manifest.supports_batch_extraction:

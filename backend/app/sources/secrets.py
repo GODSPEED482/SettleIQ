@@ -11,6 +11,9 @@ import re
 
 from app.errors import conflict
 
+# TODO(G4 4.5 Rishav): add the managed reference scheme the credentials route writes, resolved
+# server-side from the deployment secret store. Values never reach logs, audit rows, browser
+# payloads or agent tools. Keep the env: scheme for local runs and test_secrets.py green.
 _ENV_REFERENCE = re.compile(r"^env:(SOURCE_SECRET_[A-Z0-9_]+)$")
 
 

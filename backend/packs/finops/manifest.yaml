@@ -10,6 +10,12 @@ ontology_definitions:
   - {id: finops.ontology, path: ontology/finops.jsonld}
 shacl_shapes:
   - {id: finops.shapes, path: ontology/finops.shacl.ttl}
+# TODO(G4 4.6 Swapnaneel): map PayPal capture, refund and event fields (capture ID, order
+# reference, status, amount, currency, create and update times) to finops terms. Assert PayPal
+# as the authority for capture completion, with the merchant database the authority for
+# internal order and payment state (spec 10.5 step 4). Ship them as hints here and publish
+# them as mappings, so the 4.3 event and the merchant row give comparable observations and
+# STATUS_MISMATCH is raised (AC-PP-06).
 mapping_hints: []
 validators:
   - {id: finops.settlement_cardinality, entrypoint: "packs.finops.validators:check_settlement_cardinality"}

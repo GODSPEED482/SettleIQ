@@ -4,6 +4,13 @@
 
 # TODO(G4 4.1 Rahul): with the Sandbox app, confirm the token scopes include Transaction
 # Search and refunds, register the webhook, and record whether Sandbox SFTP reports are enabled.
+# Expose the webhook route on a public HTTPS URL (a tunnel or the production domain) and
+# confirm PayPal reaches it. Record the outcome under OPEN-PP-01 in README.md.
+# TODO(G4 4.2 Rahul): freeze this adapter manifest against what 4.1 found: fill
+# supported_schema_versions, and declare incremental reads only if they are built.
+# TODO(G4 4.9 Rahul): in Sandbox, create one intended order with two distinct successful
+# capture IDs (spec 10.6, demo step 14). Record both IDs, the order linkage and the event
+# details that prove the duplicate; equal amounts alone are not proof (AC-PLY-02).
 connector_id: paypal
 version: 1.0.0
 protocols: [https-rest, webhook, csv]
@@ -47,6 +54,11 @@ capabilities:
       required: [refund_id]
       properties:
         refund_id: {type: string}
+  # TODO(G4 4.10 Rahul): the refunds.create and refunds.read adapter calls. Refund only the
+  # exact capture named, send idempotency_key as PayPal-Request-Id, and refuse any base URL
+  # that is not Sandbox. A change to this parameter contract bumps the capability version. An
+  # ambiguous outcome is settled by refunds.read, never by a blind retry (5.15). Only the
+  # Worker calls the adapter, under a grant (5.6); no route reaches it.
   - key: refunds.create
     version: 1.0.0
     parameters:

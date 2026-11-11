@@ -106,12 +106,12 @@ These bind code not yet written. The spec sections hold the detail.
 
 ## In-code TODOs
 
-Gates 1 and 2 are closed: every `TODO(G1 ...)` and `TODO(G2 ...)` marker has been removed and their checklist items are ticked. Later gates mark work where it happens, as `TODO(G<n> <task> <owner>): ...`. `<task>` is a plan task number (`2.7`), an OPEN item (`OPEN-10`) or `exit`; `<owner>` is the first name from the checklist below. "Owner review" TODOs mark starter code that its owner has yet to review.
+Gates 1, 2 and 3 are closed: every `TODO(G1 ...)`, `TODO(G2 ...)` and `TODO(G3 ...)` marker has been removed and their checklist items are ticked. Later gates mark work where it happens, as `TODO(G<n> <task> <owner>): ...`. `<task>` is a plan task number (`2.7`), an OPEN item (`OPEN-10`) or `exit`; `<owner>` is the first name from the checklist below. "Owner review" TODOs mark starter code that its owner has yet to review.
 
 ```
-git grep "TODO(G3 "              # all of Gate 3
-git grep "TODO(G3 .* Rahul)"     # one person
-git grep "TODO(G3 3.6 "          # one task
+git grep "TODO(G4 "              # all of Gate 4
+git grep "TODO(G4 .* Rahul)"     # one person
+git grep "TODO(G4 4.3 "          # one task
 ```
 
 Delete a TODO in the same change that completes it. The checklist below stays the record of what is done. Keep permission-set names out of frontend TODOs: the role-name ban matches quoted names in comments too.
