@@ -87,6 +87,9 @@ TRACE = {
         "test_iam_acceptance::test_another_tenants_ids_are_404_under_your_own_tenant",
         "test_rls::test_tenant_a_cannot_read_tenant_b",
         "test_rls::test_tenant_a_cannot_update_tenant_b",
+        "test_rls::test_tenant_a_reads_none_of_tenant_bs_domain_rows",
+        "test_rls::test_tenant_a_updates_none_of_tenant_bs_domain_rows",
+        "test_rls::test_tenant_a_cannot_reference_tenant_bs_domain_rows",
     ],
     "AC-TEN-03": [
         "test_iam_acceptance::test_path_tenant_wins_over_the_header",

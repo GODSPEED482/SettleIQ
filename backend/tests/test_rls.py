@@ -4,6 +4,7 @@ These run as the runtime role, so RLS applies exactly as it does in production.
 """
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -13,6 +14,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from app.authz.access import Decision, PostgresAccessGateway, Principal, PrincipalKind
 from app.authz.catalogue import get_catalogue
 from app.db import get_engine, global_tx, scoped_tx
+from tests.domain_rows import DOMAIN_TABLES, seed_domain_rows
 
 pytestmark = pytest.mark.db
 
@@ -155,14 +157,6 @@ def test_no_context_sees_nothing(tenant: UUID):
         assert conn.execute(text("SELECT count(*) FROM tenant_members")).scalar() == 0
 
 
-# TODO(G3 3.7 Rishav): one migration for domain_entities, entity_source_links,
-# entity_resolution_decisions, property_observations, resolved_property_views,
-# domain_relationship_instances, domain_runs and domain_cases (spec 6.3). Each table gets
-# enable_tenant_rls, an explicit GRANT to settleiq_app, and (tenant_id, id) composite foreign
-# keys so no row can point into another tenant. Money columns are NUMERIC(20,6) with an
-# explicit currency. property_observations is append-only (SELECT, INSERT). Add negative tests
-# here: tenant A reads, updates and references none of tenant B's domain rows, then trace them
-# under AC-TEN-02 in test_iam_acceptance.py.
 def test_tenant_a_cannot_read_tenant_b(owner: UUID, tenant: UUID):
     other = make_tenant(make_user())
     with scoped_tx(tenant) as conn:
@@ -196,6 +190,221 @@ def test_tenant_context_does_not_outlive_the_transaction(tenant: UUID):
             assert conn.execute(text("SELECT count(*) FROM tenants")).scalar() == 1
         with conn.begin():
             assert conn.execute(text("SELECT count(*) FROM tenants")).scalar() == 0
+
+
+# Domain tables (task 3.7, spec 6.3)
+
+
+@pytest.fixture
+def two_seeded_tenants(owner: UUID, tenant: UUID) -> tuple[dict, UUID, dict]:
+    """Tenant A and tenant B, each with one row in every domain table."""
+    other_owner = make_user()
+    other = make_tenant(other_owner)
+    return seed_domain_rows(tenant, owner), other, seed_domain_rows(other, other_owner)
+
+
+@pytest.mark.parametrize("table", DOMAIN_TABLES)
+def test_tenant_a_reads_none_of_tenant_bs_domain_rows(tenant, two_seeded_tenants, table):
+    mine, _, theirs = two_seeded_tenants
+    with scoped_tx(tenant) as conn:
+        found = conn.execute(
+            text(f"SELECT count(*) FROM {table} WHERE id = :id"), {"id": theirs[table]}
+        ).scalar()
+        visible = conn.execute(text(f"SELECT id FROM {table}")).scalars().all()
+    assert found == 0
+    assert set(visible) <= {mine[table], mine["other_entity"]}
+
+
+@pytest.mark.parametrize(
+    ("table", "assignment"),
+    [
+        ("domain_runs", "finished_at = now()"),
+        ("entity_resolution_decisions", "reason = 'x'"),
+        ("domain_cases", "reason = 'x'"),
+    ],
+)
+def test_tenant_a_updates_none_of_tenant_bs_domain_rows(
+    tenant, two_seeded_tenants, table, assignment
+):
+    _, _, theirs = two_seeded_tenants
+    with scoped_tx(tenant) as conn:
+        result = conn.execute(
+            text(f"UPDATE {table} SET {assignment} WHERE id = :id"), {"id": theirs[table]}
+        )
+    assert result.rowcount == 0
+
+
+CROSS_TENANT_REFERENCES = {
+    "link to their entity": (
+        "INSERT INTO entity_source_links (id, tenant_id, entity_id, source_record_id, decision_id) "
+        "VALUES (gen_random_uuid(), :tenant, :their_entity, :my_record, :my_decision)"
+    ),
+    "case on their run": (
+        "INSERT INTO domain_cases (id, tenant_id, run_id, case_type, reconciliation_scope, "
+        "severity, fingerprint, entity_ids, evidence, method, rule_version, version_refs) "
+        "VALUES (gen_random_uuid(), :tenant, :their_run, 'TXN_MISSING', 'INTRA_ENTITY', "
+        "'high', repeat('b', 64), '{}', '{}', 'm', '1', '{}')"
+    ),
+    "entity in their ontology": (
+        "INSERT INTO domain_entities (id, tenant_id, ontology_id, class_iri, canonical_key, "
+        "created_run_id) VALUES (gen_random_uuid(), :tenant, :their_ontology, 'finops:Order', "
+        "'k', :my_run)"
+    ),
+    "observation of their record": (
+        "INSERT INTO property_observations (id, tenant_id, entity_id, property_iri, "
+        "source_record_id, source_id, raw_evidence_id, evidence_hash, field_path, mapping_id, "
+        "mapping_version, raw_value, datatype, value_basis, temporal_context, transform, "
+        "observed_at) VALUES (gen_random_uuid(), :tenant, :my_entity, 'finops:amount', "
+        ":their_record, :my_source, :my_evidence, repeat('a', 64), '$.x', :my_mapping, 1, "
+        "'1', 'decimal', 'gross', 't', '{}', now())"
+    ),
+    "relationship to their entity": (
+        "INSERT INTO domain_relationship_instances (id, tenant_id, ontology_id, "
+        "subject_entity_id, predicate_iri, object_entity_id, provenance, created_run_id) "
+        "VALUES (gen_random_uuid(), :tenant, :my_ontology, :my_entity, 'finops:forOrder', "
+        ":their_entity, '{}', :my_run)"
+    ),
+    "view on their entity": (
+        "INSERT INTO resolved_property_views (id, tenant_id, run_id, entity_id, property_iri, "
+        "status, mapping_versions, contributing_observation_ids) VALUES (gen_random_uuid(), "
+        ":tenant, :my_run, :their_entity, 'finops:amount', 'UNRESOLVED', '{}', '{}')"
+    ),
+}
+
+
+@pytest.mark.parametrize("statement", CROSS_TENANT_REFERENCES.values(),
+                         ids=CROSS_TENANT_REFERENCES.keys())
+def test_tenant_a_cannot_reference_tenant_bs_domain_rows(tenant, two_seeded_tenants, statement):
+    mine, _, theirs = two_seeded_tenants
+    params = {
+        "tenant": tenant,
+        "my_record": mine["record"],
+        "my_decision": mine["entity_resolution_decisions"],
+        "my_run": mine["domain_runs"],
+        "my_entity": mine["domain_entities"],
+        "my_ontology": mine["ontology"],
+        "my_source": mine["source"],
+        "my_evidence": mine["evidence"],
+        "my_mapping": mine["mapping"],
+        "their_entity": theirs["domain_entities"],
+        "their_run": theirs["domain_runs"],
+        "their_ontology": theirs["ontology"],
+        "their_record": theirs["record"],
+    }
+    with pytest.raises(IntegrityError, match="foreign key"):
+        with scoped_tx(tenant) as conn:
+            conn.execute(text(statement), params)
+
+
+@pytest.mark.parametrize("table", [
+    "domain_entities", "entity_source_links", "property_observations",
+    "resolved_property_views", "domain_relationship_instances",
+])
+@pytest.mark.parametrize("statement", ["UPDATE {t} SET tenant_id = tenant_id", "DELETE FROM {t}"])
+def test_append_only_domain_tables_refuse_change(tenant, two_seeded_tenants, table, statement):
+    with pytest.raises(DBAPIError, match="permission denied"):
+        with scoped_tx(tenant) as conn:
+            conn.execute(text(statement.format(t=table)))
+
+
+@pytest.mark.parametrize("table", DOMAIN_TABLES)
+def test_domain_rows_cannot_be_deleted(tenant, two_seeded_tenants, table):
+    with pytest.raises(DBAPIError, match="permission denied"):
+        with scoped_tx(tenant) as conn:
+            conn.execute(text(f"DELETE FROM {table}"))
+
+
+def test_domain_money_is_numeric_20_6():
+    with global_tx() as conn:
+        columns = conn.execute(
+            text(
+                """
+                SELECT table_name, column_name, numeric_precision, numeric_scale
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND data_type = 'numeric'
+                  AND table_name = ANY (:tables)
+                """
+            ),
+            {"tables": list(DOMAIN_TABLES)},
+        ).all()
+    assert {(c.table_name, c.column_name) for c in columns} == {
+        ("property_observations", "numeric_value"),
+        ("resolved_property_views", "numeric_value"),
+        ("domain_cases", "expected_amount"),
+        ("domain_cases", "observed_amount"),
+    }
+    assert {(c.numeric_precision, c.numeric_scale) for c in columns} == {(20, 6)}
+
+
+def test_case_money_keeps_six_places_and_needs_a_currency(tenant, two_seeded_tenants):
+    mine, _, _ = two_seeded_tenants
+    with scoped_tx(tenant) as conn:
+        row = conn.execute(
+            text("SELECT expected_amount, currency FROM domain_cases WHERE id = :id"),
+            {"id": mine["domain_cases"]},
+        ).one()
+    assert (row.expected_amount, row.currency) == (Decimal("100.000001"), "USD")
+    with pytest.raises(IntegrityError, match="check"):
+        with scoped_tx(tenant) as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO domain_cases (id, tenant_id, run_id, case_type, "
+                    "reconciliation_scope, severity, fingerprint, entity_ids, expected_amount, "
+                    "evidence, method, rule_version, version_refs) VALUES (gen_random_uuid(), "
+                    ":t, :run, 'AMOUNT_MISMATCH', 'INTRA_ENTITY', 'high', repeat('c', 64), "
+                    "'{}', 10, '{}', 'm', '1', '{}')"
+                ),
+                {"t": tenant, "run": mine["domain_runs"]},
+            )
+
+
+@pytest.mark.parametrize("target", ["RESOLVED", "ACTION_PENDING", "CLOSED", "HUMAN_REVIEW"])
+def test_database_refuses_a_case_transition_outside_9_3(tenant, two_seeded_tenants, target):
+    mine, _, _ = two_seeded_tenants
+    with pytest.raises(DBAPIError, match="not allowed"):
+        with scoped_tx(tenant) as conn:
+            conn.execute(
+                text("UPDATE domain_cases SET status = :s WHERE id = :id"),
+                {"s": target, "id": mine["domain_cases"]},
+            )
+
+
+def test_finished_run_is_immutable(tenant, two_seeded_tenants):
+    mine, _, _ = two_seeded_tenants
+    with scoped_tx(tenant) as conn:
+        conn.execute(
+            text("UPDATE domain_runs SET status = 'SUCCEEDED' WHERE id = :id"),
+            {"id": mine["domain_runs"]},
+        )
+    with pytest.raises(DBAPIError, match="immutable"):
+        with scoped_tx(tenant) as conn:
+            conn.execute(
+                text("UPDATE domain_runs SET status = 'FAILED' WHERE id = :id"),
+                {"id": mine["domain_runs"]},
+            )
+
+
+def test_settled_identity_decision_cannot_be_rewritten(tenant, two_seeded_tenants):
+    mine, _, _ = two_seeded_tenants
+    with pytest.raises(DBAPIError, match="pending"):
+        with scoped_tx(tenant) as conn:
+            conn.execute(
+                text("UPDATE entity_resolution_decisions SET status = 'REJECTED', "
+                     "selected_entity_id = NULL, reviewer_id = :u, reviewed_at = now(), "
+                     "reason = 'x' WHERE id = :id"),
+                {"id": mine["entity_resolution_decisions"], "u": make_user()},
+            )
+
+
+def test_a_link_needs_a_recorded_decision(tenant, two_seeded_tenants):
+    mine, _, _ = two_seeded_tenants
+    with pytest.raises(IntegrityError, match="null value"):
+        with scoped_tx(tenant) as conn:
+            conn.execute(
+                text("INSERT INTO entity_source_links (id, tenant_id, entity_id, "
+                     "source_record_id) VALUES (gen_random_uuid(), :t, :e, :r)"),
+                {"t": tenant, "e": mine["other_entity"], "r": mine["record"]},
+            )
 
 
 def test_audit_log_is_append_only(owner: UUID, tenant: UUID, gateway: PostgresAccessGateway):
