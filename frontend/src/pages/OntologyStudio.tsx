@@ -16,6 +16,7 @@ import {
   type RelationshipInput,
 } from "./ontology/graph";
 import { Proposals } from "./ontology/Proposals";
+import { Publish } from "./ontology/Publish";
 import { Relationships } from "./ontology/Relationships";
 import type {
   Authority as AuthorityRow,
@@ -34,10 +35,6 @@ import type { WorkspaceDefinition } from "./workspaces";
 
 const POLL_MS = 2000;
 
-// TODO(G2 2.10 Suprava): publish confirmation showing the candidate content hash and the
-// validation run with per-validator results. Enable it only for a passed run whose hash matches
-// the current candidate, and send confirm_publish=true.
-
 // Ontology Studio (spec 13.1). The published ontology is read-only; changes go to the one open
 // draft, each PATCH carrying the revision it was made against, so a stale edit is refused rather
 // than overwriting someone else's. Each control shows only with its own key; the API rechecks.
@@ -47,6 +44,7 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
   const canEdit = can(permissions, "ontology.edit");
   const canGenerate = can(permissions, "ontology.generate");
   const canValidate = can(permissions, "ontology.validate");
+  const canPublish = can(permissions, "ontology.publish");
   const canReadMappings = can(permissions, "mapping.read");
   const canEditMappings = can(permissions, "mapping.edit");
   const canReadAuthority = can(permissions, "authority.read");
@@ -123,13 +121,13 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
   if (!tenantId) return null;
 
   // Runs one change, reports it, then re-reads the ontology and the draft.
-  async function run(work: () => Promise<unknown>, done: string) {
+  async function run<T>(work: () => Promise<T>, done: string | ((result: T) => string)) {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      await work();
-      setNotice(done);
+      const result = await work();
+      setNotice(typeof done === "function" ? done(result) : done);
       return true;
     } catch (caught) {
       setError(
@@ -318,6 +316,25 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
           busy={busy}
           onValidate={() =>
             void run(async () => setValidationRun(await api.validate(draft.id)), "Validation finished.")
+          }
+        />
+      )}
+
+      {draft && canPublish && (
+        <Publish
+          draft={draft}
+          run={validationRun}
+          nextVersion={(published?.version ?? 0) + 1}
+          busy={busy}
+          onPublish={(passed) =>
+            void run(
+              async () => {
+                const created = await api.publish(draft.id, passed.validation_run_id);
+                setValidationRun(null);
+                return created;
+              },
+              (created) => `Version ${created.version} published.`,
+            )
           }
         />
       )}

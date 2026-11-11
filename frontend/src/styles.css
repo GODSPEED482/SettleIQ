@@ -453,3 +453,7 @@ textarea {
   padding-left: 18px;
   font-size: 13px;
 }
+
+code.hash {
+  overflow-wrap: anywhere;
+}
