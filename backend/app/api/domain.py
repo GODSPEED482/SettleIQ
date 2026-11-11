@@ -9,9 +9,7 @@ from app.domain import cases, entities, runs
 
 router = APIRouter(prefix="/api", tags=["domain"])
 
-# TODO(G3 exit Swapnaneel): identical version-pinned inputs give identical findings across
-# runs; fees or refunds already included in net are never subtracted again (AC-REC-07); an
-# ambiguous identity match is never forced (AC-REC-06). Each needs an automated test.
+# G3 exit evidence (determinism, AC-REC-07, AC-REC-06) is in tests/test_reconciliation.py.
 
 
 @router.post("/domain-runs", status_code=201)

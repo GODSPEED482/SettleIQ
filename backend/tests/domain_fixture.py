@@ -185,3 +185,59 @@ class FinanceTenant(Member):
 
     def cases(self, **params) -> list[dict]:
         return self.get("/api/domain-cases", **params)
+
+
+def capture(capture_id: str, order_id: str, amount: str, status: str = "COMPLETED",
+            currency: str = "USD") -> dict[str, Any]:
+    return {"id": capture_id, "invoice_id": order_id, "status": status,
+            "amount": {"value": amount, "currency_code": currency}}
+
+
+def brr(settlement: str, transaction: str, code: str, gross: str, fee: str | None = None,
+        net: str | None = None, currency: str = "USD") -> dict[str, Any]:
+    row = {"settlement_id": settlement, "transaction_id": transaction, "event_code": code,
+           "gross": gross, "currency": currency}
+    if fee is not None:
+        row["fee"] = fee
+    if net is not None:
+        row["net"] = net
+    return row
+
+
+def seed_reconciliation(member: FinanceTenant) -> None:
+    """The G3 fixture. It should raise exactly three cases:
+
+    - STATUS_MISMATCH (INTRA_ENTITY): PayPal says CAP-1 is COMPLETED, the merchant says pending.
+    - DUPLICATE_CAPTURE: CAP-2 and CAP-3 both succeeded for order ORD-2. CAP-4 and CAP-5 have
+      equal amounts but different orders, so they raise nothing (AC-PLY-02).
+    - SETTLEMENT_VARIANCE (INTER_ENTITY) on S-1: expected net 125.63 against a bank credit of
+      124.63. Subtracting the netted fee again would give 122.43 (AC-REC-07). S-2 balances.
+
+    The ORD-5/PO-6 order row matches two orders and must stay in review (AC-REC-06).
+    """
+    for order in ("ORD-1", "ORD-2", "ORD-3", "ORD-4"):
+        member.ingest("merchant", "orders", {"order_id": order})
+    member.ingest("merchant", "orders", {"order_id": "ORD-5", "paypal_order_id": "PO-5"})
+    member.ingest("merchant", "orders", {"order_id": "ORD-6", "paypal_order_id": "PO-6"})
+
+    member.ingest("paypal", "captures", capture("CAP-1", "ORD-1", "100.00"))
+    member.ingest("merchant", "payments", {"paypal_capture_id": "CAP-1", "order_id": "ORD-1",
+                                           "state": "pending", "amount": "100.00",
+                                           "currency": "USD"})
+    member.ingest("paypal", "captures", capture("CAP-2", "ORD-2", "50.00"))
+    member.ingest("paypal", "captures", capture("CAP-3", "ORD-2", "50.00"))
+    member.ingest("paypal", "captures", capture("CAP-4", "ORD-3", "75.00"))
+    member.ingest("paypal", "captures", capture("CAP-5", "ORD-4", "75.00"))
+
+    member.ingest("report", "brr", brr("S-1", "CAP-1", "T0006", "100.00", "-3.20", "96.80"))
+    member.ingest("report", "brr", brr("S-1", "CAP-2", "T0006", "50.00", "-1.75"))
+    member.ingest("report", "brr", brr("S-1", "REF-1", "T1107", "-20.00", "0.58", "-19.42"))
+    member.ingest("report", "brr", brr("S-1", "WD-1", "T0400", "-107.63"))
+    member.ingest("bank", "statement", {"bank_reference": "BNK-1", "memo": "S-1",
+                                        "amount": "124.63", "currency": "USD"})
+    member.ingest("report", "brr", brr("S-2", "CAP-4", "T0006", "75.00", "-2.00", "73.00"))
+    member.ingest("bank", "statement", {"bank_reference": "BNK-2", "memo": "S-2",
+                                        "amount": "73.00", "currency": "USD"})
+
+    member.run()  # settles the first orders, so the mixed row below has two candidates
+    member.ingest("merchant", "orders", {"order_id": "ORD-5", "paypal_order_id": "PO-6"})

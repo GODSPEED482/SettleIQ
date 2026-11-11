@@ -17,23 +17,13 @@ validators:
 # The exact-ID policy is data in resolution.yaml; the entrypoint only returns it.
 entity_resolution_policies:
   - {id: finops.exact_id, entrypoint: "packs.finops.resolution:exact_id_policy"}
-# TODO(G3 3.3 Swapnaneel): the Finance engine as a pack entrypoint. INTRA_ENTITY compares
-# comparable observations of one entity and property (STATUS_MISMATCH: provider COMPLETED,
-# merchant PENDING). INTER_ENTITY checks invariants across entities (SettlementBatch to
-# BankTransaction: SETTLEMENT_VARIANCE). Keep the two as separate findings (spec 7.3, AC-REC-13,
-# AC-REC-14). Expected Net = Captures - Refunds - Fees - Chargebacks + Adjustments; Variance =
-# Expected Net - Bank Credit. Do all of it in Money, and never subtract an amount the report
-# already nets (AC-REC-07). Never compare different currencies, units or valid-time windows
-# (AC-REC-15). calculate_settlement_variance below exposes the same calculation to the agent.
-domain_engine: null
+# Both reconciliation scopes, the OPEN-10 settlement calculation and duplicate captures.
+domain_engine: {id: finops.engine, entrypoint: "packs.finops.engine:run"}
 
 case_types:
   - {code: TXN_MISSING, default_severity: high}
   - {code: STATUS_MISMATCH, default_severity: high}
   - {code: AMOUNT_MISMATCH, default_severity: high}
-  # TODO(G3 3.10 Swapnaneel): raise DUPLICATE_CAPTURE only for two distinct successful capture
-  # IDs linked to one intended order. Equal amounts alone never qualify (AC-PLY-02). Add a
-  # fixture with a true duplicate and a same-amount pair of different orders that raises nothing.
   - {code: DUPLICATE_CAPTURE, default_severity: critical}
   - {code: REFUND_MISMATCH, default_severity: high}
   - {code: FEE_MISMATCH, default_severity: medium}
