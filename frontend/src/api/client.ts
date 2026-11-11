@@ -1,12 +1,16 @@
 // Tenant selection only picks a tenant. The server proves access from membership (spec 11.1).
 const TENANT_HEADER = "X-Tenant-Id";
 
+// A 422 VALIDATION_ERROR names each rejected body field.
+export type FieldError = { loc: (string | number)[]; msg: string };
+
 // The error envelope ratified under OPEN-14: {"error": {"code", "message", ...}}.
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
     message: string,
+    readonly fields: FieldError[] = [],
   ) {
     super(message);
   }
@@ -36,6 +40,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
       response.status,
       body?.error?.code ?? "UNKNOWN",
       body?.error?.message ?? response.statusText,
+      Array.isArray(body?.error?.fields) ? body.error.fields : [],
     );
   }
   return body as T;
@@ -49,9 +54,13 @@ function parse(text: string) {
   }
 }
 
-// The text to show for a failed call. Only the envelope's message reaches the screen.
+// The text to show for a failed call. Only the envelope's message reaches the screen, followed
+// by the rejected fields of a 422, named by their last path segment.
 export function messageOf(error: unknown): string {
-  return error instanceof ApiError ? error.message : "Something went wrong. Try again.";
+  if (!(error instanceof ApiError)) return "Something went wrong. Try again.";
+  if (error.fields.length === 0) return error.message;
+  const details = error.fields.map((field) => `${field.loc[field.loc.length - 1]}: ${field.msg}`);
+  return `${error.message} ${details.join("; ")}`;
 }
 
 export async function checkHealth(): Promise<boolean> {

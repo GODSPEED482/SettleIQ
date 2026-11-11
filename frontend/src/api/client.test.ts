@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, apiFetch } from "./client";
+import { ApiError, apiFetch, messageOf } from "./client";
 
 function respond(status: number, body?: unknown) {
   const fetch = vi.fn(async () =>
@@ -35,6 +35,28 @@ describe("apiFetch", () => {
       "MISSING_PERMISSION",
       "Permission required.",
     ]);
+  });
+
+  it("keeps the rejected fields of a 422 and shows them after the message", async () => {
+    respond(422, {
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Invalid request.",
+        fields: [{ loc: ["body", "field_path"], msg: "String should have at least 1 character" }],
+      },
+    });
+    const error = await apiFetch("/api/x").catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ fields: [{ loc: ["body", "field_path"] }] });
+    expect(messageOf(error)).toBe(
+      "Invalid request. field_path: String should have at least 1 character",
+    );
+  });
+
+  it("has no fields when the envelope names none", async () => {
+    respond(409, { error: { code: "STALE_DRAFT", message: "The draft changed." } });
+    const error = await apiFetch("/api/x").catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ fields: [] });
+    expect(messageOf(error)).toBe("The draft changed.");
   });
 
   it("raises UNKNOWN when the error has no envelope", async () => {
