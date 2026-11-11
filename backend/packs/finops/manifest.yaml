@@ -14,13 +14,30 @@ mapping_hints: []
 validators:
   - {id: finops.settlement_cardinality, entrypoint: "packs.finops.validators:check_settlement_cardinality"}
   - {id: finops.required_terms, entrypoint: "packs.finops.validators:check_required_terms"}
+# TODO(G3 3.1 Swapnaneel): declare the exact-ID policy as data: which record types project to
+# Order, Payment, Capture, Refund, SettlementEntry and BankTransaction, and which shared
+# identifiers link them (capture ID, merchant order ID).
 entity_resolution_policies: []
+# TODO(G3 OPEN-10 Swapnaneel): before 3.3, decide which BRR entry types are included in the
+# reported net, and the sign of each, and record the decision in README.md. The settlement
+# calculation and the 3.8 fixture manifest both follow it.
+# TODO(G3 3.3 Swapnaneel): the Finance engine as a pack entrypoint. INTRA_ENTITY compares
+# comparable observations of one entity and property (STATUS_MISMATCH: provider COMPLETED,
+# merchant PENDING). INTER_ENTITY checks invariants across entities (SettlementBatch to
+# BankTransaction: SETTLEMENT_VARIANCE). Keep the two as separate findings (spec 7.3, AC-REC-13,
+# AC-REC-14). Expected Net = Captures - Refunds - Fees - Chargebacks + Adjustments; Variance =
+# Expected Net - Bank Credit. Do all of it in Money, and never subtract an amount the report
+# already nets (AC-REC-07). Never compare different currencies, units or valid-time windows
+# (AC-REC-15). calculate_settlement_variance below exposes the same calculation to the agent.
 domain_engine: null
 
 case_types:
   - {code: TXN_MISSING, default_severity: high}
   - {code: STATUS_MISMATCH, default_severity: high}
   - {code: AMOUNT_MISMATCH, default_severity: high}
+  # TODO(G3 3.10 Swapnaneel): raise DUPLICATE_CAPTURE only for two distinct successful capture
+  # IDs linked to one intended order. Equal amounts alone never qualify (AC-PLY-02). Add a
+  # fixture with a true duplicate and a same-amount pair of different orders that raises nothing.
   - {code: DUPLICATE_CAPTURE, default_severity: critical}
   - {code: REFUND_MISMATCH, default_severity: high}
   - {code: FEE_MISMATCH, default_severity: medium}
@@ -54,4 +71,9 @@ playbook_templates:
     title: Settlement / chargeback workflow
     executable: false
 
+# TODO(G3 3.8 Suprava): a SYNTHETIC/REFERENCE BRR CSV, with SYNTHETIC in its filename, built
+# against PayPal's published Balance Report layout (spec 10.3.1). Include sales, fees, refunds
+# and adjustments, and no real credentials or personal data. Its manifest states version,
+# SHA-256, opening and closing balance and each row's included-in-net treatment (OPEN-10). Add
+# a test that fails when the file and its checksum disagree, and list the fixture here.
 test_fixtures: []

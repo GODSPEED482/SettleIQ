@@ -155,6 +155,14 @@ def test_no_context_sees_nothing(tenant: UUID):
         assert conn.execute(text("SELECT count(*) FROM tenant_members")).scalar() == 0
 
 
+# TODO(G3 3.7 Rishav): one migration for domain_entities, entity_source_links,
+# entity_resolution_decisions, property_observations, resolved_property_views,
+# domain_relationship_instances, domain_runs and domain_cases (spec 6.3). Each table gets
+# enable_tenant_rls, an explicit GRANT to settleiq_app, and (tenant_id, id) composite foreign
+# keys so no row can point into another tenant. Money columns are NUMERIC(20,6) with an
+# explicit currency. property_observations is append-only (SELECT, INSERT). Add negative tests
+# here: tenant A reads, updates and references none of tenant B's domain rows, then trace them
+# under AC-TEN-02 in test_iam_acceptance.py.
 def test_tenant_a_cannot_read_tenant_b(owner: UUID, tenant: UUID):
     other = make_tenant(make_user())
     with scoped_tx(tenant) as conn:

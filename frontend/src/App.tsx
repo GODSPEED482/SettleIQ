@@ -104,6 +104,13 @@ function Shell() {
                   ) : workspace.path === "/ontology" ? (
                     <OntologyStudio workspace={workspace} />
                   ) : (
+                    // TODO(G3 3.9 Suprava): replace the /operations placeholder with Domain
+                    // Operations: runs with their pinned versions, cases by scope, severity and
+                    // status, entities with observations and resolved values, and the review of
+                    // ambiguous identity links. Show CONFLICT and UNRESOLVED as they are, never a
+                    // chosen value, and label SYNTHETIC/REFERENCE evidence wherever it appears.
+                    // Gate each action on its permission key (case.triage,
+                    // entity_resolution.review, domain_run.create).
                     <Workspace workspace={workspace} />
                   )}
                 </RequirePermission>
