@@ -150,7 +150,9 @@ def test_each_entry_names_its_implementation_and_source_hash():
 
 
 def test_a_declared_action_with_no_implementation_fails(monkeypatch):
-    monkeypatch.setattr(capability_manifest, "PENDING_IMPLEMENTATIONS", frozenset())
+    monkeypatch.setattr(capability_manifest, "IMPLEMENTATIONS", tuple(
+        i for i in implementations.IMPLEMENTATIONS
+        if i.capability != "merchant.payment_status.correct"))
     with pytest.raises(capability_manifest.ManifestError, match="no implementation"):
         capability_manifest.generate()
 

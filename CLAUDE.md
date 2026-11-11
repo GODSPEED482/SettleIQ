@@ -169,7 +169,7 @@ Source: the delivery plan. Every task is unticked until its owner has reviewed i
 - [x] G4 exit with a real Sandbox `PAYMENT.CAPTURE.COMPLETED` (2026-11-11): PayPal's own delivery through a tunnel was verified, `PROCESSED`, started a Worker run and reconciled to `STATUS_MISMATCH`. Recorded under "G4 live exit step" in `README.md`; the automated evidence is `test_g4_exit.py`.
 - [x] 4.9 Sandbox duplicate-capture setup: two successful capture IDs for one intended order (0.5h). Evidence in `test_paypal_g4.py` (AC-PLY-02).
 - [x] 4.10 PayPal `refunds.create` and `refunds.read` adapter: versioned parameter contract, exact capture target, provider idempotency key, Sandbox only (2.5h). Evidence in `test_paypal_g4.py` (AC-PP-12).
-- [ ] 5.5 Internal-merchant adapter: conditional update, idempotency, restricted DB role (2.5h). Starter: manifest draft exists.
+- [x] 5.5 Internal-merchant adapter: conditional update, idempotency, restricted DB role (2.5h). `app/connectors/internal_merchant/` with the merchant-side `merchant_setup.sql` (view, action-record table, a role that can only update `status`), registered in `IMPLEMENTATIONS` and the capability manifest. Evidence in `test_internal_merchant.py` (AC-MERCH-01..07 at the adapter).
 - [ ] 5.6 Worker: atomic grant consumption, durable attempts, independent readback (2.5h)
 - [ ] 5.15 Worker refund execution: grant-bound, durable attempts, no blind retry on an ambiguous outcome, verified completion by readback (1.5h)
 - [ ] 6.2 Non-financial source through the generic pipeline (AC-OPEN-01/02/06) (0.5h)

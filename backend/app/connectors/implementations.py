@@ -21,11 +21,12 @@ IMPLEMENTATIONS = (
     Implementation("paypal", "refunds.read", "app.connectors.paypal.refunds:read_refund"),
     Implementation("paypal", "captures.read",
                    "app.connectors.paypal.client:PayPalClient.captures_read"),
+    Implementation("internal-merchant", "merchant.payment_status.correct",
+                   "app.connectors.internal_merchant.actions:correct_payment_status"),
+    Implementation("internal-merchant", "merchant.payment.read",
+                   "app.connectors.internal_merchant.actions:read_payment"),
 )
 
-# Declared but not built. Never in the manifest, so never certifiable or LIVE.
-# TODO(G5 5.5 Rahul): register the internal-merchant adapter above and remove these entries.
-PENDING_IMPLEMENTATIONS = frozenset({
-    ("internal-merchant", "merchant.payment_status.correct"),
-    ("internal-merchant", "merchant.payment.read"),
-})
+# Declared but not built, as (connector_id, capability). Never in the manifest, so never
+# certifiable or LIVE.
+PENDING_IMPLEMENTATIONS: frozenset[tuple[str, str]] = frozenset()
