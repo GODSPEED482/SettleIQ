@@ -4,12 +4,17 @@ Exit: identical version-pinned inputs give identical findings; fees already in n
 subtracted again (AC-REC-07); an ambiguous identity match is never forced (AC-REC-06).
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
+from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
 
 from app.db import scoped_tx
+from app.domain.inputs import Record
+from app.domain.views import current_word
 from packs.finops import engine
 from tests.domain_fixture import FinanceTenant, brr, capture, seed_reconciliation
 
@@ -162,6 +167,23 @@ def test_settlement_in_another_currency_is_never_compared():
 
 
 @pytest.mark.db
+def test_a_dismissed_finding_is_not_raised_again_from_the_same_evidence():
+    """Spec 9.3: a dismissed or closed case comes back only through reopen."""
+    member = FinanceTenant()
+    member.ingest("paypal", "captures", capture("CAP-7", "ORD-7", "29.00"))
+    member.ingest("merchant", "payments", {"paypal_capture_id": "CAP-7", "order_id": "ORD-7",
+                                           "state": "pending", "amount": "29.00",
+                                           "currency": "USD"})
+    [first] = member.run()["findings"]
+    with scoped_tx(member.tenant) as conn:
+        conn.execute(text("UPDATE domain_cases SET status = 'DISMISSED', reason = 'noise' "
+                          "WHERE id = :id"), {"id": first["case_id"]})
+    [again] = member.run()["findings"]
+    assert (again["case_id"], again["new_case"]) == (first["case_id"], False)
+    assert [c["status"] for c in member.cases()] == ["DISMISSED"]
+
+
+@pytest.mark.db
 def test_unresolved_amounts_are_not_guessed():
     member = FinanceTenant(authority=[])  # no authority at all
     member.ingest("report", "brr", brr("S-8", "CAP-1", "T0006", "100.00", "-3.00", "97.00"))
@@ -217,3 +239,73 @@ def test_the_engine_is_deterministic():
                       observation("o1", "e1", "s1", "100.000000")])
     assert engine.run(state) == engine.run(state)
     assert Decimal(engine.run(state)[0]["observed"][0]["value"]) == Decimal("100")
+
+
+# No database: only a source's current word on a value is eligible (spec 5.5)
+
+T1, T2, T3 = (datetime(2026, 3, 1, hour, tzinfo=UTC) for hour in (1, 2, 3))
+
+
+def said(value: str, *, at: datetime, event: bool = False, source: str = "paypal",
+         occurred: datetime | None = None) -> tuple[SimpleNamespace, Record]:
+    """One observation of a capture's status and the record it came from. An event speaks for
+    its provider time (`at`) whenever it arrived; a read for when it was read."""
+    record = Record(uuid4(), source, "events" if event else "captures.read",
+                    "paypal:event/PAYMENT.CAPTURE.X" if event else "paypal:table/x", {},
+                    uuid4(), "0" * 64, at if event else occurred, T3 if event else at)
+    return SimpleNamespace(id=uuid4(), entity_id="e1", property_iri="finops:lifecycleStatus",
+                           source_id=source, source_record_id=record.id,
+                           normalized_value=value), record
+
+
+def eligible(*said_: tuple[SimpleNamespace, Record]) -> list[str]:
+    records = {record.id: record for _, record in said_}
+    return sorted(o.normalized_value for o in current_word([o for o, _ in said_], records))
+
+
+def test_a_later_read_supersedes_an_earlier_event():
+    assert eligible(said("PENDING", at=T1, event=True), said("COMPLETED", at=T2)) == ["COMPLETED"]
+
+
+def test_a_later_event_supersedes_an_earlier_read():
+    assert eligible(said("PENDING", at=T1), said("COMPLETED", at=T2, event=True)) == ["COMPLETED"]
+
+
+def test_events_follow_provider_time_not_arrival():
+    # Both arrive at T3; the one PayPal raised later wins, whichever was processed first.
+    assert eligible(said("COMPLETED", at=T2, event=True),
+                    said("PENDING", at=T1, event=True)) == ["COMPLETED"]
+
+
+def test_a_read_after_an_event_wins_even_with_an_older_create_time():
+    # A captures.read carries the capture's create time; it still speaks for when it was read.
+    assert eligible(said("COMPLETED", at=T2, event=True),
+                    said("REFUNDED", at=T3, occurred=T1)) == ["REFUNDED"]
+
+
+def test_two_rows_of_one_source_that_disagree_both_stay():
+    assert eligible(said("PENDING", at=T1), said("COMPLETED", at=T2)) == ["COMPLETED", "PENDING"]
+
+
+def test_each_source_keeps_its_own_word():
+    assert eligible(said("PENDING", at=T1, event=True),
+                    said("COMPLETED", at=T2, event=True),
+                    said("PENDING", at=T1, source="merchant")) == ["COMPLETED", "PENDING"]
+
+
+def test_a_stale_event_no_longer_raises_a_status_mismatch():
+    """PayPal's early PENDING event, its later COMPLETED read and the merchant's COMPLETED row
+    agree once only PayPal's current word counts."""
+    current = current_word(*_split(said("PENDING", at=T1, event=True),
+                                   said("COMPLETED", at=T2),
+                                   said("COMPLETED", at=T2, source="merchant")))
+    found = engine.run(snapshot([
+        observation(str(o.id), "e1", o.source_id, o.normalized_value,
+                    prop="finops:lifecycleStatus", currency=None, context="current")
+        for o in current
+    ]))
+    assert found == []
+
+
+def _split(*said_: tuple[SimpleNamespace, Record]) -> tuple[list, dict]:
+    return [o for o, _ in said_], {record.id: record for _, record in said_}
