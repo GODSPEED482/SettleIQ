@@ -17,6 +17,7 @@ from app.audit import write_audit
 from app.authz.guard import TenantContext
 from app.db import tenant_tx
 from app.errors import conflict, not_found
+from app.semantics.store import active_namespaces
 
 
 class _Strict(BaseModel):
@@ -134,6 +135,17 @@ def enqueue_generation(ctx: TenantContext) -> dict[str, str]:
         ).first()
         if draft is None:
             raise conflict("NO_OPEN_DRAFT", "Create an ontology draft first.")
+        # The model may use only terms the draft composes. A draft started before a pack was
+        # activated lacks that pack's classes and relationships, so its proposals would rebuild
+        # them as generic tenant terms instead of binding to them.
+        composed = {ref["namespace"] for ref in draft.composition if ref.get("layer") == "PACK"}
+        missing = sorted(set(active_namespaces(conn)) - composed)
+        if missing:
+            raise conflict(
+                "DRAFT_MISSING_PACKS",
+                f"The open draft was started before {', '.join(missing)} was activated. "
+                "Abandon it and start a new draft, then generate.",
+            )
         metadata = load_discovered_metadata(conn)
         if not metadata:
             raise conflict("NO_DISCOVERED_METADATA", "Discover a source before generating.")
