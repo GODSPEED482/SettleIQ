@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool
 
 from app.config import get_settings
@@ -222,6 +223,34 @@ def test_unreachable_source_names_no_connection_detail(monkeypatch):
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "SOURCE_UNREACHABLE"
     assert "hunter2" not in response.text and "reader" not in response.text
+
+
+@pytest.mark.db
+def test_discovery_skips_relations_the_role_cannot_read(merchant_schema, monkeypatch):
+    owner_url = os.environ["MIGRATION_DATABASE_URL"]
+    role, password = f"reader_{uuid4().hex[:12]}", uuid4().hex
+    engine = create_engine(owner_url, poolclass=NullPool)
+    with engine.begin() as conn:
+        conn.execute(text(f"CREATE ROLE {role} LOGIN PASSWORD '{password}'"))
+        conn.execute(text(f"GRANT USAGE ON SCHEMA {merchant_schema} TO {role}"))
+        conn.execute(text(f"GRANT SELECT ON {merchant_schema}.payments TO {role}"))
+    monkeypatch.setenv(
+        "SOURCE_SECRET_TEST_MERCHANT",
+        make_url(owner_url)
+        .set(username=role, password=password)
+        .render_as_string(hide_password=False),
+    )
+    try:
+        member = Member()
+        source = merchant_source(member, merchant_schema)
+        response = discover(member, source["id"])
+        assert response.status_code == 200, response.text
+        assert set(stored_objects(member, source["id"])) == {"payments"}
+    finally:
+        with engine.begin() as conn:
+            conn.execute(text(f"DROP OWNED BY {role}"))
+            conn.execute(text(f"DROP ROLE {role}"))
+        engine.dispose()
 
 
 @pytest.mark.db
