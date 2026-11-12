@@ -1,0 +1,45 @@
+#!/bin/bash
+# First-boot bootstrap of the demo business host (rendered by Terraform templatefile; bash
+# variables use the $VAR form).
+set -euxo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+# swap: a 1 GB instance OOMs while pulling and extracting images
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+# docker engine + compose plugin (official repo; Ubuntu's docker.io lacks the compose plugin)
+apt-get update -y
+apt-get install -y ca-certificates curl unzip jq
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" > /etc/apt/sources.list.d/docker.list
+apt-get update -y
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+# Without the userland proxy, connections to the published Postgres port keep their source
+# address, which deploy-demo/pg_hba.conf relies on to keep the owner role off the network.
+mkdir -p /etc/docker
+echo '{"userland-proxy": false}' > /etc/docker/daemon.json
+systemctl enable docker
+systemctl restart docker # the package started it before daemon.json existed
+
+# aws cli v2 (deploy.sh uses it for ECR login, S3 and SSM Parameter Store)
+if ! command -v aws >/dev/null; then
+  curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install
+fi
+
+# host facts for deploy.sh
+mkdir -p /opt/kitebase/releases
+cat > /opt/kitebase/host.env <<EOF
+REGION=${region}
+REGISTRY=${registry}
+PARAM_PATH=${param_path}
+RELEASE_BUCKET=${release_bucket}
+EOF

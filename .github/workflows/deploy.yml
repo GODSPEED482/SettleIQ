@@ -10,6 +10,9 @@ on:
       - "infra/**"
       - "docs/**"
       - "**/*.md"
+      - "demo-business/**" # the demo business has its own pipeline, demo-deploy.yml
+      - "deploy-demo/**"
+      - ".github/workflows/demo-*.yml"
 
 concurrency:
   group: deploy-prod

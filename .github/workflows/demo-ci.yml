@@ -1,0 +1,81 @@
+name: demo-ci
+
+# The demo business (Kitebase, tasks 6.11 to 6.15). Runs on PRs and pushes to prod that touch it,
+# and is demo-deploy.yml's gate. Terraform for its host is validated by ci.yml's deploy-config.
+on:
+  push:
+    branches: [prod]
+    paths:
+      - "demo-business/**"
+      - "deploy-demo/**"
+      - "infra/push-demo-env.sh"
+      - "backend/app/connectors/internal_merchant/merchant_setup.sql"
+      - ".github/workflows/demo-*.yml"
+  pull_request:
+    paths:
+      - "demo-business/**"
+      - "deploy-demo/**"
+      - "infra/push-demo-env.sh"
+      - "backend/app/connectors/internal_merchant/merchant_setup.sql"
+      - ".github/workflows/demo-*.yml"
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  shop:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-owner
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      DEMO_TEST_DATABASE_URL: postgresql://postgres:ci-owner@localhost:5432/postgres
+      REQUIRE_DB_TESTS: "1"
+    defaults:
+      run:
+        working-directory: demo-business
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - name: merchant_setup.sql is SettleIQ's, byte for byte
+        run: cmp shop/sql/merchant_setup.sql ../backend/app/connectors/internal_merchant/merchant_setup.sql
+      - run: uv run pytest
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: demo-business
+          file: demo-business/Dockerfile
+          push: false
+          cache-from: type=gha,scope=demo
+          cache-to: type=gha,mode=max,scope=demo
+
+  deploy-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: shellcheck deploy-demo/deploy.sh infra/push-demo-env.sh
+      - name: Compose file renders
+        working-directory: deploy-demo
+        run: |
+          REGISTRY=ci TAG=ci POSTGRES_PASSWORD=x MERCHANT_READER_PASSWORD=x \
+            MERCHANT_WRITER_PASSWORD=x ACME_EMAIL=ci@example.com docker compose config -q

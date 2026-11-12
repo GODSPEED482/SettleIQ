@@ -34,8 +34,8 @@ variable "data_volume_gb" {
 
 variable "monthly_budget_usd" {
   type        = number
-  default     = 25
-  description = "Alerts when actual or forecast monthly usage passes this; the expected cost is about $23"
+  default     = 40
+  description = "Alerts when actual or forecast monthly usage passes this; the expected cost is about $36 with the demo host"
 }
 
 variable "budget_alert_email" {
@@ -51,13 +51,24 @@ variable "budget_alert_email" {
 # A new image needs its ECR repo applied before the deploy that pushes it; deploy and infra run in parallel.
 variable "services" {
   type        = list(string)
-  default     = ["api", "web", "agent"] # one ECR repo per image the pipeline builds
+  default     = ["api", "web", "agent", "demo"] # one ECR repo per image the pipelines build
   description = "Image names; repos are created as settleiq-<name>"
 }
 
 variable "app_domain" {
   type    = string
   default = "app.settleiq.dpdns.org"
+}
+
+variable "demo_domain" {
+  type    = string
+  default = "subs.settleiq.dpdns.org"
+}
+
+variable "demo_instance_type" {
+  type        = string
+  default     = "t3.micro"
+  description = "The demo business host: one small shop and its Postgres"
 }
 
 variable "route53_zone_id" {

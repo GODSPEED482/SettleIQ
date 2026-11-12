@@ -54,12 +54,13 @@ Isolation matches the local stack: `edge` holds proxy, web and api; `backend` ho
 | EC2 `t3.small`, Ubuntu 24.04, standard CPU credits | One box to debug; free-tier eligible | $16.35 ($0.0224/hr) |
 | EBS gp3: 20 GB root, 10 GB data | Data outlives the instance; `prevent_destroy` | $2.74 |
 | Elastic IP / public IPv4 | Stable DNS target | $3.65 |
-| ECR (3 repos, last 5 images) | Immutable SHA tags, so rollback is exact | under $0.50 |
+| Demo host: EC2 `t3.micro`, 12 GB gp3, Elastic IP | The demo business on its own box | $12.93 ($8.18 + $1.10 + $3.65) |
+| ECR (4 repos, last 5 images) | Immutable SHA tags, so rollback is exact | under $0.50 |
 | S3 (state, releases 30 days, backups 14 days) | Remote state, deploy bundles, dumps | under $0.50 |
 | SSM Parameter Store, standard | Secrets | free |
-| AWS Budgets alert at $25 a month | Warns before credits drain | free |
+| AWS Budgets alert at $40 a month | Warns before credits drain | free |
 
-Total is about **$23 a month, or $0.76 a day**, at Mumbai list prices checked on 2026-11-09, before any tax.
+Total is about **$36 a month, or $1.19 a day**, at Mumbai list prices checked on 2026-11-09, before any tax; the demo host is about $13 of it. The `t3.micro` price assumes the same per-hour ratio as `t3.small`, so check it against the console.
 
 Idle, the five core containers used about 170 MB in total in a local run, so `t3.small` (2 GB plus 2 GB swap) should fit. That is an idle figure, with no load and the agent profile off, so measure it in rehearsal.
 
@@ -90,6 +91,8 @@ To pause spending after the demo, run `aws ec2 stop-instances --region ap-south-
 | `ci.yml` | PRs, push to `prod`, called by `deploy.yml` | backend (real Postgres, `REQUIRE_DB_TESTS=1`), agent, frontend, image builds, Terraform validate, shellcheck | no |
 | `deploy.yml` | **push to `prod` only**, ignoring `infra/`, `docs/`, `*.md` | test, build and push, deploy through SSM, public smoke test | yes |
 | `infra.yml` | **push to `prod` only**, `infra/**` | terraform plan and apply | yes |
+| `demo-ci.yml` | PRs and pushes to `prod` touching the demo business, called by `demo-deploy.yml` | shop tests (real Postgres), `merchant_setup.sql` copy check, image build, shellcheck, compose render | no |
+| `demo-deploy.yml` | **push to `prod` only**, demo paths | test, build and push `settleiq-demo`, wait for the host, deploy through SSM, host health check | yes |
 
 Any failing CI job blocks the deploy.
 
@@ -109,6 +112,17 @@ Protect `prod` in GitHub, requiring a PR and passing CI, since a direct push dep
 `ci.yml` still runs on its own for a push to `prod`, so a deploying push runs the tests twice. That is deliberate: the standalone run also covers pushes that `deploy.yml` ignores.
 
 Image tags are immutable, so "Re-run all jobs" on a finished deploy fails at the push step. Use "Re-run failed jobs".
+
+### Demo business host
+
+Kitebase, the demo business (`demo-business/`), runs on its own `t3.micro` instance (`infra/envs/prod/demo.tf`) at `subs.settleiq.dpdns.org`, with Caddy, the shop and its own Postgres (`deploy-demo/`). Its database is published on 5432. The security group admits only the SettleIQ host, and `pg_hba.conf` keeps the owner role on the shop's network. The shop's data is disposable, so it has no backup and no separate volume.
+
+- `demo-deploy.yml` finds the instance by its `Name` tag (`settleiq-prod-demo`) and needs no repository variable. On the first merge it waits up to 15 minutes for `infra.yml` to create the repository and the host.
+- Its values live under `/settleiq/demo`. `bash infra/push-demo-env.sh` creates them from `.env.demo`. Terraform creates no placeholders there, so the script can run before the merge.
+- The deploy fails, changing nothing, while a required value is missing.
+- A failed deploy restores the previous release on the host. The public check only warns until DNS points at the Elastic IP.
+
+Setup and the demo tenant are in `docs/DEMO.md`.
 
 ## 6. Config and secrets
 
