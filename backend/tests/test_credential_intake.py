@@ -39,7 +39,7 @@ def sealing_key(monkeypatch):
 def provider_checks(monkeypatch) -> list[str]:
     """Stands in for PayPal's token endpoint and records what it was asked to check."""
     checked: list[str] = []
-    monkeypatch.setattr(registry, "_check_with_provider", lambda _c, value: checked.append(value))
+    monkeypatch.setattr(registry, "_check_with_provider", lambda value: checked.append(value))
     return checked
 
 
