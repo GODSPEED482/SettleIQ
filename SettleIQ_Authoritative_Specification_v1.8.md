@@ -1456,8 +1456,8 @@ Track each acceptance criterion as `NOT STARTED`, `IN PROGRESS`, `BLOCKED` or `V
 | Impact analysis | A scope can now go LIVE, and a grant can be issued, without any release attestation, so LIVE is no longer bound at runtime to a tested build. The safety-critical tests remain release-blocking through the §16.7 release rule, applied by CI and by whoever switches a scope to LIVE. The request-to-execution chain, POL-01, POL-06, POL-09, SHADOW by default, the exact-scope key, grants, the Worker and readback do not change. `platform.release.attest` leaves Appendix A, and the `release_attestor` principal is removed. |
 | Compatibility and migration | Migration 0020 drops `release_gate_attestations`, `release_revocation_states`, the revocation high-water mark and `platform_service_principals`, the `attestation_id` columns on `execution_mode_settings`, `policy_decisions` and `execution_grants`, and the check that a LIVE row carries an attestation; the grant guard is replaced to match. No attestation was ever issued, so no data is lost. The attestation workflow, signer, runtime-identity service and write-once bucket are deleted. |
 | Test updates | AC-REL-01..12 and AC-AUTHZ-16 are retired with their tests. Mode tests switch scopes to LIVE without an attestation, and a schema check and a code scan prove no release attestation remains. AC-EXEC-MODE-04 and AC-MERCH-07 are traced to mode tests. |
-| Approver | To be recorded by the team. |
-| Effective version | 1.8, effective 12 November 2026 on approval. |
+| Approver | Rishav Chowdhury, 12 November 2026. The approval covers the integrated v1.8 text. |
+| Effective version | 1.8, effective 12 November 2026. |
 
 ---
 

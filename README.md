@@ -159,7 +159,7 @@ Sandbox gotchas met on the way:
 
 Spec v1.8 (CHG-1.8-01, 2026-11-12) removed POL-14. Each exact scope starts in SHADOW, and a tenant member holding `execution_mode.manage` switches it to LIVE with `PUT /api/tenants/{tenant_id}/execution-mode`. No developer-side attestation, signing key or build freeze gates execution. The tenant's own controls still apply: the REQUEST decision, independent approval (POL-01), execution-stage revalidation, the mode check at grant issue and at the Worker, single-use grants and readback. Migration 0020 drops the release tables and the attestation columns.
 
-Outside the repo, these leftovers from task 5.4 can be deleted by hand: the GitHub environments `release-attestation` and `release-publish`, the secret `ATTESTATION_SIGNING_KEY`, and the variables `ATTESTATION_KEY_ID`, `ATTEST_BUCKET` and `AWS_ATTEST_ROLE_ARN`. The next `terraform apply` removes the attestations bucket and the `gha-attest` role; if an envelope was ever written to the bucket, its 30-day COMPLIANCE lock blocks that until it expires.
+Spec v1.8 was approved by Rishav on 2026-11-12. The task 5.4 provisioning was never done, so nothing outside the repo needed removing: on 2026-11-12 the repository had no GitHub environments or attestation secrets and variables, and AWS had no attestations bucket, `gha-attest` role or attestation parameter, nor any of them in the Terraform state.
 
 ## Spec gaps found while scaffolding
 
