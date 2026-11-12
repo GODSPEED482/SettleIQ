@@ -122,12 +122,14 @@ resource "aws_iam_role" "gha_infra" {
 # their inline policies and trust, so the trust policy above (this repo, prod branch only) still guards that.
 # No ec2:DeleteVolume: the data volume is prevent_destroy. KMS comes from the aws/ssm and aws/ebs key policies.
 locals {
-  account_id    = data.aws_caller_identity.me.account_id
-  ec2           = "arn:aws:ec2:${var.region}:${local.account_id}"
-  ssm_prod      = "arn:aws:ssm:${var.region}:${local.account_id}:parameter/settleiq/prod/*"
-  iam           = "arn:aws:iam::${local.account_id}"
-  host_role     = "${local.iam}:role/settleiq-prod-host"
-  stack_roles   = [local.host_role, "${local.iam}:role/settleiq-prod-gha-deploy"]
+  account_id = data.aws_caller_identity.me.account_id
+  ec2        = "arn:aws:ec2:${var.region}:${local.account_id}"
+  ssm_prod   = "arn:aws:ssm:${var.region}:${local.account_id}:parameter/settleiq/prod/*"
+  iam        = "arn:aws:iam::${local.account_id}"
+  # The SettleIQ host and the demo business host (infra/envs/prod/demo.tf), each with its own role and profile.
+  host_roles    = ["${local.iam}:role/settleiq-prod-host", "${local.iam}:role/settleiq-prod-demo-host"]
+  host_profiles = ["${local.iam}:instance-profile/settleiq-prod-host", "${local.iam}:instance-profile/settleiq-prod-demo-host"]
+  stack_roles   = concat(local.host_roles, ["${local.iam}:role/settleiq-prod-gha-deploy"])
   state_bucket  = aws_s3_bucket.tfstate.arn
   state_object  = "${aws_s3_bucket.tfstate.arn}/prod/terraform.tfstate"
   release_store = "arn:aws:s3:::settleiq-prod-releases-${local.account_id}"
@@ -260,7 +262,7 @@ data "aws_iam_policy_document" "gha_infra" {
   statement {
     sid       = "IamHostManagedPolicies"
     actions   = ["iam:AttachRolePolicy", "iam:DetachRolePolicy"]
-    resources = [local.host_role]
+    resources = local.host_roles
     condition {
       test     = "ArnEquals"
       variable = "iam:PolicyARN"
@@ -276,12 +278,12 @@ data "aws_iam_policy_document" "gha_infra" {
       "iam:AddRoleToInstanceProfile", "iam:CreateInstanceProfile", "iam:DeleteInstanceProfile", "iam:GetInstanceProfile",
       "iam:RemoveRoleFromInstanceProfile", "iam:TagInstanceProfile", "iam:UntagInstanceProfile",
     ]
-    resources = ["${local.iam}:instance-profile/settleiq-prod-host"]
+    resources = local.host_profiles
   }
   statement {
     sid       = "IamPassHostRole"
     actions   = ["iam:PassRole"]
-    resources = [local.host_role]
+    resources = local.host_roles
     condition {
       test     = "StringEquals"
       variable = "iam:PassedToService"
