@@ -95,11 +95,21 @@ export type Execution = {
   attempts: Attempt[];
 };
 
+export type Mode = "SHADOW" | "LIVE";
+
 export type Readiness = {
   domain_pack_id: string;
+  domain_pack_version: string;
   connector_id: string;
   action_capability: string;
-  mode: "SHADOW" | "LIVE";
+  mode: Mode;
+};
+
+// PUT /execution-mode (backend/app/api/tenants.py). A LIVE switch also lists the requests that
+// scope had blocked, each evaluated again.
+export type ModeChange = Readiness & {
+  previous_mode: Mode;
+  reevaluated_requests?: string[];
 };
 
 export type AuditRecord = {

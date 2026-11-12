@@ -1,7 +1,7 @@
 import { apiFetch } from "../../api/client";
 import { can, type EffectivePermission } from "../../permissions/can";
 import type { InvestigationSummary } from "../investigations/types";
-import type { AuditRecord, Execution, PlaybookRequest, Readiness } from "./types";
+import type { AuditRecord, Execution, Mode, ModeChange, PlaybookRequest, Readiness } from "./types";
 
 function query(params: Record<string, string | undefined>): string {
   const search = new URLSearchParams();
@@ -39,6 +39,17 @@ export function playbooksApi(tenantId: string) {
     execution: (id: string) => call<Execution>(`/api/executions/${id}`),
     audit: (id: string) => call<AuditRecord>(`/api/audit/${id}`),
     readiness: () => call<Readiness[]>(`/api/tenants/${tenantId}/execution-readiness`),
+    // Exactly one scope per call (AC-EXEC-MODE-02); the server takes the pack version itself.
+    setMode: (scope: Readiness, mode: Mode) =>
+      call<ModeChange>(`/api/tenants/${tenantId}/execution-mode`, {
+        method: "PUT",
+        json: {
+          domain_pack_id: scope.domain_pack_id,
+          connector_id: scope.connector_id,
+          action_capability: scope.action_capability,
+          mode,
+        },
+      }),
     investigations: (caseId: string) =>
       call<InvestigationSummary[]>(`/api/investigations${query({ case_id: caseId })}`),
   };

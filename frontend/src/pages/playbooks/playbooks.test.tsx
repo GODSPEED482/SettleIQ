@@ -135,10 +135,19 @@ const VERIFIED: Execution = {
 };
 const SHADOW: Readiness = {
   domain_pack_id: "finops",
+  domain_pack_version: "0.2.0",
   connector_id: "paypal",
   action_capability: "refunds.create",
   mode: "SHADOW",
 };
+const LIVE_MERCHANT: Readiness = {
+  domain_pack_id: "finops",
+  domain_pack_version: "0.2.0",
+  connector_id: "internal-merchant",
+  action_capability: "merchant.payment_status.correct",
+  mode: "LIVE",
+};
+const MODE_PUT = `PUT /api/tenants/${T}/execution-mode`;
 
 type Grant = string | { key: string; scopes?: string[]; denied?: string[] };
 
@@ -242,6 +251,74 @@ describe("PlaybookRequests", () => {
     const detail = await openRequest();
     const mode = await within(detail).findByText("SHADOW");
     expect(mode.closest("p")?.textContent).toContain("PayPal Sandbox");
+  });
+
+  it("lists each exact scope's mode to a reader with no switch", async () => {
+    renderPlaybooks(["playbook.read", "execution.read"], {
+      [`GET /api/tenants/${T}/execution-readiness`]: { status: 200, body: [SHADOW, LIVE_MERCHANT] },
+    });
+    const panel = await screen.findByRole("region", { name: "Execution mode" });
+    const rows = await within(panel).findAllByRole("row");
+    expect(rows[1].textContent).toContain("PayPal Sandbox");
+    expect(rows[1].textContent).toContain("refunds.create");
+    expect(rows[1].textContent).toContain("SHADOW");
+    expect(rows[2].textContent).toContain("merchant.payment_status.correct");
+    expect(rows[2].textContent).toContain("LIVE");
+    expect(within(panel).queryByRole("button")).toBeNull();
+    expect(within(panel).getByText("Only the tenant owner can switch a scope.")).toBeTruthy();
+  });
+
+  it("does not show the panel without execution.read", async () => {
+    renderPlaybooks(["playbook.read"]);
+    await screen.findByRole("button", { name: `Open request ${R}` });
+    expect(screen.queryByRole("region", { name: "Execution mode" })).toBeNull();
+  });
+
+  it("switches one scope to LIVE after confirmation, sending only that scope", async () => {
+    const api = renderPlaybooks(["playbook.read", "execution.read", "execution_mode.manage"], {
+      [`GET /api/tenants/${T}/execution-readiness`]: [
+        { status: 200, body: [SHADOW] },
+        { status: 200, body: [{ ...SHADOW, mode: "LIVE" }] },
+      ],
+      [MODE_PUT]: {
+        status: 200,
+        body: { ...SHADOW, mode: "LIVE", previous_mode: "SHADOW", reevaluated_requests: [R] },
+      },
+    });
+    const panel = await screen.findByRole("region", { name: "Execution mode" });
+    fireEvent.click(await within(panel).findByRole("button", { name: "Switch to LIVE" }));
+    expect(api.sent(MODE_PUT)).toEqual([]);
+    fireEvent.click(within(panel).getByRole("button", { name: "Confirm switch to live" }));
+    expect((await within(panel).findByRole("status")).textContent).toBe(
+      "refunds.create is LIVE; 1 blocked request was evaluated again.",
+    );
+    expect(api.sent(MODE_PUT)).toEqual([
+      {
+        domain_pack_id: "finops",
+        connector_id: "paypal",
+        action_capability: "refunds.create",
+        mode: "LIVE",
+      },
+    ]);
+    // The readiness and the request list are read again, so re-evaluated requests show their state.
+    expect(await within(panel).findByRole("button", { name: "Return to SHADOW" })).toBeTruthy();
+    const keys = api.calls.map((call) => call.key);
+    expect(keys.filter((key) => key === `GET /api/tenants/${T}/execution-readiness`)).toHaveLength(2);
+    expect(keys.filter((key) => key.startsWith("GET /api/playbook-requests")).length).toBeGreaterThan(1);
+  });
+
+  it("shows a refused switch and leaves the mode as it was", async () => {
+    renderPlaybooks(["playbook.read", "execution.read", "execution_mode.manage"], {
+      [MODE_PUT]: apiError(403, "MISSING_PERMISSION", "You do not hold execution_mode.manage."),
+    });
+    const panel = await screen.findByRole("region", { name: "Execution mode" });
+    fireEvent.click(await within(panel).findByRole("button", { name: "Switch to LIVE" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Confirm switch to live" }));
+    expect((await within(panel).findByRole("alert")).textContent).toContain(
+      "You do not hold execution_mode.manage.",
+    );
+    expect(within(panel).queryByRole("status")).toBeNull();
+    expect(within(panel).getByRole("button", { name: "Switch to LIVE" })).toBeTruthy();
   });
 
   it("hides approve and reject from the requester (POL-01)", async () => {

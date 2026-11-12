@@ -6,6 +6,7 @@ import { can } from "../../permissions/can";
 import { usePermissions } from "../../permissions/PermissionsContext";
 import { StatusBadge, shortId } from "../operations/labels";
 import { playbooksApi } from "./api";
+import { ExecutionModes } from "./ExecutionModes";
 import { ModeLabel } from "./ModeLabel";
 import { RequestDetail } from "./RequestDetail";
 import type { PlaybookRequest, Readiness, RequestStatus } from "./types";
@@ -29,6 +30,7 @@ const STATUSES: RequestStatus[] = [
 export function PlaybookRequests({ pollMs = POLL_MS }: { pollMs?: number }) {
   const { tenantId, permissions } = usePermissions();
   const canReadExecutions = can(permissions, "execution.read");
+  const canManageModes = can(permissions, "execution_mode.manage");
   const api = useMemo(() => (tenantId ? playbooksApi(tenantId) : null), [tenantId]);
   const [params, setParams] = useSearchParams();
   const selected = params.get("request");
@@ -76,6 +78,14 @@ export function PlaybookRequests({ pollMs = POLL_MS }: { pollMs?: number }) {
         Operations.
       </p>
       {error && <p className="error" role="alert">{error}</p>}
+      {canReadExecutions && (
+        <ExecutionModes
+          api={api}
+          readiness={readiness}
+          canManage={canManageModes}
+          onChanged={() => setVersion((current) => current + 1)}
+        />
+      )}
       <section className="panel">
         <h2>Requests</h2>
         <div className="form inline filters">
