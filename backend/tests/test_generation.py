@@ -19,6 +19,7 @@ from app.semantics.generation import (
     OntologyProposal,
     ProposedTerm,
     UngroundedProposal,
+    ValueKind,
     ground_items,
     ground_proposal,
 )
@@ -54,6 +55,7 @@ def term(**overrides) -> dict:
 def binding(**overrides) -> dict:
     return {
         "source_id": "s1", "object": "orders", "field": "total", "property": "finops:Order",
+        "class_iri": "finops:Order", "value_kind": "text", "currency_field": None,
         "confidence": "medium", "evidence": [evidence()],
     } | overrides
 
@@ -211,6 +213,54 @@ def test_proposal_needs_evidence():
         proposal(bindings=[binding(evidence=[])])
 
 
+def test_a_grounded_binding_carries_a_complete_mapping():
+    item = ground(bindings=[binding(field="id", value_kind="identifier")])[0]
+    assert item["mapping"] == {
+        "class_iri": "finops:Order", "datatype": "string", "transform": {"name": "identity"},
+        "value_basis": "identifier", "temporal_context": "any", "currency_field": None,
+        "unit": None, "nullable": False, "is_unique": True, "sync_strategy": "batch",
+    }
+
+
+def test_status_is_compared_in_upper_case_as_a_current_value():
+    mapping = ground(bindings=[binding(value_kind="status")])[0]["mapping"]
+    assert (mapping["transform"], mapping["value_basis"], mapping["temporal_context"]) == (
+        {"name": "upper"}, "status", "current")
+
+
+def test_binding_to_an_invented_class_is_refused():
+    with pytest.raises(UngroundedProposal, match="unknown class"):
+        ground(bindings=[binding(class_iri="finops:Invented")])
+
+
+def test_money_needs_a_currency_field_on_the_same_object():
+    with pytest.raises(UngroundedProposal, match="no currency field"):
+        ground(bindings=[binding(value_kind="money", currency_field=None)])
+    with pytest.raises(UngroundedProposal, match="no currency field"):
+        ground(bindings=[binding(value_kind="money", currency_field="customers.currency")])
+    priced = DiscoveredObject(**ORDERS | {"fields": [*ORDERS["fields"], {
+        "name": "currency", "datatype": "text", "nullable": False, "unique": False}]})
+    item = ground_proposal(
+        proposal(bindings=[binding(value_kind="money", currency_field="orders.currency")]),
+        [priced], KNOWN,
+    )[0]
+    assert item["currency_field"] == item["mapping"]["currency_field"] == "currency"
+    assert (item["mapping"]["datatype"], item["mapping"]["transform"]) == (
+        "decimal", {"name": "decimal_string"})
+
+
+def test_only_money_keeps_a_currency_field():
+    item = ground(bindings=[binding(value_kind="text", currency_field="total")])[0]
+    assert item["mapping"]["currency_field"] is None
+
+
+def test_the_agent_offers_the_same_value_kinds():
+    agent = (Path(__file__).parents[2] / "agent" / "settleiq_agent" / "drafting.py").read_text(
+        encoding="utf-8")
+    kinds = ", ".join(f'"{kind}"' for kind in ValueKind.__args__)
+    assert f"value_kind: Literal[{kinds}]" in agent
+
+
 # Queue, database
 
 
@@ -339,9 +389,17 @@ def test_payload_carries_metadata_and_known_terms_only(member_with_draft):
         payload = conn.execute(
             text("SELECT payload FROM agent_jobs WHERE id = :i"), {"i": job_id}
         ).scalar_one()
-    assert set(payload) == {"metadata", "known_terms"}
+    assert set(payload) == {"metadata", "known_terms", "term_details", "resolution"}
     assert "finops:Order" in payload["known_terms"]
     assert "core:Tenant" in payload["known_terms"]
+    details = {term["id"]: term for term in payload["term_details"]}
+    assert set(details) == set(payload["known_terms"])
+    assert details["finops:Order"]["kind"] == "class"
+    assert details["finops:forOrder"]["range"] == "finops:Order"
+    assert payload["resolution"]["identities"]["finops:Capture"] == ["finops:providerReference"]
+    assert {"subject": "finops:Capture", "predicate": "finops:forOrder",
+            "object": "finops:Order", "via": "finops:orderReference"} in (
+        payload["resolution"]["relationships"])
 
 
 @pytest.mark.db
