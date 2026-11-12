@@ -31,7 +31,7 @@ resource "aws_security_group" "demo" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
-    description     = "Postgres for SettleIQ's merchant connectors, over the VPC"
+    description     = "Postgres for the SettleIQ merchant connectors, over the VPC"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
