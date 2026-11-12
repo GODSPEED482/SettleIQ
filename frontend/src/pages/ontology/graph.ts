@@ -74,8 +74,12 @@ function depthOf(term: Term, byId: Map<string, Term>, seen = new Set<string>()):
   return 1 + depthOf(parent, byId, seen);
 }
 
-export function toFlow(terms: Term[]): { nodes: Node[]; edges: Edge[] } {
-  const classes = terms.filter((term) => term.kind === "class");
+export function toFlow(
+  terms: Term[],
+  hidden: ReadonlySet<Layer> = new Set(),
+): { nodes: Node[]; edges: Edge[] } {
+  const shown = terms.filter((term) => !hidden.has(term.layer));
+  const classes = shown.filter((term) => term.kind === "class");
   const byId = new Map(classes.map((term) => [term.id, term]));
   const perRow = new Map<number, number>();
   const nodes: Node[] = classes.map((term) => {
@@ -104,7 +108,7 @@ export function toFlow(terms: Term[]): { nodes: Node[]; edges: Edge[] } {
       });
     }
   }
-  for (const term of terms) {
+  for (const term of shown) {
     if (term.kind !== "relationship" || !term.domain || !term.range) continue;
     if (!byId.has(term.domain) || !byId.has(term.range)) continue;
     edges.push({

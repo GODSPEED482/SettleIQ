@@ -159,6 +159,19 @@ describe("OntologyStudio proposals", () => {
   });
 });
 
+describe("OntologyStudio layer filter", () => {
+  it("switches each layer off and on from the legend", async () => {
+    renderStudio([]);
+    const legend = await screen.findByRole("list", { name: "Layers" });
+    const tenant = within(legend).getByRole("button", { name: "Tenant extension" });
+    expect(tenant.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(tenant);
+    expect(tenant.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(tenant);
+    expect(tenant.getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
 describe("OntologyStudio domain packs", () => {
   const PACKS = [
     { namespace: "pk", version: "1.0.0", status: "ACTIVE", case_types: ["THING_MISMATCH"] },

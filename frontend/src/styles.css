@@ -435,7 +435,22 @@ span.status {
   list-style: none;
 }
 
-.legend li::before {
+.legend button {
+  padding: 2px 8px;
+  color: var(--text);
+  font: inherit;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.legend button[aria-pressed="false"] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.legend button::before {
   display: inline-block;
   width: 10px;
   height: 10px;

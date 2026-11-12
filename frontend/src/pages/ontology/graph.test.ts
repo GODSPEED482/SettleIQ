@@ -89,6 +89,18 @@ describe("toFlow", () => {
     );
     expect(dangling.edges).toEqual([]);
   });
+
+  it("leaves out a hidden layer's classes and every link that touches them", () => {
+    const terms = collectTerms([CORE, PACK], EXTENSION);
+    const noCore = toFlow(terms, new Set(["core"]));
+    expect(noCore.nodes.map((node) => node.id).sort()).toEqual(["pk:Part", "pk:Thing", "tenant:Widget"]);
+    expect(noCore.edges.some((edge) => edge.target === "core:DomainEntity")).toBe(false);
+    expect(noCore.edges.map((edge) => edge.id)).toContain("rel:pk:hasPart");
+
+    const noPack = toFlow(terms, new Set(["pack"]));
+    expect(noPack.nodes.map((node) => node.id).sort()).toEqual(["core:DomainEntity", "tenant:Widget"]);
+    expect(noPack.edges).toEqual([]);
+  });
 });
 
 describe("tenant terms", () => {
