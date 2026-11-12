@@ -302,6 +302,21 @@ def test_generation_needs_an_open_draft(discovered):
 
 
 @pytest.mark.db
+def test_generation_refuses_a_draft_started_before_a_pack_was_activated(member_with_draft):
+    assert member_with_draft.activate("saas").status_code == 200
+    response = generate(member_with_draft)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "DRAFT_MISSING_PACKS"
+    assert "saas" in response.json()["error"]["message"]
+    with scoped_tx(member_with_draft.tenant) as conn:
+        assert conn.execute(text("SELECT count(*) FROM agent_jobs")).scalar() == 0
+    draft_id = open_draft(member_with_draft)["id"]
+    member_with_draft.request("POST", f"/api/ontology/drafts/{draft_id}/abandon")
+    assert member_with_draft.create_draft().status_code == 201
+    assert generate(member_with_draft).status_code == 202
+
+
+@pytest.mark.db
 def test_generation_refuses_without_discovered_metadata():
     member = Member()
     member.create_draft()

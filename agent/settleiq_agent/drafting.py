@@ -22,6 +22,11 @@ Rules:
 - A binding's property is copied exactly from known_terms, or is the id of a term you propose
   in this same answer. Never write an id that appears in neither place.
 - New term ids must look like tenant:CamelCaseName.
+- Bind every field that carries business meaning: identifiers, references to other objects,
+  statuses, amounts, currencies and dates. Prefer the classes and properties in known_terms.
+- Where a foreign key links two objects and no relationship in known_terms connects the
+  classes they bind to, propose a relationship term whose domain and range are those classes,
+  citing the foreign key as evidence.
 - A foreign key is structural evidence only. It does not prove a business relationship.
 - Bind two fields to one property only if they mean the same thing, in the same units and
   over the same time context. Similar names or datatypes are not enough.

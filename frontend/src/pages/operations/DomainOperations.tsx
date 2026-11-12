@@ -23,6 +23,7 @@ export function DomainOperations() {
   const canReadDecisions = can(permissions, "entity_resolution.read");
   const canReview = can(permissions, "entity_resolution.review");
   const canStart = can(permissions, "domain_run.create");
+  const canReadPacks = can(permissions, "domain_pack.read");
   const canReadMembers = can(permissions, "member.read");
   // The recommendation comes from the case's investigations; each playbook's own scope is
   // checked inside the request form.
@@ -32,6 +33,7 @@ export function DomainOperations() {
   const api = useMemo(() => (tenantId ? operationsApi(tenantId) : null), [tenantId]);
   const playbooks = useMemo(() => (tenantId ? playbooksApi(tenantId) : null), [tenantId]);
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [packs, setPacks] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,6 +51,19 @@ export function DomainOperations() {
       current = false;
     };
   }, [api, canTriage, canReadMembers]);
+
+  // With more than one pack active, each run names its pack, so the panel offers one per pack.
+  useEffect(() => {
+    if (!api || !canStart || !canReadPacks) return;
+    let current = true;
+    api
+      .activePacks()
+      .then((list) => current && setPacks(list))
+      .catch((caught) => current && setError(messageOf(caught)));
+    return () => {
+      current = false;
+    };
+  }, [api, canStart, canReadPacks]);
 
   if (!api || !playbooks) return null;
 
@@ -83,8 +98,11 @@ export function DomainOperations() {
         api={api}
         version={version}
         canStart={canStart}
+        packs={packs}
         busy={busy}
-        onStart={() => void run(() => api.startRun(), "Run finished.")}
+        onStart={(namespace) =>
+          void run(() => api.startRun(namespace), namespace ? `${namespace} run finished.` : "Run finished.")
+        }
       />
       {canReadCases && (
         <Cases

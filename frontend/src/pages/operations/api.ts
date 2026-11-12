@@ -23,7 +23,16 @@ export function operationsApi(tenantId: string) {
     apiFetch<T>(path, { ...init, tenantId });
   return {
     runs: () => call<DomainRun[]>("/api/domain-runs"),
-    startRun: () => call<DomainRun>("/api/domain-runs", { method: "POST" }),
+    // A run is per pack; the server picks the pack itself only when exactly one is active.
+    startRun: (namespace?: string) =>
+      call<DomainRun>("/api/domain-runs", {
+        method: "POST",
+        ...(namespace ? { json: { namespace } } : {}),
+      }),
+    activePacks: () =>
+      call<{ namespace: string; status: string }[]>("/api/domain-packs").then((packs) =>
+        packs.filter((pack) => pack.status === "ACTIVE").map((pack) => pack.namespace),
+      ),
     cases: (filter: { status?: string; case_type?: string }) =>
       call<DomainCase[]>(`/api/domain-cases${query(filter)}`),
     triage: (caseId: string, body: TriageInput) =>
