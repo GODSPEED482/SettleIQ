@@ -152,14 +152,18 @@ _KINDS = {"owl:Class": "class", "owl:DatatypeProperty": "property",
 
 def _composition_terms(
     conn: Connection, composition: list[dict[str, str]]
-) -> list[dict[str, str | None]]:
-    """Each composed term with what a model needs to choose it: kind, label, domain, range."""
+) -> list[dict[str, Any]]:
     hashes = [reference["content_hash"] for reference in composition]
     rows = conn.execute(
         text("SELECT content FROM ontology_artifacts WHERE content_hash = ANY(:hashes)"),
         {"hashes": hashes},
     ).all()
-    nodes = {node["@id"]: node for row in rows for node in row.content.get("@graph", [])}
+    return term_details([node for row in rows for node in row.content.get("@graph", [])])
+
+
+def term_details(graph: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Each JSON-LD term with what a model needs to choose it, and the grounding to align to it."""
+    nodes = {node["@id"]: node for node in graph}
     return [
         {
             "id": term_id,
