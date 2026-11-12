@@ -7,6 +7,7 @@ the server can confirm against the metadata is labelled observed (AC-ONT-04).
 """
 
 import json
+import re
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
@@ -151,24 +152,34 @@ _KINDS = {"owl:Class": "class", "owl:DatatypeProperty": "property",
 
 def _composition_terms(
     conn: Connection, composition: list[dict[str, str]]
-) -> list[dict[str, str | None]]:
-    """Each composed term with what a model needs to choose it: kind, label, domain, range."""
+) -> list[dict[str, Any]]:
     hashes = [reference["content_hash"] for reference in composition]
     rows = conn.execute(
         text("SELECT content FROM ontology_artifacts WHERE content_hash = ANY(:hashes)"),
         {"hashes": hashes},
     ).all()
-    nodes = {node["@id"]: node for row in rows for node in row.content.get("@graph", [])}
+    return term_details([node for row in rows for node in row.content.get("@graph", [])])
+
+
+def term_details(graph: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Each JSON-LD term with what a model needs to choose it, and the grounding to align to it."""
+    nodes = {node["@id"]: node for node in graph}
     return [
         {
             "id": term_id,
             "kind": _KINDS.get(str(node.get("@type")), "term"),
             "label": node.get("rdfs:label"),
+            "subclass_of": _ids(node.get("rdfs:subClassOf")),
             "domain": node.get("rdfs:domain"),
             "range": node.get("rdfs:range"),
         }
         for term_id, node in sorted(nodes.items())
     ]
+
+
+def _ids(value: Any) -> list[str]:
+    values = value if isinstance(value, list) else [] if value is None else [value]
+    return [item["@id"] if isinstance(item, dict) else str(item) for item in values]
 
 
 def _resolution(namespaces: list[str]) -> dict[str, Any]:
@@ -390,8 +401,80 @@ def _ground_binding(
     }
 
 
+def _words(text: str) -> str:
+    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    return " ".join(re.findall(r"[a-z0-9]+", spaced.lower()))
+
+
+def _ancestors(class_iri: str, parents: dict[str, list[str]]) -> set[str]:
+    found, pending = set(), [class_iri]
+    while pending:
+        current = pending.pop()
+        if current not in found:
+            found.add(current)
+            pending += parents.get(current, [])
+    return found
+
+
+def align_to_pack_terms(
+    proposal: OntologyProposal, term_details: list[dict[str, Any]]
+) -> OntologyProposal:
+    """Binds a field the model gave a new term to the pack's own term of the same name.
+
+    A pack's checks read only its own terms, so a field bound to a lookalike new term is
+    invisible to them. The match is exact on words: the field name, the field name without its
+    class's name, or the new term's label, against the label of a property of the class's pack
+    that applies to the class. Only a single match is used; the result stays a proposal for a
+    person to accept. A new term left with no binding after this is dropped with it.
+    """
+    known = {term["id"]: term for term in term_details}
+    parents = {term["id"]: term.get("subclass_of") or [] for term in term_details}
+    proposed = {term.id: term for term in proposal.terms}
+    bindings, aligned = [], set()
+    for binding in proposal.bindings:
+        cls = known.get(binding.class_iri)
+        if binding.property in known or cls is None or binding.class_iri.startswith("tenant:"):
+            bindings.append(binding)
+            continue
+        namespace = binding.class_iri.split(":")[0]
+        field = _words(binding.field.split(".")[-1])
+        class_words = _words(cls.get("label") or binding.class_iri.split(":")[1])
+        names = {field, field.removeprefix(f"{class_words} ")}
+        if binding.property in proposed:
+            names.add(_words(proposed[binding.property].label))
+        lineage = _ancestors(binding.class_iri, parents)
+        matches = [
+            term["id"] for term in term_details
+            if term["kind"] == "property"
+            and term["id"].startswith(f"{namespace}:")
+            and _words(term.get("label") or term["id"].split(":")[1]) in names
+            and (term.get("domain") is None or term["domain"] in lineage)
+        ]
+        if len(matches) != 1:
+            bindings.append(binding)
+            continue
+        aligned.add(binding.property)
+        bindings.append(binding.model_copy(update={
+            "property": matches[0],
+            "evidence": [*binding.evidence, ProposedEvidence(
+                kind="name_similarity", field=binding.field,
+                detail=f"{binding.field} matches the {namespace} term {matches[0]}, which applies "
+                       f"to {binding.class_iri}; the model proposed {binding.property}.",
+            )],
+        }))
+    used = {binding.property for binding in bindings}
+    referenced = {ref for term in proposal.terms for ref in (term.subclass_of, term.domain,
+                                                             term.range)}
+    terms = [term for term in proposal.terms
+             if term.id not in aligned or term.id in used or term.id in referenced]
+    return OntologyProposal(terms=terms, bindings=bindings)
+
+
 def ground_items(
-    proposal: OntologyProposal, metadata: list[DiscoveredObject], known_terms: list[str]
+    proposal: OntologyProposal,
+    metadata: list[DiscoveredObject],
+    known_terms: list[str],
+    term_details: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[tuple[str, str]]]:
     """Each proposed item the input supports, and (item, reason) for each one refused.
 
@@ -399,6 +482,8 @@ def ground_items(
     nothing ungrounded is ever kept. A term or binding that leans on a refused term is refused
     with it.
     """
+    if term_details:
+        proposal = align_to_pack_terms(proposal, term_details)
     all_fields = set().union(*(_field_names(item) for item in metadata))
     all_foreign_keys = set().union(*(_foreign_key_names(item) for item in metadata))
 

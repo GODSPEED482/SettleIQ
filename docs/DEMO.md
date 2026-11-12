@@ -49,6 +49,8 @@ One shared tenant, created by real registration at `https://app.settleiq.dpdns.o
 4. **Ontology and mappings.** **Start a draft**, then **Generate proposals** from discovery.
    - Each binding proposal names its class and carries a complete mapping, so **Accept all ready bindings** adds every proposal whose terms the draft holds. A proposal that leans on a proposed `tenant:` term waits until that term is accepted. Check the result against the table below and retire anything that disagrees.
    - Under **Pack bindings**, **Apply finops bindings** to the PayPal source. This adds the pack's capture and refund bindings and makes PayPal the authority for capture status and amount.
+   - **Pack bindings** lists what each active pack's run would miss with the draft's bindings: a class the pack does not resolve, a class nothing identifies, a property its shapes require, a link whose shared value is unbound. Publish when it lists nothing.
+   - Every property the engines compare needs one authority assertion, or its value stays unresolved and the run skips it. Applying the finops pack bindings covers PayPal. For SaaS, make Kitebase database the authority for `saas:status` and `saas:currentPeriodEnd` on `saas:Subscription`, and `saas:status` and `saas:periodEnd` on `saas:Invoice`, with no end date.
    - Validate, then publish. A run reads only published bindings: a published version with no bindings yields no cases.
 
    The Kitebase bindings should be:

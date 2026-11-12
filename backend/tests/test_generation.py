@@ -396,6 +396,7 @@ def test_payload_carries_metadata_and_known_terms_only(member_with_draft):
     assert set(details) == set(payload["known_terms"])
     assert details["finops:Order"]["kind"] == "class"
     assert details["finops:forOrder"]["range"] == "finops:Order"
+    assert details["finops:Capture"]["subclass_of"] == ["finops:FinancialEntry"]
     assert payload["resolution"]["identities"]["finops:Capture"] == ["finops:providerReference"]
     assert {"subject": "finops:Capture", "predicate": "finops:forOrder",
             "object": "finops:Order", "via": "finops:orderReference"} in (
@@ -635,3 +636,99 @@ def test_the_agent_generates_under_the_same_term_id_rule():
         encoding="utf-8")
     pattern = ProposedTerm.model_fields["id"].metadata[0].pattern
     assert f'TERM_ID = r"{pattern}"' in agent
+
+
+# Aligning lookalike new terms to the pack's own terms, no database
+
+SUBSCRIPTIONS = DiscoveredObject(
+    source_id="s1", object="subscriptions",
+    fields=[{"name": name, "datatype": "text", "nullable": False, "unique": name == "id"}
+            for name in ("id", "status", "current_period_end", "period_end", "subscription_plan",
+                         "renews_at", "lifecycle_status")],
+)
+DETAILS = [
+    {"id": "core:DomainEntity", "kind": "class", "label": "Domain entity", "subclass_of": []},
+    {"id": "saas:Subscription", "kind": "class", "label": "Subscription",
+     "subclass_of": ["core:DomainEntity"]},
+    {"id": "saas:Invoice", "kind": "class", "label": "Invoice",
+     "subclass_of": ["core:DomainEntity"]},
+    {"id": "saas:status", "kind": "property", "label": "status", "domain": "core:DomainEntity"},
+    {"id": "saas:currentPeriodEnd", "kind": "property", "label": "current period end",
+     "domain": "saas:Subscription"},
+    {"id": "saas:periodEnd", "kind": "property", "label": "period end", "domain": "saas:Invoice"},
+    {"id": "saas:plan", "kind": "property", "label": "plan", "domain": None},
+    {"id": "finops:lifecycleStatus", "kind": "property", "label": "lifecycle status",
+     "domain": None},
+]
+
+
+def sub_binding(field: str, prop: str, **overrides) -> dict:
+    return binding(object="subscriptions", field=field, property=prop,
+                   class_iri="saas:Subscription", evidence=[evidence(field=field)]) | overrides
+
+
+def sub_term(term_id: str, label: str) -> dict:
+    return term(id=term_id, kind="property", label=label, subclass_of=None,
+                domain="saas:Subscription", evidence=[evidence(field="status")])
+
+
+def aligned(terms=(), bindings=()) -> list[dict]:
+    grounded, refused = ground_items(
+        proposal(terms, bindings), [SUBSCRIPTIONS], [d["id"] for d in DETAILS], DETAILS)
+    assert refused == []
+    return grounded
+
+
+def test_a_lookalike_new_term_is_replaced_by_the_packs_term_of_the_same_name():
+    items = aligned(
+        terms=[sub_term("tenant:subscriptionStatus", "Subscription status"),
+               sub_term("tenant:subscriptionCurrentPeriodEnd", "Current period end")],
+        bindings=[sub_binding("status", "tenant:subscriptionStatus"),
+                  sub_binding("current_period_end", "tenant:subscriptionCurrentPeriodEnd")],
+    )
+    assert [(i["field"], i["property"]) for i in items] == [
+        ("status", "saas:status"), ("current_period_end", "saas:currentPeriodEnd")]
+    note = items[0]["evidence"][-1]
+    assert note["basis"] == "inferred" and "tenant:subscriptionStatus" in note["detail"]
+
+
+def test_the_field_may_carry_its_class_name_and_the_new_terms_label_may_match():
+    items = aligned(
+        terms=[sub_term("tenant:renewsAt", "Current period end")],
+        bindings=[sub_binding("subscription_plan", "tenant:subscriptionPlan"),
+                  sub_binding("renews_at", "tenant:renewsAt")],
+    )
+    assert [i["property"] for i in items if i["type"] == "binding"] == [
+        "saas:plan", "saas:currentPeriodEnd"]
+
+
+def test_no_term_of_another_pack_or_for_another_class_is_used():
+    items = aligned(
+        terms=[sub_term("tenant:periodEnd", "Period end"),
+               sub_term("tenant:lifecycleStatus", "Lifecycle status")],
+        bindings=[sub_binding("period_end", "tenant:periodEnd"),
+                  sub_binding("lifecycle_status", "tenant:lifecycleStatus")],
+    )
+    assert [i["property"] for i in items if i["type"] == "binding"] == [
+        "tenant:periodEnd", "tenant:lifecycleStatus"]
+    assert {i["id"] for i in items if i["type"] == "term"} == {
+        "tenant:periodEnd", "tenant:lifecycleStatus"}
+
+
+def test_a_new_term_still_bound_elsewhere_is_kept():
+    items = aligned(
+        terms=[sub_term("tenant:subscriptionStatus", "Subscription status")],
+        bindings=[sub_binding("status", "tenant:subscriptionStatus"),
+                  sub_binding("lifecycle_status", "tenant:subscriptionStatus")],
+    )
+    assert "tenant:subscriptionStatus" in {i["id"] for i in items if i["type"] == "term"}
+    assert [i["property"] for i in items if i["type"] == "binding"] == [
+        "saas:status", "tenant:subscriptionStatus"]
+
+
+def test_without_term_details_nothing_is_aligned():
+    grounded, _ = ground_items(
+        proposal([sub_term("tenant:subscriptionStatus", "Status")],
+                 [sub_binding("status", "tenant:subscriptionStatus")]),
+        [SUBSCRIPTIONS], [d["id"] for d in DETAILS])
+    assert grounded[-1]["property"] == "tenant:subscriptionStatus"

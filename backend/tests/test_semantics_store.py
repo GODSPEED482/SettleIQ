@@ -17,6 +17,7 @@ from app.domain_packs.manifest import DomainPackManifest, load_domain_packs
 from app.main import create_app
 from app.semantics import artifacts, store
 from app.semantics.hashing import content_hash
+from app.semantics.requirements import pack_requirements
 from app.tenancy.creation import create_tenant
 
 FINOPS = Namespace("urn:settleiq:pack:finops#")
@@ -189,6 +190,27 @@ def test_pack_listing_carries_each_packs_mapping_hints(member):
     assert any(hint["external_object"] == "captures.read" for hint in hints
                if hint["kind"] == "binding")
     assert packs["saas"]["mapping_hints"] == []
+
+
+@pytest.mark.db
+def test_pack_listing_says_what_each_packs_run_needs_from_bindings(member):
+    saas = next(p for p in member.request("GET", "/api/domain-packs").json()
+                if p["namespace"] == "saas")
+    assert saas["identities"]["saas:Subscription"] == ["saas:subscriptionReference"]
+    assert {"subject": "saas:Invoice", "predicate": "saas:invoiceFor",
+            "object": "saas:Subscription", "via": "saas:subscriptionReference"} in (
+        saas["relationships"])
+    assert saas["required_properties"] == [{
+        "class_iri": "saas:Subscription", "property_iri": "saas:status",
+        "message": "A subscription needs a status."}]
+
+
+def test_a_relationship_a_shape_requires_is_not_asked_of_bindings():
+    finops = pack_requirements(load_domain_packs()["finops"])
+    required = {(row["class_iri"], row["property_iri"]) for row in finops["required_properties"]}
+    assert ("finops:Payment", "finops:amount") in required
+    assert ("finops:SettlementEntry", "finops:includedInSettlement") not in required
+    assert "finops:Capture" in finops["identities"]
 
 
 @pytest.mark.db

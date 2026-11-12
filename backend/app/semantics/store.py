@@ -19,6 +19,7 @@ from app.errors import conflict, not_found, validation_failed
 from app.semantics import mappings, validation
 from app.semantics.artifacts import Artifact, core_artifact, extension_context, pack_artifacts
 from app.semantics.hashing import content_hash
+from app.semantics.requirements import pack_requirements
 
 _ACTIVE_NAMESPACES_SQL = text(
     "SELECT namespace FROM tenant_domain_packs WHERE status = 'ACTIVE' ORDER BY namespace"
@@ -70,6 +71,8 @@ def list_packs(ctx: TenantContext) -> list[dict[str, Any]]:
             "case_types": [case.code for case in pack.case_types],
             # Bindings the pack proposes per connector, which a tenant applies to its draft.
             "mapping_hints": [hint.model_dump() for hint in pack.mapping_hints],
+            # What its run needs from those bindings, so the Studio can say what is missing.
+            **pack_requirements(pack),
         }
         for pack in load_domain_packs().values()
     ]
