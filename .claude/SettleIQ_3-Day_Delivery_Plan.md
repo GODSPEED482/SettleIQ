@@ -56,12 +56,12 @@ PB-002 has its own exact scope and safety trace. If only its tests are not green
 | Hours | G1 | G2 | G3 | G4 | G5 | G6 | Total |
 |---|---|---|---|---|---|---|---|
 | Rishav | 9 | 2 | 2 | 2 | 6 | 0.5 | **21.5** |
-| Rahul | 4 | 3 | 3 | 11 | 6.5 | 1 | **28.5** |
+| Rahul | 4 | 3 | 3 | 11 | 6.5 | 0.5 | **28** |
 | Swapnaneel | 3 | 7 | 7.5 | 1 | 8 | 3 | **29.5** |
 | Suprava | 5 | 5 | 3 | 2 | 7.5 | 3.5 | **26** |
-| **Total** | **21** | **17** | **15.5** | **16** | **28** | **8** | **105.5** |
+| **Total** | **21** | **17** | **15.5** | **16** | **28** | **7.5** | **105** |
 
-**Over capacity.** PB-002 was added on 2026-11-09, taking planned work to 107.5 hours against 96 available. Its task hours are estimates. Task 5.4 is also about 8 hours over budget under the OPEN-REL-01 decision record, which makes roughly 115.5. On 2026-11-12 task 5.7 grew from 3 to 5 hours to cover all 11 registry tools, taking the table to 109.5 and the estimate to roughly 117.5. On 2026-11-12 spec v1.8 (CHG-1.8-01) removed POL-14, so task 5.4 (already spent) and tasks 6.3 and 6.8 left the plan, and so did the Tenant B isolation test (6.4); the table is now 104.5. Task 6.10 (the execution-mode switch screen, 1h) followed the same day, taking it to 105.5. The team must add time or move work before Day 1.
+**Over capacity.** PB-002 was added on 2026-11-09, taking planned work to 107.5 hours against 96 available. Its task hours are estimates. Task 5.4 is also about 8 hours over budget under the OPEN-REL-01 decision record, which makes roughly 115.5. On 2026-11-12 task 5.7 grew from 3 to 5 hours to cover all 11 registry tools, taking the table to 109.5 and the estimate to roughly 117.5. On 2026-11-12 spec v1.8 (CHG-1.8-01) removed POL-14, so task 5.4 (already spent) and tasks 6.3 and 6.8 left the plan, and so did the Tenant B isolation test (6.4); the table is now 104.5. Task 6.10 (the execution-mode switch screen, 1h) followed the same day, taking it to 105.5. Task 6.2 was dropped the same day because it only re-tested the generic pipeline: AC-OPEN-01, 02 and 06 are traced to existing tests (`test_sources.py`, `test_ingestion.py`, `test_contracts.py`) in the 6.5 sheet. The table is now 105. The team must add time or move work before Day 1.
 
 ## Timeline
 
@@ -173,12 +173,11 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 **Exit:** the G5 evidence list in §17 is green, including AC-PP-08 and the PB-002 parts of AC-PLY-08.
 
-### G6: Extensibility proof and demo (lead: Suprava, 8h)
+### G6: Extensibility proof and demo (lead: Suprava, 7.5h)
 
 | ID | Task | Owner | Hours |
 |---|---|---|---|
 | 6.1 | SaaS pack: manifest, one validator, renewal/invoice fixture | Swapnaneel | 1.5 |
-| 6.2 | Non-financial source through the generic pipeline (AC-OPEN-01/02/06) | Rahul | 0.5 |
 | 6.5 | Acceptance-criteria status sheet with owners and evidence (§22.3) | Suprava | 0.5 |
 | 6.6 | Demo script with SYNTHETIC disclosure, Tenant A created by real registration, and the list of what was not built | Suprava | 2 |
 | 6.7 | Full team rehearsal | All four | 0.5 each |
