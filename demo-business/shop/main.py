@@ -1,5 +1,5 @@
 """Kitebase's website: the store and checkout, the source view, the demo controls and the
-judge guide. The source view and the reset exist here only, never in SettleIQ.
+judge guide. The source view and the demo controls exist here only, never in SettleIQ.
 
 Each handler opens its own connection and leaves the block before it returns, so its writes are
 committed before the response is sent and rolled back if it raises.
@@ -60,8 +60,7 @@ def create_app(settings: config.Settings | None = None, paypal: PayPal | None = 
         with db.connect(settings) as conn:
             db.setup(conn, settings)
             store.ensure_catalogue(conn)
-            if store.status(conn) is None:
-                store.reset(conn, settings, force=True)
+            store.initialise(conn)
         yield
 
     app = FastAPI(title="Kitebase", lifespan=lifespan, docs_url=None, redoc_url=None,
@@ -131,15 +130,6 @@ def create_app(settings: config.Settings | None = None, paypal: PayPal | None = 
             meta = store.status(conn)
         return page(request, "demo.html", meta=meta, faults=store.FAULTS, message=message,
                     error=error)
-
-    @app.post("/demo/reset")
-    def reset():
-        try:
-            with db.connect(settings) as conn:
-                generation = store.reset(conn, settings)
-        except store.ShopError as error:
-            return _back("/demo", error=error.message)
-        return _back("/demo", message=f"Reset to generation {generation}.")
 
     @app.post("/demo/faults")
     def faults(queue: str = Form("")):

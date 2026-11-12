@@ -20,7 +20,6 @@ class Settings:
     reader_password: str
     writer_password: str
     settleiq_url: str
-    reset_cooldown_seconds: int
 
 
 def load() -> Settings:
@@ -40,5 +39,4 @@ def load() -> Settings:
         reader_password=os.environ.get("MERCHANT_READER_PASSWORD", ""),
         writer_password=os.environ.get("MERCHANT_WRITER_PASSWORD", ""),
         settleiq_url=os.environ.get("SETTLEIQ_URL", "https://app.settleiq.dpdns.org"),
-        reset_cooldown_seconds=int(os.environ.get("RESET_COOLDOWN_SECONDS", "20")),
     )

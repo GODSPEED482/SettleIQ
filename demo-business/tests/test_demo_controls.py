@@ -1,4 +1,4 @@
-"""Reset discrepancies (task 6.14) and the billing discrepancies it plants for the SaaS pack."""
+"""The first start, the fault queue and the billing discrepancies seeded for the SaaS pack."""
 
 from conftest import FakePayPal
 
@@ -36,44 +36,16 @@ def test_a_restart_keeps_the_state(make_client, sql):
     assert client.get("/healthz").json() == {"status": "ok"}
 
 
-def test_reset_restores_every_discrepancy_under_new_identifiers(client, sql, paypal):
+def test_nothing_is_ever_deleted(client, sql):
+    """There is no reset: removing payment rows would strand their PayPal captures."""
+    assert all(r.path != "/demo/reset" for r in client.app.routes)
+    assert client.post("/demo/reset").status_code in (404, 405)
     client.post("/demo/faults", data={"queue": ""})
     started = client.post("/api/checkout",
                           json={"plan_id": "pro-monthly", "email": "b@example.com"}).json()
     client.post("/api/checkout/capture", json=started)
-    before = {r["subscription_id"] for r in subscriptions(sql)}
-
-    response = client.post("/demo/reset")
-    assert response.status_code == 200
-    assert "Reset to generation 2." in response.text
-
-    meta = sql("SELECT * FROM demo_meta")[0]
-    assert meta["generation"] == 2
-    assert meta["fault_queue"] == ["LOST_CONFIRMATION", "DOUBLE_CHARGE"]
-    assert sql("SELECT * FROM orders") == []
-    assert sql("SELECT * FROM payments") == []
-    after = subscriptions(sql)
-    assert [s["name"] for s in after] == ["Ada Byron", "Grace Hopper", "Linus Pauling"]
-    assert not before & {s["subscription_id"] for s in after}
-    assert all(s["subscription_id"].startswith("SUB-2-") for s in after)
-    emails = [r["email"] for r in sql("SELECT email FROM accounts")]
-    assert all(".g2@" in e for e in emails)
-
-    # New checkouts after the reset get generation-2 identifiers too.
-    again = client.post("/api/checkout",
-                        json={"plan_id": "pro-monthly", "email": "b@example.com"}).json()
-    assert again["order_ref"].startswith("ORD-2-")
-    assert again["order_ref"] != started["order_ref"]
-
-
-def test_reset_is_refused_during_the_cooldown(make_client, sql):
-    client = make_client(reset_cooldown_seconds=600)
-    client.post("/api/checkout", json={"plan_id": "pro-monthly", "email": "c@example.com"})
-
-    response = client.post("/demo/reset")
-    assert "Reset again in" in response.text
-    assert sql("SELECT generation FROM demo_meta")[0]["generation"] == 1
-    assert len(sql("SELECT * FROM orders")) == 1
+    assert "Reset discrepancies" not in client.get("/demo").text
+    assert [r["order_ref"] for r in sql("SELECT order_ref FROM orders")] == [started["order_ref"]]
 
 
 def test_an_unknown_fault_is_refused(client, sql):

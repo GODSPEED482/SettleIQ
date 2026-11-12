@@ -6,7 +6,7 @@
 
 <h2>Before you start</h2>
 <ol>
-  <li>On <a href="/demo">Demo controls</a>, press <strong>Reset discrepancies</strong>. Both checkout faults are now queued.</li>
+  <li>On <a href="/demo">Demo controls</a>, press <strong>Queue both</strong> so the next two checkouts each carry one fault.</li>
   <li>In SettleIQ, open <strong>Playbook Requests</strong> as the Tenant Owner and check both scopes in the <strong>Execution mode</strong> panel read SHADOW. Use <strong>Return to SHADOW</strong> if an earlier run left one LIVE.</li>
 </ol>
 
@@ -35,5 +35,5 @@
 </ol>
 
 <h2>Run it again</h2>
-<p>Press <strong>Reset discrepancies</strong> and return both scopes to SHADOW. Every discrepancy comes back under new identifiers; SettleIQ keeps the earlier cases, executions and audit records.</p>
+<p>Queue both faults again on <a href="/demo">Demo controls</a> and return both scopes to SHADOW. The next two checkouts are new orders with new discrepancies; nothing earlier is deleted, so SettleIQ keeps reconciling every order it has already seen.</p>
 {% endblock %}

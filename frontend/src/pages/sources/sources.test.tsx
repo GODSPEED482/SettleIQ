@@ -68,12 +68,14 @@ const sourceOf = (overrides: Partial<Source>): Source => ({
   capabilities: PAYPAL.capabilities,
   status: "ACTIVE",
   has_secret_reference: false,
+  webhook_url: "https://app.example/api/webhooks/paypal/s0000000-0000-4000-8000-000000000001",
   created_at: "2026-11-11T10:00:00Z",
   updated_at: "2026-11-11T10:00:00Z",
   ...overrides,
 });
 
 const PAYPAL_SOURCE = sourceOf({});
+const CONNECTED = sourceOf({ has_secret_reference: true });
 const CSV_SOURCE = sourceOf({
   id: "s0000000-0000-4000-8000-000000000002",
   connector_id: "tenant-csv",
@@ -83,6 +85,7 @@ const CSV_SOURCE = sourceOf({
   display_name: "Bank statements",
   capabilities: CSV.capabilities,
   has_secret_reference: true,
+  webhook_url: null,
 });
 
 type Grant = string | { key: string; scopes: string[] };
@@ -354,9 +357,37 @@ describe("SourceManagement", () => {
     expect(within(paypal).getByText("Or use a platform-managed reference")).toBeTruthy();
   });
 
+  it("asks for the app's credentials before the webhook", async () => {
+    renderSources([...READ, "source.webhook.manage"]);
+    const paypal = await card("PayPal Sandbox");
+    expect(
+      within(paypal).getByText(
+        "Connect the app's credentials first. The webhook URL to register appears here.",
+      ),
+    ).toBeTruthy();
+    expect(within(paypal).queryByLabelText("Webhook URL")).toBeNull();
+    expect(within(paypal).queryByRole("button", { name: "Register webhook" })).toBeNull();
+  });
+
+  it("shows the URL to register once connected, with a copy button", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    renderSources([...READ, "source.webhook.manage"], {
+      "GET /api/sources": { status: 200, body: [CONNECTED, CSV_SOURCE] },
+    });
+    const paypal = await card("PayPal Sandbox");
+    expect(within(paypal).getByLabelText("Webhook URL").textContent).toBe(
+      PAYPAL_SOURCE.webhook_url,
+    );
+    fireEvent.click(within(paypal).getByRole("button", { name: "Copy" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(PAYPAL_SOURCE.webhook_url));
+    expect(await within(paypal).findByRole("button", { name: "Copied" })).toBeTruthy();
+  });
+
   it("registers a webhook with the checked event types only", async () => {
     const api = renderSources([...READ, "source.webhook.manage"], {
-      [`PUT /api/sources/${PAYPAL_SOURCE.id}/webhooks`]: { status: 200, body: PAYPAL_SOURCE },
+      "GET /api/sources": { status: 200, body: [CONNECTED, CSV_SOURCE] },
+      [`PUT /api/sources/${PAYPAL_SOURCE.id}/webhooks`]: { status: 200, body: CONNECTED },
     });
     const csv = await card("Bank statements");
     expect(within(csv).queryByRole("button", { name: "Register webhook" })).toBeNull();

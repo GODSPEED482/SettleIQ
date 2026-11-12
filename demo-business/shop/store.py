@@ -9,9 +9,10 @@ Two checkout faults reproduce the discrepancies SettleIQ's Financial Operations 
   the same order again, a bug with no "already paid" guard, so PayPal holds two captures with
   one invoice ID: SettleIQ raises DUPLICATE_CAPTURE and PB-002 refunds the later one.
 
-Each queued fault fires on the next checkout and is then used up. Reset reseeds every source
-under a new generation of identifiers, plants the SaaS pack's two discrepancies and queues both
-faults again. SettleIQ keeps what it already read, so nothing is ever reused.
+Each queued fault fires on the next checkout and is then used up, and Demo controls can queue
+them again. The first start seeds the billing customers, with the SaaS pack's two discrepancies,
+and queues both faults. Nothing is ever deleted afterwards: a payment row that disappeared
+would leave its PayPal captures with nothing to reconcile against.
 """
 
 import time
@@ -271,31 +272,19 @@ def provision(conn: psycopg.Connection) -> int:
     return len(rows)
 
 
-# Reset
+# First start
 
 
-def reset(conn: psycopg.Connection, settings: Settings, *, force: bool = False) -> int:
-    """Back to the discrepant starting state, under a new generation of identifiers."""
-    meta = _meta(conn, lock=True)
-    if meta is not None and meta["last_reset_at"] and not force:
-        elapsed = (datetime.now(UTC) - meta["last_reset_at"]).total_seconds()
-        if elapsed < settings.reset_cooldown_seconds:
-            raise ShopError(429, "RESET_COOLDOWN",
-                            f"Reset again in {int(settings.reset_cooldown_seconds - elapsed) + 1}"
-                            " seconds.")
-    generation = (meta["generation"] if meta else 0) + 1
-    for table in ("checkout_attempts", "invoices", "subscriptions", "payments", "orders",
-                  "accounts"):
-        conn.execute(f"DELETE FROM {table}")
+def initialise(conn: psycopg.Connection) -> None:
+    """Seed an empty database once: the billing customers and both faults queued."""
+    if _meta(conn, lock=True) is not None:
+        return
     conn.execute(
         "INSERT INTO demo_meta (id, generation, fault_queue, last_reset_at) "
-        "VALUES (1, %s, %s, now()) ON CONFLICT (id) DO UPDATE SET "
-        "generation = EXCLUDED.generation, fault_queue = EXCLUDED.fault_queue, "
-        "last_reset_at = EXCLUDED.last_reset_at",
-        (generation, list(FAULTS)),
+        "VALUES (1, 1, %s, now())",
+        (list(FAULTS),),
     )
-    _seed(conn, generation)
-    return generation
+    _seed(conn, 1)
 
 
 def _seed(conn: psycopg.Connection, generation: int) -> None:

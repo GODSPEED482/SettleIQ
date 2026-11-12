@@ -15,6 +15,7 @@ from sqlalchemy import text
 
 from app.audit import write_audit
 from app.authz.guard import TenantContext
+from app.config import get_settings
 from app.connectors.manifest import load_connector_manifests, select_binding
 from app.db import global_tx, tenant_tx
 from app.errors import ApiError, conflict, missing_permission, not_found, validation_failed
@@ -59,6 +60,16 @@ class CreateSourceBody(_Body):
         return value
 
 
+def _webhook_url(row: Any) -> str | None:
+    """Where the provider delivers this source's events (app/api/webhooks.py), for a source whose
+    pinned capabilities receive webhooks. The tenant registers it with the provider, then
+    returns the provider's webhook ID through the webhooks route."""
+    if not any(capability["key"] == "webhooks.receive" for capability in row.capabilities):
+        return None
+    base = get_settings().app_base_url.rstrip("/")
+    return f"{base}/api/webhooks/{row.connector_id}/{row.id}"
+
+
 def _view(row: Any) -> dict[str, Any]:
     return {
         "id": str(row.id),
@@ -71,6 +82,7 @@ def _view(row: Any) -> dict[str, Any]:
         "capabilities": row.capabilities,
         "status": row.status,
         "has_secret_reference": row.has_secret_reference,
+        "webhook_url": _webhook_url(row),
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat(),
     }

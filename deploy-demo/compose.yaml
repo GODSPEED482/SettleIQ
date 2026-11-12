@@ -31,7 +31,6 @@ services:
       MERCHANT_READER_PASSWORD: ${MERCHANT_READER_PASSWORD}
       MERCHANT_WRITER_PASSWORD: ${MERCHANT_WRITER_PASSWORD}
       SETTLEIQ_URL: ${SETTLEIQ_URL:-https://app.settleiq.dpdns.org}
-      RESET_COOLDOWN_SECONDS: ${RESET_COOLDOWN_SECONDS:-20}
     depends_on:
       shop-db:
         condition: service_healthy

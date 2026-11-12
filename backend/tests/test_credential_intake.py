@@ -88,6 +88,18 @@ def test_a_tenant_connects_its_own_app_without_the_value_coming_back(
     assert CLIENT_SECRET not in listed and "stored:" not in listed
 
 
+def test_connecting_returns_the_webhook_url_to_register_with_paypal(
+    owner, source, provider_checks
+):
+    """The tenant copies this into PayPal's dashboard, then returns PayPal's webhook ID."""
+    connected = Integrator(owner.tenant).put(intake(source), {"value": VALUE}).json()
+    base = get_settings().app_base_url.rstrip("/")
+    assert connected["webhook_url"] == f"{base}/api/webhooks/paypal/{source['id']}"
+    [listed] = [s for s in owner.request("GET", "/api/sources").json()
+                if s["id"] == source["id"]]
+    assert listed["webhook_url"] == connected["webhook_url"]
+
+
 def test_rotation_stops_the_old_value_being_used(owner, source, provider_checks):
     admin = Integrator(owner.tenant)
     assert admin.put(intake(source), {"value": VALUE}).status_code == 200
@@ -181,6 +193,7 @@ def test_a_source_the_server_cannot_check_takes_no_typed_credential(
     assert provider_checks == []
     assert sealed_rows(owner.tenant) == []
     assert stored_reference(owner.tenant, database["id"]) is None
+    assert database["webhook_url"] is None  # it receives no webhooks
 
 
 def test_another_tenant_can_neither_write_nor_reach_the_value(owner, source, provider_checks):

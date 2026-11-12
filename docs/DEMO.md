@@ -41,7 +41,7 @@ One shared tenant, created by real registration at `https://app.settleiq.dpdns.o
 
 1. Register the Tenant Owner, verify the email and create the tenant.
 2. **Sources**, as Integration Admin:
-   - **PayPal.** Register a `paypal` source and connect the Sandbox app with **Connect your PayPal app**. In the PayPal developer dashboard, add a webhook to `https://app.settleiq.dpdns.org/api/webhooks/paypal/<source_id>` for the `PAYMENT.CAPTURE.*` events, then enter its webhook ID under **Webhook registration** on the card. Backfill with **Sync** (Transaction Search).
+   - **PayPal.** Register a `paypal` source and connect the Sandbox app with **Connect your PayPal app**. The card's **Webhook registration** then shows the source's webhook URL with a **Copy** button. In the PayPal developer dashboard, add a webhook to that URL for the `PAYMENT.CAPTURE.*` events, then enter the webhook ID PayPal gives it under **Webhook registration**. Backfill with **Sync** (Transaction Search).
    - **`merchant-postgres`.** URL `postgresql://settleiq_reader:<MERCHANT_READER_PASSWORD>@<private-ip>:5432/kitebase`. Store it in SSM as `/settleiq/prod/source/<tenant_id>/KITEBASE_READ_URL` and enter `managed:KITEBASE_READ_URL` under **Platform-managed reference** on the card. Run discovery: it sees `accounts`, `plans`, `orders`, `payments`, `subscriptions` and `invoices`.
    - **`internal-merchant`.** URL `postgresql://settleiq_merchant_writer:<MERCHANT_WRITER_PASSWORD>@<private-ip>:5432/kitebase`, stored as `/settleiq/prod/source/<tenant_id>/KITEBASE_WRITE_URL` and referenced as `managed:KITEBASE_WRITE_URL`, with config `{"merchant_id": "kitebase"}`. It has no discovery or sync: it only carries PB-001's status correction.
    - Redeploy SettleIQ after adding the SSM parameters: `deploy.sh` renders source secrets only at deploy time.
@@ -70,8 +70,8 @@ One shared tenant, created by real registration at `https://app.settleiq.dpdns.o
 
    The shop stores statuses in lower case (`active`, `paid`), so status bindings use `upper`, which generated proposals apply to every status. Then **Sync** each source and press **Run finops** and **Run saas** under Domain Operations.
 5. **Judge accounts.** Invite the Domain Operator (who also holds an Approver grant, for the POL-01 denial) and the Approver. Put their sign-ins and the Sandbox buyer in the submission.
-6. **Rehearse** the Judge guide end to end, then press **Reset discrepancies** and return both scopes to SHADOW.
+6. **Rehearse** the Judge guide end to end, then queue both faults again on **Demo controls** and return both scopes to SHADOW.
 
-## 4. What reset can and cannot undo
+## 4. Running the demo again
 
-Reset rebuilds every Kitebase row under a new identifier generation and queues both checkout faults again. SettleIQ keeps what it already read, so earlier cases, executions and audit records remain, and nothing is reused. PayPal captures and refunds cannot be undone. The PayPal-side discrepancies return through new checkouts: two Sandbox checkouts, one per fault. Reset does not replay checkouts for you.
+There is no reset. Kitebase never deletes its rows: a payment row that disappeared would leave its PayPal captures, which cannot be undone, with nothing to reconcile against. To run again, queue both faults on **Demo controls** and check out twice; each checkout is a new order with its own discrepancy, and everything SettleIQ already reconciled stays consistent.
