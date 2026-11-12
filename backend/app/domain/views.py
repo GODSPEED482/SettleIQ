@@ -7,6 +7,12 @@ expired, UNRESOLVED when there is none or it observed nothing, CONFLICT when the
 observations disagree, and HUMAN_REVIEW while an identity review could still change the
 entity. Every contributing observation is kept, authoritative or not, and no value is ever
 chosen by ingestion order (AC-REC-12, AC-REC-16).
+
+Only a source's current word on a value is eligible (spec 5.5). Its events form a timeline in
+provider time, and a read is the state when it was read, so whichever is newer speaks for the
+source; an earlier PENDING event is history once a later event or read says COMPLETED. Reads
+of different rows are never ranked against each other: two rows of one source that disagree
+stay a CONFLICT.
 """
 
 import json
@@ -17,7 +23,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import Connection, text
 
-from app.domain.inputs import RunInputs
+from app.domain.inputs import Record, RunInputs, is_event, reported_at
 
 _OBSERVATIONS = text(
     """
@@ -34,14 +40,38 @@ _OBSERVATIONS = text(
 
 
 def pinned_observations(conn: Connection, inputs: RunInputs) -> list[Any]:
-    """Only observations made under this run's mappings, from this run's records."""
-    return conn.execute(
+    """Only observations made under this run's mappings, from this run's records, and of
+    those only each source's current word on each value."""
+    rows = conn.execute(
         _OBSERVATIONS,
         {
             "mappings": [m["id"] for m in inputs.mappings],
             "records": [str(r.id) for r in inputs.records],
         },
     ).all()
+    return current_word(rows, {r.id: r for r in inputs.records})
+
+
+def current_word(observations: list[Any], records: dict[UUID, Record]) -> list[Any]:
+    """Per entity, property and source: its latest events if they are newer than every read,
+    otherwise its reads. Events at the same provider time, and reads, all stay."""
+    grouped: dict[tuple[Any, str, Any], list[Any]] = defaultdict(list)
+    for observation in observations:
+        grouped[(observation.entity_id, observation.property_iri,
+                 observation.source_id)].append(observation)
+    eligible: set[Any] = set()
+    for group in grouped.values():
+        events, reads = [], []
+        for observation in group:
+            record = records[observation.source_record_id]
+            (events if is_event(record) else reads).append((reported_at(record), observation))
+        latest_event = max((at for at, _ in events), default=None)
+        latest_read = max((at for at, _ in reads), default=None)
+        if latest_event is not None and (latest_read is None or latest_event > latest_read):
+            eligible |= {o.id for at, o in events if at == latest_event}
+        else:
+            eligible |= {o.id for _, o in reads}
+    return [o for o in observations if o.id in eligible]
 
 
 def _when(value: str | None) -> datetime | None:

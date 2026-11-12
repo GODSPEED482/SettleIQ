@@ -38,6 +38,19 @@ _FILE_KIND = re.compile(r"^[^:]+:file/(.+)$")
 _EVENT_TYPE = re.compile(r"^[^:]+:event/(.+)$")
 
 
+def is_event(record: Record) -> bool:
+    return _EVENT_TYPE.match(record.record_type) is not None
+
+
+def reported_at(record: Record) -> datetime:
+    """When the source said what this record says. An event speaks for its provider time, so a
+    late or replayed delivery never outranks a newer report; a read speaks for when it was
+    read."""
+    if is_event(record) and record.occurred_at is not None:
+        return record.occurred_at
+    return record.observed_at
+
+
 def object_keys(record: Record) -> list[str]:
     """Names a mapping's `external_object` can use for this record, most specific first.
 

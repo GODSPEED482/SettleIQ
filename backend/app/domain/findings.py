@@ -2,9 +2,10 @@
 
 The engine receives a plain, sorted snapshot (no database, no core types) and returns finding
 dicts. Core validates every finding, adds the evidence AC-REC-08 requires (affected records
-and resolution state), fingerprints it, and opens a case unless an open case already holds
-the same finding. The fingerprint covers only the finding, so identical version-pinned inputs
-give identical fingerprints across runs.
+and resolution state), fingerprints it, and opens a case unless a case already holds the
+same finding. The fingerprint covers only the finding, so identical version-pinned inputs give
+identical fingerprints across runs. A finding someone dismissed or closed comes back only
+through reopen (spec 9.3), or as a new finding once the evidence changes.
 """
 
 import json
@@ -192,7 +193,7 @@ def open_cases(
         existing = conn.execute(
             text(
                 "SELECT id FROM domain_cases WHERE fingerprint = :f "
-                "AND status NOT IN ('DISMISSED', 'CLOSED')"
+                "ORDER BY created_at DESC LIMIT 1"
             ),
             {"f": fingerprint},
         ).scalar()
