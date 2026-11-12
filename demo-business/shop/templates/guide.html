@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Judge guide{% endblock %}
+{% block content %}
+<h1>Judge guide</h1>
+<p>Kitebase is a fictional SaaS business. It sells plans through PayPal Sandbox checkout, keeps its own database, and is connected to <a href="{{ settleiq_url }}">SettleIQ</a> only through SettleIQ's connectors: PayPal webhooks and reads, a read-only database role, and a role that can correct one column of its payments. The sign-ins for SettleIQ and the PayPal Sandbox buyer account come with the submission; they are not published here.</p>
+
+<h2>Before you start</h2>
+<ol>
+  <li>On <a href="/demo">Demo controls</a>, press <strong>Reset discrepancies</strong>. Both checkout faults are now queued.</li>
+  <li>In SettleIQ, open <strong>Playbook Requests</strong> as the Tenant Owner and check both scopes in the <strong>Execution mode</strong> panel read SHADOW. Use <strong>Return to SHADOW</strong> if an earlier run left one LIVE.</li>
+</ol>
+
+<h2>1. Lost confirmation (PB-001)</h2>
+<ol>
+  <li>On <a href="/">Plans</a>, check out any plan with the PayPal Sandbox buyer. The shop reports it could not confirm the payment.</li>
+  <li>On <a href="/sources">Sources</a>, PayPal shows the capture COMPLETED while Kitebase's payment is still PENDING.</li>
+  <li>In SettleIQ, as the Domain Operator: sync the Kitebase database source, then run the Financial Operations domain run. A STATUS_MISMATCH case appears.</li>
+  <li>Investigate the case, then request PB-001 from it. Sign in as the Approver and approve.</li>
+  <li>While the merchant-correction scope is SHADOW, the request is POLICY_BLOCKED and nothing changes here.</li>
+  <li>As the Tenant Owner, switch <code>merchant.payment_status.correct</code> to LIVE. The blocked request runs, and on Sources the payment reads COMPLETED and the subscription becomes active.</li>
+</ol>
+
+<h2>2. Double charge (PB-002)</h2>
+<ol>
+  <li>Check out again. The shop reports a timeout; pay again when it asks. PayPal now holds two captures for one order, shown on <a href="/sources">Sources</a>.</li>
+  <li>In SettleIQ, run Financial Operations again. A DUPLICATE_CAPTURE case appears with the proof.</li>
+  <li>Investigate, request PB-002 and approve it as the Approver.</li>
+  <li>As the Tenant Owner, switch <code>refunds.create</code> to LIVE. SettleIQ refunds the later capture in PayPal Sandbox; on Sources it reads REFUNDED and the original capture is untouched.</li>
+</ol>
+
+<h2>3. Subscription billing (SaaS pack)</h2>
+<ol>
+  <li>On <a href="/sources">Sources</a>, two subscriptions are flagged: one active for a month with no paid invoice, one paid a year ahead but never extended.</li>
+  <li>In SettleIQ, run the SaaS Subscription Lifecycle domain run. Two RENEWAL_INVOICE_MISMATCH cases appear. This pack only detects: it has no action and no execution-mode scope.</li>
+</ol>
+
+<h2>Run it again</h2>
+<p>Press <strong>Reset discrepancies</strong> and return both scopes to SHADOW. Every discrepancy comes back under new identifiers; SettleIQ keeps the earlier cases, executions and audit records.</p>
+{% endblock %}

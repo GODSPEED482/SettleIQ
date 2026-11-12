@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     smtp_from: str = ""
 
     agent_url: str = "http://agent:8100"
+    # dispatcher and agent-tools only: signs delegated tool tokens (app/investigation/tokens.py).
+    agent_token_secret: str = ""
     agent_job_concurrency: int = 1
 
 

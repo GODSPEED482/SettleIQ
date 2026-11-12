@@ -434,11 +434,21 @@ def test_human_is_rejected_by_the_worker_route():
     assert gateway.decisions == []
 
 
-def test_worker_with_single_permission_passes_the_gate():
+def test_a_worker_without_a_grant_gets_nothing_past_the_gate():
+    """The gate admits the Worker's key, but the run needs the grant it authenticated with
+    (POL-09); test_worker.py covers runs under real grants."""
     worker_app = create_worker_app()
     worker = Principal(uuid4(), PrincipalKind.WORKER)
     client = client_for(FakeGateway([GrantRow("playbook.execute", "ALLOW")]), worker, worker_app)
     response = client.post(
         f"/internal/executions/{uuid4()}/run", headers={TENANT_HEADER: str(TENANT)}
     )
-    assert response.status_code == 501
+    assert response.status_code == 404
+
+
+def test_the_worker_app_reads_no_session_cookie():
+    worker_app = create_worker_app()
+    response = TestClient(worker_app, cookies={"__Host-settleiq_session": "x"}).post(
+        f"/internal/executions/{uuid4()}/run", headers={TENANT_HEADER: str(TENANT)}
+    )
+    assert response.status_code == 401

@@ -127,7 +127,9 @@ case_types:
   - {code: LEDGER_MISMATCH, default_severity: medium}
 
 agent_tools:
-  - {name: calculate_settlement_variance, permission: domain.compute}
+  - name: calculate_settlement_variance
+    permission: domain.compute
+    entrypoint: packs.finops.agent_tools:settlement_variance
 
 permissions: []
 
@@ -136,16 +138,17 @@ connector_action_capabilities:
   - refunds.create
 
 playbook_templates:
+  # Definitions are data under playbook_definitions/; preconditions are in playbooks.py.
   - id: PB-001
     title: Payment-state recovery
     executable: true
-    definition: null
+    definition: playbook_definitions/pb-001.yaml
     connector_action_capabilities: [merchant.payment_status.correct]
     capability_dependencies: [merchant.payment.read]
   - id: PB-002
     title: Duplicate-capture refund
     executable: true
-    definition: null
+    definition: playbook_definitions/pb-002.yaml
     connector_action_capabilities: [refunds.create]
     capability_dependencies: [refunds.read, captures.read]
   - id: PB-003

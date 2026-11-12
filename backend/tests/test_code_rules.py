@@ -100,3 +100,13 @@ def test_agent_never_imports_backend_or_database_code():
         if any(module.split(".")[0] in banned for module in imported_modules(path))
     ]
     assert offenders == []
+
+
+def test_no_release_attestation_gates_execution():
+    """Spec v1.8 (CHG-1.8-01) removed POL-14: nothing in the product code issues, stores or
+    checks a release attestation, so only the tenant's mode and approvals gate execution."""
+    pattern = re.compile(r"attest|POL-14|release_gate|runtime.identity", re.IGNORECASE)
+    files = [*(path for root in PYTHON_ROOTS for path in python_files(root)),
+             *FRONTEND_SRC.rglob("*.ts"), *FRONTEND_SRC.rglob("*.tsx")]
+    assert [str(f.relative_to(REPO)) for f in files
+            if pattern.search(f.read_text(encoding="utf-8"))] == []

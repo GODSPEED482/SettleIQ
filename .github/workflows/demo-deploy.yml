@@ -1,0 +1,167 @@
+name: demo-deploy
+
+# Deploys the demo business (task 6.15) to its own host. Runs only for a push to prod, which
+# includes a merged PR. Keep it that way: do not add workflow_dispatch or pull_request. The AWS
+# deploy role trusts only refs/heads/prod, so no other branch can get credentials anyway.
+on:
+  push:
+    branches: [prod]
+    paths:
+      - "demo-business/**"
+      - "deploy-demo/**"
+      - "infra/envs/prod/demo*" # a replaced host needs a deploy
+      - ".github/workflows/demo-*.yml"
+
+concurrency:
+  group: demo-deploy-prod
+  cancel-in-progress: false # never kill a deploy halfway
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  DEMO_DOMAIN: subs.settleiq.dpdns.org
+  DEMO_HOST_NAME: settleiq-prod-demo # the instance's Name tag (infra/envs/prod/demo.tf)
+
+jobs:
+  test:
+    if: github.ref == 'refs/heads/prod'
+    uses: ./.github/workflows/demo-ci.yml
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC -> AWS, no long-lived keys
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      # On the first merge infra.yml creates the repository while this runs.
+      - name: Wait for the settleiq-demo repository
+        run: |
+          for _ in $(seq 1 90); do
+            if aws ecr describe-repositories --repository-names settleiq-demo >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::ECR repository settleiq-demo does not exist after 15 minutes; check the infra run."
+          exit 1
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: demo-business
+          file: demo-business/Dockerfile
+          push: true
+          provenance: false # a single manifest per tag, so ECR lifecycle counts stay accurate
+          tags: ${{ steps.ecr.outputs.registry }}/settleiq-demo:${{ github.sha }}
+          cache-from: type=gha,scope=demo
+          cache-to: type=gha,mode=max,scope=demo
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      TAG: ${{ github.sha }}
+      RELEASE_BUCKET: ${{ vars.RELEASE_BUCKET }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # On the first merge infra.yml creates the host while this runs.
+      - name: Find the demo host and wait for SSM
+        run: |
+          for _ in $(seq 1 90); do
+            id=$(aws ec2 describe-instances \
+              --filters "Name=tag:Name,Values=$DEMO_HOST_NAME" "Name=instance-state-name,Values=running" \
+              --query 'Reservations[].Instances[].InstanceId' --output text 2>/dev/null || true)
+            if [[ "$id" =~ ^i-[0-9a-f]+$ ]]; then
+              ping=$(aws ssm describe-instance-information \
+                --filters "Key=InstanceIds,Values=$id" \
+                --query 'InstanceInformationList[0].PingStatus' --output text 2>/dev/null || true)
+              if [ "$ping" = "Online" ]; then
+                echo "INSTANCE_ID=$id" >> "$GITHUB_ENV"
+                echo "demo host $id is online"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "::error::No running demo host online in SSM after 15 minutes; check the infra run."
+          exit 1
+
+      - name: Write shell helpers shared by the steps below
+        run: |
+          cat > "$RUNNER_TEMP/deploy-lib.sh" <<'LIB'
+          # ssm_run <comment> <command>: prints the command's stdout; returns 0 only on SSM Success.
+          ssm_run() {
+            local comment=$1 command=$2 params cmd_id status=Pending
+            params=$(mktemp)
+            jq -n --arg c "$command" '{commands: [$c], executionTimeout: ["1500"]}' > "$params" || return 1
+            cmd_id=$(aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name AWS-RunShellScript \
+              --comment "$comment" \
+              --parameters "file://$params" \
+              --query Command.CommandId --output text) || return 1
+
+            for _ in $(seq 1 156); do
+              status=$(aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$INSTANCE_ID" \
+                --query Status --output text 2>/dev/null || echo Pending)
+              case "$status" in
+                Pending|InProgress|Delayed|Cancelling) sleep 10 ;;
+                *) break ;;
+              esac
+            done
+
+            aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$INSTANCE_ID" \
+              --query StandardOutputContent --output text || true
+            aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$INSTANCE_ID" \
+              --query StandardErrorContent --output text >&2 || true
+            echo "SSM status: $status" >&2
+            [ "$status" = "Success" ]
+          }
+          LIB
+
+      - name: Upload release bundle
+        run: aws s3 cp deploy-demo/ "s3://$RELEASE_BUCKET/demo-releases/$TAG/" --recursive
+
+      # A new host is still installing Docker when SSM comes online, so wait for its first boot.
+      # deploy.sh restores the previous release itself if this one does not come up healthy.
+      - name: Run deploy.sh on the demo host via SSM
+        run: |
+          . "$RUNNER_TEMP/deploy-lib.sh"
+          ssm_run "demo deploy $TAG" "cloud-init status --wait >/dev/null; aws s3 cp s3://$RELEASE_BUCKET/demo-releases/$TAG/ /opt/kitebase/releases/$TAG/ --recursive && bash /opt/kitebase/releases/$TAG/deploy.sh $TAG"
+
+      - name: Health check on the host
+        run: |
+          . "$RUNNER_TEMP/deploy-lib.sh"
+          ssm_run "demo health $TAG" "docker exec kitebase-shop-1 python -c 'import urllib.request; print(urllib.request.urlopen(\"http://127.0.0.1:8000/healthz\", timeout=5).read().decode())'"
+
+      # Until DNS for the demo domain points at the host's Elastic IP, Caddy has no certificate,
+      # so this only warns.
+      - name: Public health check
+        run: |
+          for _ in $(seq 1 10); do
+            if curl -fsS --max-time 10 "https://$DEMO_DOMAIN/healthz"; then exit 0; fi
+            sleep 6
+          done
+          echo "::warning::https://$DEMO_DOMAIN/healthz is not answering yet. Point $DEMO_DOMAIN at the demo host's Elastic IP (terraform output demo_public_ip) if DNS is not set."

@@ -1,0 +1,5 @@
+subscription_id,account_id,plan_id,status,current_period_end
+SYN-SUB-1,SYN-ACC-1,pro-monthly,active,2026-12-01T00:00:00Z
+SYN-SUB-2,SYN-ACC-2,pro-monthly,active,2026-12-01T00:00:00Z
+SYN-SUB-3,SYN-ACC-3,team-annual,past_due,2026-11-01T00:00:00Z
+SYN-SUB-4,SYN-ACC-4,pro-monthly,canceled,2026-10-01T00:00:00Z

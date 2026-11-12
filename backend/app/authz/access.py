@@ -25,7 +25,6 @@ class PrincipalKind(StrEnum):
     AGENT = "agent"
     WORKER = "worker"
     PLATFORM_HUMAN = "platform_human"
-    CI = "ci"
 
 
 @dataclass(frozen=True)
@@ -33,6 +32,8 @@ class Principal:
     id: UUID
     kind: PrincipalKind
     email_verified: bool = False
+    # A Worker carries the execution grant it authenticated with (POL-09); nobody else does.
+    grant_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,11 @@ class AccessGateway(Protocol):
     def resolve_platform(self, principal: Principal) -> EffectiveAccess | None:
         """Return platform access. No path grants this until break-glass is built."""
 
+    def resolve_agent(
+        self, agent: Principal, tenant_id: UUID, invoker_id: UUID
+    ) -> EffectiveAccess | None:
+        """POL-08: the Agent's set intersected with the invoker's current access."""
+
     def record_decision(self, decision: Decision) -> None:
         """Durably audit a sensitive or critical decision (AUTHZ-09)."""
 
@@ -136,12 +142,34 @@ _GRANTS_SQL = text(
     """
 )
 
+_AGENT_GRANTS_SQL = text(
+    """
+    SELECT i.permission_key, i.effect, g.scope_type, g.scope_id
+    FROM service_principals p
+    JOIN member_grants g ON g.tenant_id = p.tenant_id AND g.service_principal_id = p.id
+    JOIN permission_sets s ON s.id = g.permission_set_id AND s.status = 'ACTIVE'
+    JOIN permission_set_items i ON i.permission_set_id = s.id
+    WHERE p.id = :agent_id AND p.kind = 'agent' AND p.status = 'ACTIVE'
+      AND g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at > now())
+    """
+)
+
 _OWNER_ITEMS_SQL = text(
     """
     SELECT i.permission_key, i.effect, NULL AS scope_type, NULL AS scope_id
     FROM permission_sets s
     JOIN permission_set_items i ON i.permission_set_id = s.id
     WHERE s.derivation = 'OWNER_POINTER' AND s.status = 'ACTIVE'
+    """
+)
+
+_WORKER_GRANT_SQL = text(
+    """
+    SELECT g.permission_keys
+    FROM execution_grants g
+    JOIN service_principals p ON p.tenant_id = g.tenant_id AND p.id = :worker_id
+    WHERE g.id = :grant_id AND p.kind = 'worker' AND p.status = 'ACTIVE'
+      AND g.consumed_at IS NULL AND g.expires_at > now()
     """
 )
 
@@ -165,8 +193,9 @@ class PostgresAccessGateway:
         self._catalogue = catalogue
 
     def resolve(self, principal: Principal, tenant_id: UUID) -> EffectiveAccess | None:
-        # Agent and Worker resolution arrive with POL-08 and POL-09 in G5; until then
-        # they resolve to nothing.
+        # The Agent resolves only through resolve_agent, on behalf of one invoker.
+        if principal.kind is PrincipalKind.WORKER:
+            return self._resolve_worker(principal, tenant_id)
         if principal.kind is not PrincipalKind.HUMAN:
             return None
         params = {"tenant_id": tenant_id, "user_id": principal.id}
@@ -181,8 +210,48 @@ class PostgresAccessGateway:
                 rows.extend(conn.execute(_OWNER_ITEMS_SQL))
         return EffectiveAccess((_to_row(row) for row in rows), self._catalogue)
 
+    def _resolve_worker(self, worker: Principal, tenant_id: UUID) -> EffectiveAccess | None:
+        """POL-09: the Worker holds exactly its grant's keys, and only while that grant is
+        unconsumed and unexpired. Worker-only keys come from nowhere else (AC-AUTHZ-06)."""
+        if worker.grant_id is None:
+            return None
+        with scoped_tx(tenant_id) as conn:
+            keys = conn.execute(
+                _WORKER_GRANT_SQL, {"grant_id": worker.grant_id, "worker_id": worker.id}
+            ).scalar_one_or_none()
+        if not keys:
+            return None
+        return EffectiveAccess((GrantRow(key, "ALLOW") for key in keys), self._catalogue)
+
     def resolve_platform(self, principal: Principal) -> EffectiveAccess | None:
         return None
+
+    def resolve_agent(
+        self, agent: Principal, tenant_id: UUID, invoker_id: UUID
+    ) -> EffectiveAccess | None:
+        """POL-08, resolved afresh on every tool call. A key a human may also hold survives only
+        if the invoker holds it tenant-wide right now; agent-only keys remain. A DENY on either
+        side wins, and an invoker who is no longer an ACTIVE member leaves the Agent nothing.
+        """
+        if agent.kind is not PrincipalKind.AGENT:
+            return None
+        invoker = self.resolve(Principal(invoker_id, PrincipalKind.HUMAN, True), tenant_id)
+        if invoker is None:
+            return None
+        with scoped_tx(tenant_id) as conn:
+            rows = [_to_row(row) for row in conn.execute(_AGENT_GRANTS_SQL,
+                                                         {"agent_id": agent.id})]
+        if not rows:
+            return None
+        kept = []
+        for row in rows:
+            spec = self._catalogue.get(row.permission)
+            human_data = "human" in spec.principal_types
+            if row.effect == "DENY" or not human_data or invoker.permits(row.permission):
+                kept.append(row)
+            if human_data and not invoker.permits(row.permission):
+                kept.append(GrantRow(row.permission, "DENY"))
+        return EffectiveAccess(kept, self._catalogue)
 
     def record_decision(self, decision: Decision) -> None:
         scope = (

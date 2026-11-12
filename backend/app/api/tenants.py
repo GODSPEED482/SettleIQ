@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 
 from app.authz.guard import TenantContext, require
-from app.errors import not_implemented
+from app.execution import mode, readiness
 from app.mail import MailSender, get_mail_sender
+from app.playbooks import gateway
 from app.tenancy import invitations, members, ownership
 
 router = APIRouter(prefix="/api/tenants/{tenant_id}", tags=["tenants"])
@@ -88,10 +89,19 @@ def transfer_ownership(
 
 
 @router.put("/execution-mode")
-def set_execution_mode(ctx: TenantContext = require("execution_mode.manage")) -> None:
-    raise not_implemented("5.3")
+def set_execution_mode(
+    body: mode.ModeBody, ctx: TenantContext = require("execution_mode.manage")
+) -> dict:
+    """Set one exact scope to SHADOW or LIVE. After a LIVE switch, requests that scope blocked
+    are evaluated again (spec 18 steps 12-15)."""
+    result = mode.set_mode(ctx, body)
+    if body.mode == "LIVE":
+        result["reevaluated_requests"] = gateway.reevaluate_scope(
+            ctx, body.domain_pack_id, body.connector_id, body.action_capability)
+    return result
 
 
 @router.get("/execution-readiness")
-def execution_readiness(ctx: TenantContext = require("execution.read")) -> None:
-    raise not_implemented("5.4")
+def execution_readiness(ctx: TenantContext = require("execution.read")) -> list[dict]:
+    """Each exact scope the tenant's active packs declare, and its mode."""
+    return readiness.readiness(ctx)

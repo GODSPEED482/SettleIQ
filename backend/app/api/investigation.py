@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.authz.guard import TenantContext, require
-from app.errors import not_implemented
+from app.investigation import service
 
 router = APIRouter(prefix="/api", tags=["investigation"])
 
@@ -23,14 +23,24 @@ class InvestigationStarted(BaseModel):
     "/agent/investigate/{case_id}", status_code=202, response_model=InvestigationStarted
 )
 def start_investigation(
-    case_id: str, ctx: TenantContext = require("case.investigate")
-) -> InvestigationStarted:
+    case_id: UUID, ctx: TenantContext = require("case.investigate")
+) -> dict:
     """Write the RUNNING investigation and its job in one transaction; never run it here."""
-    raise not_implemented("5.7")
+    return service.start(ctx, case_id)
+
+
+@router.get("/investigations")
+def list_investigations(
+    case_id: UUID | None = None, ctx: TenantContext = require("investigation.read")
+) -> list[dict]:
+    """Investigation summaries, newest first, optionally for one case."""
+    return service.list_for(ctx, case_id)
 
 
 @router.get("/investigations/{investigation_id}")
 def read_investigation(
-    investigation_id: str, ctx: TenantContext = require("investigation.read")
-) -> None:
-    raise not_implemented("5.7")
+    investigation_id: UUID, ctx: TenantContext = require("investigation.read")
+) -> dict:
+    """The investigation, its validated result, PROPOSED classification and tool trace. Evidence
+    IDs come from the trace, so they resolve without trusting the model's text (AC-AI-04)."""
+    return service.read(ctx, investigation_id)

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Order {{ order_ref }}{% endblock %}
+{% block content %}
+{% if not order %}
+<h1>Order not found</h1>
+<p class="muted">{{ order_ref }} does not exist, perhaps because the demo was reset.</p>
+{% else %}
+<h1>Order {{ order.order_ref }}</h1>
+<div class="card">
+  <p><strong>{{ order.plan }}</strong>, {{ order.total }} {{ order.currency }}, for {{ order.email }}</p>
+  {% if order.order_status == "PAID" %}
+  <p class="ok">Paid. {% if order.subscription_status %}Your subscription is {{ order.subscription_status }}{% if order.current_period_end %} until {{ order.current_period_end.strftime("%d %b %Y") }}{% endif %}.{% endif %}</p>
+  {% else %}
+  <p class="warn">Payment pending. We have not confirmed this payment yet.</p>
+  {% endif %}
+  {% for flag in order.flags %}<p class="flag">{{ flag }}</p>{% endfor %}
+  {% for note in order.notes %}<p class="ok">{{ note }}</p>{% endfor %}
+</div>
+<p><a href="/sources">See what every source says about this order</a></p>
+{% endif %}
+{% endblock %}

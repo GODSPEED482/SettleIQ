@@ -1,0 +1,20 @@
+# SaaS Subscription Lifecycle constraints (spec 5.8). They apply only when this pack is active.
+
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix saas: <urn:settleiq:pack:saas#> .
+
+saas:SubscriptionShape a sh:NodeShape ;
+    sh:targetClass saas:Subscription ;
+    sh:property [
+        sh:path saas:status ;
+        sh:minCount 1 ;
+        sh:message "A subscription needs a status." ;
+    ] .
+
+saas:InvoiceShape a sh:NodeShape ;
+    sh:targetClass saas:Invoice ;
+    sh:property [
+        sh:path saas:invoiceFor ;
+        sh:minCount 1 ;
+        sh:message "An invoice must belong to a subscription." ;
+    ] .

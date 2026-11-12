@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { messageOf } from "../../api/client";
 import type { OperationsApi } from "./api";
@@ -30,15 +30,21 @@ type Props = {
   busy: boolean;
   onTriage: (item: DomainCase, body: TriageInput) => Promise<boolean>;
   onReopen: (item: DomainCase, reason: string) => Promise<boolean>;
+  // A case under human review can ask for its recommended playbook (task 5.11).
+  canRequest: boolean;
+  renderRequest: (item: DomainCase) => ReactNode;
 };
 
 // Cases by scope, severity and status (spec 9.3). Triage is reasoned and follows the case state
 // machine; execution states are never set from here.
-export function Cases({ api, version, canTriage, members, busy, onTriage, onReopen }: Props) {
+export function Cases(props: Props) {
+  const { api, version, canTriage, members, busy, onTriage, onReopen } = props;
+  const { canRequest, renderRequest } = props;
   const [cases, setCases] = useState<DomainCase[]>([]);
   const [status, setStatus] = useState("");
   const [caseType, setCaseType] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,6 +60,7 @@ export function Cases({ api, version, canTriage, members, busy, onTriage, onReop
 
   const types = [...new Set(cases.map((item) => item.case_type))].sort();
   const active = cases.find((item) => item.id === selected) ?? null;
+  const requested = cases.find((item) => item.id === requesting) ?? null;
 
   return (
     <section className="panel">
@@ -93,7 +100,7 @@ export function Cases({ api, version, canTriage, members, busy, onTriage, onReop
                 <th>Expected</th>
                 <th>Observed</th>
                 <th>Evidence</th>
-                {canTriage && <th />}
+                {(canTriage || canRequest) && <th />}
               </tr>
             </thead>
             <tbody>
@@ -112,16 +119,28 @@ export function Cases({ api, version, canTriage, members, busy, onTriage, onReop
                       <ProvenanceLabel key={provenance} provenance={provenance} />
                     ))}
                   </td>
-                  {canTriage && (
+                  {(canTriage || canRequest) && (
                     <td>
-                      <button
-                        type="button"
-                        className="secondary"
-                        aria-label={`Triage ${item.case_type} ${item.id}`}
-                        onClick={() => setSelected(item.id === selected ? null : item.id)}
-                      >
-                        Triage
-                      </button>
+                      {canTriage && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          aria-label={`Triage ${item.case_type} ${item.id}`}
+                          onClick={() => setSelected(item.id === selected ? null : item.id)}
+                        >
+                          Triage
+                        </button>
+                      )}{" "}
+                      {canRequest && item.status === "HUMAN_REVIEW" && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          aria-label={`Request playbook for ${item.case_type} ${item.id}`}
+                          onClick={() => setRequesting(item.id === requesting ? null : item.id)}
+                        >
+                          Request playbook
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -140,6 +159,7 @@ export function Cases({ api, version, canTriage, members, busy, onTriage, onReop
           onReopen={onReopen}
         />
       )}
+      {canRequest && requested && renderRequest(requested)}
     </section>
   );
 }

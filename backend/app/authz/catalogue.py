@@ -14,7 +14,6 @@ PERMISSION_SETS_FILE = _HERE / "permission_sets.yaml"
 GRANT_AUTHORITY = "member.role.assign"
 HUMAN_ONLY = {"playbook.approve", "platform.support.approve"}
 WORKER_ONLY = {"playbook.execute", "connector.action.invoke"}
-CI_ONLY = {"platform.release.attest"}
 
 
 class CatalogueError(ValueError):
@@ -87,9 +86,8 @@ def _parse_entry(key: str, entry: list, scope_type: str, release: str) -> Permis
 
 
 def _check_principal_ceilings(permissions: dict[str, PermissionSpec]) -> None:
-    """POL-03: human-only, worker-only and CI-only permissions."""
-    ceilings = ((HUMAN_ONLY, {"human", "platform_human"}), (WORKER_ONLY, {"worker"}),
-                (CI_ONLY, {"ci"}))
+    """POL-03: human-only and worker-only permissions."""
+    ceilings = ((HUMAN_ONLY, {"human", "platform_human"}), (WORKER_ONLY, {"worker"}))
     for keys, allowed in ceilings:
         for key in keys:
             if not set(permissions[key].principal_types) <= allowed:

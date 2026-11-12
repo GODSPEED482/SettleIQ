@@ -3,8 +3,7 @@
 # The worker has no published port and shares no network with `web`: the private
 # route in app/worker_api.py must be unreachable from browsers (AC-AUTHZ-17).
 #
-# Investigations are stubs until task 5.7. The agent, agent-tools and dispatcher services only
-# start with `--profile agent`. The agent must never join `backend` or use *backend-env.
+# The agent, agent-tools and dispatcher services only start with `--profile agent`. The agent must never join `backend` or use *backend-env.
 
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://settleiq_app:${APP_DB_PASSWORD:?copy .env.example to .env}@db:5432/${POSTGRES_DB:?copy .env.example to .env}
@@ -54,8 +53,11 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       SOURCE_SECRET_MERCHANT_DB: ${SOURCE_SECRET_MERCHANT_DB:-}
+      SOURCE_SECRET_MERCHANT_WRITE: ${SOURCE_SECRET_MERCHANT_WRITE:-}
       SOURCE_SECRET_PAYPAL_SANDBOX: ${SOURCE_SECRET_PAYPAL_SANDBOX:-}
       SOURCE_SECRET_KEY: ${SOURCE_SECRET_KEY:-}
+      # Each execution grant is handed to the private Worker here (task 5.6).
+      WORKER_URL: http://worker:8001
     volumes:
       - ./backend/app:/srv/app/app
       - ./backend/packs:/srv/app/packs
@@ -70,7 +72,14 @@ services:
   worker:
     build: ./backend
     command: uvicorn app.worker_api:app --host 0.0.0.0 --port 8001
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      # The Worker is the only caller of connector actions (spec 4.4.1), so it resolves the
+      # secret references of the sources it acts through.
+      SOURCE_SECRET_MERCHANT_WRITE: ${SOURCE_SECRET_MERCHANT_WRITE:-}
+      SOURCE_SECRET_PAYPAL_SANDBOX: ${SOURCE_SECRET_PAYPAL_SANDBOX:-}
+      # Opens the tenant's sealed PayPal credentials for refunds.create (task 5.15).
+      SOURCE_SECRET_KEY: ${SOURCE_SECRET_KEY:-}
     volumes:
       - raw_evidence:/data/raw-evidence
     depends_on:
@@ -97,6 +106,9 @@ services:
     environment:
       <<: *backend-env
       AGENT_TOKEN_SECRET: ${AGENT_TOKEN_SECRET:-}
+    volumes:
+      # get_case_evidence reads hash-checked raw excerpts; it never writes evidence.
+      - raw_evidence:/data/raw-evidence:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

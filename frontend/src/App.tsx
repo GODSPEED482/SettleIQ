@@ -8,8 +8,10 @@ import { SignIn } from "./pages/auth/SignIn";
 import { SignUp } from "./pages/auth/SignUp";
 import { VerifyEmail } from "./pages/auth/VerifyEmail";
 import { CreateTenant } from "./pages/CreateTenant";
+import { Investigations } from "./pages/investigations/Investigations";
 import { OntologyStudio } from "./pages/OntologyStudio";
 import { DomainOperations } from "./pages/operations/DomainOperations";
+import { PlaybookRequests } from "./pages/playbooks/PlaybookRequests";
 import { SourceManagement } from "./pages/sources/SourceManagement";
 import { TeamManagement } from "./pages/team/TeamManagement";
 import { WORKSPACES } from "./pages/workspaces";
@@ -109,6 +111,10 @@ function Shell() {
                     <DomainOperations />
                   ) : workspace.path === "/sources" ? (
                     <SourceManagement />
+                  ) : workspace.path === "/investigations" ? (
+                    <Investigations />
+                  ) : workspace.path === "/playbooks" ? (
+                    <PlaybookRequests />
                   ) : (
                     <Workspace workspace={workspace} />
                   )}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Kitebase plans{% endblock %}
+{% block head %}
+{% if paypal_ready %}
+<script src="https://www.paypal.com/sdk/js?client-id={{ client_id }}&currency=USD&intent=capture" defer></script>
+{% endif %}
+<script src="/static/checkout.js" defer></script>
+{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Project tracking for small teams</h1>
+  <p class="muted">Pick a plan and pay with PayPal. The demo's faults decide what goes wrong.</p>
+</section>
+
+{% if meta and meta.fault_queue %}
+<p class="notice">Next checkout:
+  {% if meta.fault_queue[0] == "LOST_CONFIRMATION" %}the shop will lose PayPal's payment confirmation.
+  {% else %}PayPal will charge, but the shop will report a timeout and let you pay again.{% endif %}
+  <a href="/demo">Change</a></p>
+{% else %}
+<p class="notice">No fault queued: the next checkout runs normally. <a href="/demo">Queue one</a></p>
+{% endif %}
+
+<form id="checkout" class="card" onsubmit="return false">
+  <fieldset>
+    <legend>Plan</legend>
+    {% for plan in plans %}
+    <label class="plan">
+      <input type="radio" name="plan_id" value="{{ plan.plan_id }}" {% if loop.index == 2 %}checked{% endif %}>
+      <span class="plan-name">{{ plan.name }}</span>
+      <span class="plan-price">{{ plan.price }} {{ plan.currency }}{% if plan.kind == "SUBSCRIPTION" %} / {{ "month" if plan.interval_months == 1 else "year" }}{% endif %}</span>
+    </label>
+    {% endfor %}
+  </fieldset>
+  <label>Email <input type="email" name="email" required autocomplete="email" placeholder="you@example.com"></label>
+  <label>Name <input type="text" name="name" autocomplete="name"></label>
+  {% if paypal_ready %}
+  <div id="paypal-buttons"></div>
+  {% else %}
+  <p class="error">PayPal is not configured on this deployment yet.</p>
+  {% endif %}
+  <p id="checkout-status" role="status"></p>
+</form>
+{% endblock %}

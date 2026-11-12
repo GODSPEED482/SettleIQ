@@ -1,5 +1,6 @@
-# SaaS Subscription Lifecycle reference pack (spec 14.4). Proves extensibility only;
-# it is not a production SaaS operations product. Filled in by task 6.1.
+# SaaS Subscription Lifecycle reference pack (spec 14.4, task 6.1). It proves extensibility and
+# is not a production SaaS operations product. It declares no connector action, so it has no
+# execution-mode scope and nothing it finds can change business state (spec 9.7).
 
 namespace: saas
 package: saas_subscription
@@ -7,12 +8,17 @@ version: 0.1.0
 compatible_platform_versions: ">=0.1.0,<1.0.0"
 dependencies: []
 conflicts: []
-ontology_definitions: []
-shacl_shapes: []
+ontology_definitions:
+  - {id: saas.ontology, path: ontology/saas.jsonld}
+shacl_shapes:
+  - {id: saas.shapes, path: ontology/saas.shacl.ttl}
+# Billing schemas differ per business, so no bindings are hinted: discovery proposes them.
 mapping_hints: []
-validators: []
-entity_resolution_policies: []
-domain_engine: null
+validators:
+  - {id: saas.required_terms, entrypoint: "packs.saas_subscription.validators:check_required_terms"}
+entity_resolution_policies:
+  - {id: saas.exact_id, entrypoint: "packs.saas_subscription.resolution:exact_id_policy"}
+domain_engine: {id: saas.engine, entrypoint: "packs.saas_subscription.engine:run"}
 
 case_types:
   - {code: RENEWAL_INVOICE_MISMATCH, default_severity: medium}
@@ -21,4 +27,8 @@ agent_tools: []
 permissions: []
 connector_action_capabilities: []
 playbook_templates: []
-test_fixtures: []
+
+test_fixtures:
+  - fixtures/SYNTHETIC_REFERENCE_subscriptions_v1.csv
+  - fixtures/SYNTHETIC_REFERENCE_invoices_v1.csv
+  - fixtures/SYNTHETIC_REFERENCE_saas_v1.manifest.yaml

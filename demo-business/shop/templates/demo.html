@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Demo controls{% endblock %}
+{% block content %}
+<h1>Demo controls</h1>
+<p class="muted">These controls are not part of the business. They set up the discrepancies SettleIQ resolves.</p>
+{% if message %}<p class="ok" role="status">{{ message }}</p>{% endif %}
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+<section class="card">
+  <h2>Reset discrepancies</h2>
+  <p>Puts every Kitebase source back into its discrepant starting state under new identifiers, and queues both checkout faults again. SettleIQ keeps what it already read; the new identifiers mean nothing is reused. PayPal captures and refunds cannot be undone, so the PayPal discrepancies come back with your next checkouts.</p>
+  <p class="muted">Generation {{ meta.generation }}, reset {{ ago(meta.last_reset_at) }}.</p>
+  <form method="post" action="/demo/reset"><button type="submit">Reset discrepancies</button></form>
+</section>
+
+<section class="card">
+  <h2>Checkout faults</h2>
+  <p>Queued for the next checkouts, in order:
+    {% if meta.fault_queue %}{{ meta.fault_queue|join(", then ") }}{% else %}none{% endif %}.</p>
+  <dl>
+    <dt>LOST_CONFIRMATION</dt><dd>PayPal captures the payment; Kitebase records the capture but never marks the payment COMPLETED. SettleIQ raises STATUS_MISMATCH, and PB-001 corrects the payment.</dd>
+    <dt>DOUBLE_CHARGE</dt><dd>PayPal captures the payment; Kitebase tells the buyer it timed out, and paying again charges the same order twice. SettleIQ raises DUPLICATE_CAPTURE, and PB-002 refunds the second capture.</dd>
+  </dl>
+  <form method="post" action="/demo/faults" class="inline">
+    <button name="queue" value="LOST_CONFIRMATION,DOUBLE_CHARGE">Queue both</button>
+    <button name="queue" value="LOST_CONFIRMATION">Lost confirmation only</button>
+    <button name="queue" value="DOUBLE_CHARGE">Double charge only</button>
+    <button name="queue" value="" class="secondary">Clear</button>
+  </form>
+</section>
+{% endblock %}

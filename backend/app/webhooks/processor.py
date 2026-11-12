@@ -19,9 +19,10 @@ from uuid import UUID, uuid4
 from sqlalchemy import Connection, text
 
 from app.audit import write_audit
-from app.authz.access import EffectiveAccess, Principal, PrincipalKind
+from app.authz.access import EffectiveAccess
 from app.authz.catalogue import get_catalogue
 from app.authz.guard import TenantContext
+from app.authz.workers import worker_principal
 from app.db import global_tx, scoped_tx, tenant_tx
 from app.domain import runs
 from app.domain_packs.manifest import load_domain_packs
@@ -56,38 +57,6 @@ def _parse_time(value: str | None) -> datetime | None:
         return datetime.fromisoformat(value)
     except Exception:
         return None
-
-
-def _get_worker_principal(conn: Connection, tenant_id: UUID) -> Principal:
-    """The tenant's Worker service principal, registered on first use.
-
-    The run it starts is attributed to this durable identity, never to an invented one. It
-    holds no grants: starting a run here is a system step, not an authorized request."""
-    conn.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
-        {"key": f"worker_principal:{tenant_id}"},
-    )
-    row = conn.execute(
-        text(
-            """
-            SELECT id FROM service_principals
-            WHERE tenant_id = :tenant AND kind = 'worker' AND status = 'ACTIVE'
-            ORDER BY created_at, id
-            LIMIT 1
-            """
-        ),
-        {"tenant": tenant_id},
-    ).first()
-    worker_id = row.id if row is not None else uuid4()
-    if row is None:
-        conn.execute(
-            text(
-                "INSERT INTO service_principals (id, tenant_id, kind, status) "
-                "VALUES (:id, :tenant, 'worker', 'ACTIVE')"
-            ),
-            {"id": worker_id, "tenant": tenant_id},
-        )
-    return Principal(worker_id, PrincipalKind.WORKER, email_verified=True)
 
 
 def claim_inbox_row(conn: Connection) -> ClaimedInboxRow | None:
@@ -196,7 +165,7 @@ def process_claimed_row(claimed: ClaimedInboxRow) -> dict[str, Any]:
         run_ids = []
         try:
             with scoped_tx(tenant_id) as conn:
-                worker_p = _get_worker_principal(conn, tenant_id)
+                worker_p = worker_principal(conn, tenant_id)
                 namespaces = sorted(set(active_namespaces(conn)) & set(load_domain_packs()))
             ctx = TenantContext(
                 tenant_id=tenant_id,

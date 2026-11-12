@@ -302,4 +302,132 @@ describe("DomainOperations", () => {
       { outcome: "REJECT", reason: "PO-6 is the provider order" },
     ]);
   });
+
+  describe("Create playbook request", () => {
+    const REVIEW = caseOf({ status: "HUMAN_REVIEW", case_type: "DUPLICATE_CAPTURE" });
+    const PLAYBOOK = "finops:PB-002";
+    const CREATE = `POST /api/playbooks/${encodeURIComponent(PLAYBOOK)}/requests`;
+    const scoped = (scopes: string[]): Reply => ({
+      status: 200,
+      body: {
+        permissions: [
+          ...["domain_run.read", "case.read", "investigation.read"].map((key) => ({
+            key,
+            tenant_wide: true,
+            scopes: [],
+            denied_scopes: [],
+          })),
+          {
+            key: "playbook.request",
+            tenant_wide: false,
+            scopes: scopes.map((id) => ({ type: "playbook", id })),
+            denied_scopes: [],
+          },
+        ],
+      },
+    });
+    const routes = (scopes: string[], create?: Reply | Reply[]) => ({
+      [`GET /api/me/permissions?tenant_id=${T}`]: scoped(scopes),
+      "GET /api/domain-cases": { status: 200, body: [REVIEW] },
+      [`GET /api/investigations?case_id=${REVIEW.id}`]: {
+        status: 200,
+        body: [
+          { investigation_id: "i-2", status: "RUNNING", recommended_playbook: null },
+          { investigation_id: "i-1", status: "SUCCEEDED", recommended_playbook: PLAYBOOK },
+        ],
+      },
+      ...(create ? { [CREATE]: create } : {}),
+    });
+    const open = async () =>
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name: `Request playbook for DUPLICATE_CAPTURE ${REVIEW.id}`,
+        }),
+      );
+
+    it("sends only the case, under one Idempotency-Key per form", async () => {
+      const api = renderOperations([], routes([PLAYBOOK], [
+        apiError(503, "UNAVAILABLE", "Try again."),
+        {
+          status: 201,
+          body: {
+            id: "req-1",
+            status: "NEEDS_APPROVAL",
+            target: { capture_id: "CAP-B", amount: "25.00", currency: "USD" },
+            decisions: [
+              {
+                stage: "REQUEST",
+                conditions: {
+                  proof: {
+                    order_reference: "ORD-7",
+                    original: { capture_id: "CAP-A", captured_at: "2026-11-11T09:00:00Z" },
+                    duplicate: { capture_id: "CAP-B", captured_at: "2026-11-11T09:00:05Z" },
+                    rule: "two distinct PayPal captures for one merchant order",
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ]));
+      await open();
+      const form = await screen.findByRole("region", { name: "Playbook request" });
+      fireEvent.click(await within(form).findByRole("button", { name: "Create playbook request" }));
+      expect((await within(form).findByRole("alert")).textContent).toBe("Try again.");
+      fireEvent.click(within(form).getByRole("button", { name: "Create playbook request" }));
+      expect(await within(form).findByText(/Request created/)).toBeTruthy();
+      expect(within(form).getByRole("link", { name: "Open the request" }).getAttribute("href"))
+        .toBe("/playbooks?request=req-1");
+      // PB-002's duplicate proof is shown as soon as the request exists (task 5.16).
+      const proof = within(form).getByRole("region", { name: "Duplicate capture proof" });
+      expect(within(proof).getByText("CAP-B")).toBeTruthy();
+      expect(within(proof).getByText("25.00 USD")).toBeTruthy();
+
+      const bodies = api.sent(CREATE);
+      expect(bodies).toEqual([
+        { case_id: REVIEW.id, parameters: {} },
+        { case_id: REVIEW.id, parameters: {} },
+      ]);
+      const keys = api.calls
+        .filter((call) => call.key === CREATE)
+        .map((call) => (call.init.headers as Record<string, string>)["Idempotency-Key"]);
+      expect(keys[0]).toBeTruthy();
+      expect(keys[1]).toBe(keys[0]);
+    });
+
+    it("shows why an ineligible case was refused", async () => {
+      renderOperations([], routes([PLAYBOOK], {
+        status: 422,
+        body: {
+          error: {
+            code: "PLAYBOOK_INELIGIBLE",
+            message: "The playbook's trigger or preconditions do not hold for this case.",
+            failures: ["a refund already exists for the duplicate capture"],
+          },
+        },
+      }));
+      await open();
+      fireEvent.click(await screen.findByRole("button", { name: "Create playbook request" }));
+      expect((await screen.findByRole("alert")).textContent).toContain(
+        "a refund already exists for the duplicate capture",
+      );
+    });
+
+    it("offers nothing for a playbook outside the holder's scope", async () => {
+      const api = renderOperations([], routes(["finops:PB-001"]));
+      await open();
+      expect(await screen.findByText(`You cannot request ${PLAYBOOK}.`)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Create playbook request" })).toBeNull();
+      expect(api.sent(CREATE)).toEqual([]);
+    });
+
+    it("offers no request on a case that is not under human review", async () => {
+      renderOperations([], {
+        ...routes([PLAYBOOK]),
+        "GET /api/domain-cases": { status: 200, body: [{ ...REVIEW, status: "OPEN" }] },
+      });
+      expect(await screen.findByRole("cell", { name: "DUPLICATE_CAPTURE" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Request playbook/ })).toBeNull();
+    });
+  });
 });

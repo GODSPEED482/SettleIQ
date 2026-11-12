@@ -30,6 +30,7 @@ from app.authz.access import (
     get_gateway,
 )
 from app.authz.catalogue import Catalogue, get_catalogue
+from app.authz.workers import grant_principal
 from app.errors import email_not_verified, missing_permission, not_found, unauthenticated
 
 logger = logging.getLogger("settleiq.authz")
@@ -64,9 +65,12 @@ class TenantContext:
 def authenticate(request: Request) -> Principal:
     """Resolve the session cookie against current state (AC-IAM-07, spec 11.2).
 
-    Only the cookie is read, so a delegated agent token can never authenticate here. Do not
-    add a development bypass; tests override this dependency instead.
+    Only the cookie is read, so a delegated agent token can never authenticate here. The Worker
+    app reads only an execution grant instead, so no human session reaches it (POL-09,
+    AC-AUTHZ-17). Do not add a development bypass; tests override this dependency instead.
     """
+    if getattr(request.app.state, "grant_authentication", False):
+        return grant_principal(request)
     raw = request.cookies.get(session_cookie_name())
     if raw is None:
         raise unauthenticated()

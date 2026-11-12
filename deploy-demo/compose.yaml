@@ -1,0 +1,78 @@
+# Kitebase, the demo business (task 6.15), on its own host. deploy.sh renders .env from SSM
+# /settleiq/demo and adds TAG and REGISTRY.
+name: kitebase
+
+services:
+  proxy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      shop:
+        condition: service_healthy
+    networks: [edge]
+
+  shop:
+    image: ${REGISTRY}/settleiq-demo:${TAG}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://kitebase:${POSTGRES_PASSWORD}@shop-db:5432/kitebase
+      MERCHANT_ID: ${MERCHANT_ID:-kitebase}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      MERCHANT_READER_PASSWORD: ${MERCHANT_READER_PASSWORD}
+      MERCHANT_WRITER_PASSWORD: ${MERCHANT_WRITER_PASSWORD}
+      SETTLEIQ_URL: ${SETTLEIQ_URL:-https://app.settleiq.dpdns.org}
+      RESET_COOLDOWN_SECONDS: ${RESET_COOLDOWN_SECONDS:-20}
+    depends_on:
+      shop-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks: [edge, data]
+
+  # Published on 5432 for SettleIQ's merchant connectors. The security group admits only the
+  # SettleIQ host, and pg_hba.conf admits the owner only from the shop's network.
+  shop-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    command: ["postgres", "-c", "hba_file=/etc/postgresql/pg_hba.conf"]
+    environment:
+      POSTGRES_DB: kitebase
+      POSTGRES_USER: kitebase
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - shop-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kitebase -d kitebase"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [data]
+
+volumes:
+  caddy-data:
+  caddy-config:
+  shop-db:
+
+networks:
+  edge:
+  data:
+    ipam:
+      config:
+        - subnet: 10.250.0.0/24 # pg_hba.conf names this range

@@ -110,6 +110,16 @@ resource "aws_s3_bucket_lifecycle_configuration" "releases" {
     }
   }
   rule {
+    id     = "old-demo-releases"
+    status = "Enabled"
+    filter {
+      prefix = "demo-releases/"
+    }
+    expiration {
+      days = 30
+    }
+  }
+  rule {
     id     = "old-backups"
     status = "Enabled"
     filter {
@@ -345,22 +355,31 @@ data "aws_iam_policy_document" "deploy" {
     actions = [
       "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload",
       "ecr:DescribeImages", "ecr:GetDownloadUrlForLayer", "ecr:InitiateLayerUpload",
-      "ecr:PutImage", "ecr:UploadLayerPart",
+      "ecr:PutImage", "ecr:UploadLayerPart", "ecr:DescribeRepositories",
     ]
     resources = [for r in aws_ecr_repository.svc : r.arn]
   }
   statement {
-    sid       = "UploadRelease"
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.releases.arn}/releases/*"]
+    sid     = "UploadRelease"
+    actions = ["s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.releases.arn}/releases/*",
+      "${aws_s3_bucket.releases.arn}/demo-releases/*",
+    ]
   }
   statement {
     sid     = "RunDeployOnHost"
     actions = ["ssm:SendCommand"]
     resources = [
       aws_instance.app.arn,
+      aws_instance.demo.arn,
       "arn:aws:ssm:${var.region}::document/AWS-RunShellScript",
     ]
+  }
+  statement {
+    sid       = "FindDemoHost" # demo-deploy.yml finds the demo instance by tag and waits for SSM
+    actions   = ["ec2:DescribeInstances", "ssm:DescribeInstanceInformation"]
+    resources = ["*"]
   }
   statement {
     sid       = "ReadDeployResult"
