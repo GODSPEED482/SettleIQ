@@ -68,6 +68,8 @@ def list_packs(ctx: TenantContext) -> list[dict[str, Any]]:
             "version": pack.version,
             "status": statuses.get(pack.namespace, "AVAILABLE"),
             "case_types": [case.code for case in pack.case_types],
+            # Bindings the pack proposes per connector, which a tenant applies to its draft.
+            "mapping_hints": [hint.model_dump() for hint in pack.mapping_hints],
         }
         for pack in load_domain_packs().values()
     ]
