@@ -445,9 +445,11 @@ describe("pack gaps", () => {
           status: 200,
           body: [bind("a", "pk:Thing", "pk:ref"), bind("b", "pk:Thing", "pk:size"), bind("c", "pk:Part", "pk:ref")],
         },
+        // MAPPING's source, open-ended.
+        "GET /api/authority?draft_id=d-1": { status: 200, body: [{ ...ASSERTION, source_id: "s-1" }] },
       }),
     );
-    await panel("Bindings");
+    await panel("Authority");
     expect(screen.queryByRole("region", { name: "Pack bindings" })).toBeNull();
   });
 
@@ -464,5 +466,89 @@ describe("pack gaps", () => {
         "Nothing is bound to a pk class, so its run has nothing to check.",
       ),
     ).toBeTruthy();
+  });
+});
+
+describe("pack authority gaps", () => {
+  const REQUIRING = {
+    ...PACK,
+    mapping_hints: [],
+    identities: { "pk:Thing": ["pk:ref"] },
+    relationships: [],
+    required_properties: [],
+  };
+  const bound = (property: string): Mapping => ({
+    ...MAPPING,
+    id: property,
+    class_iri: "pk:Thing",
+    property_iri: property,
+    field_path: property,
+  });
+  const asserted = (property: string, extra: Partial<Authority> = {}): Authority => ({
+    ...ASSERTION,
+    id: `a-${property}-${extra.source_id ?? "s-1"}`,
+    property_iri: property,
+    source_id: "s-1",
+    ...extra,
+  });
+  const show = async (authority: Authority[]) => {
+    renderStudio(
+      [...READ, "domain_pack.read"],
+      routes({
+        "GET /api/domain-packs": { status: 200, body: [REQUIRING] },
+        "GET /api/mappings?draft_id=d-1": {
+          status: 200,
+          body: [bound("pk:ref"), bound("pk:size"), bound("pk:colour")],
+        },
+        "GET /api/authority?draft_id=d-1": { status: 200, body: authority },
+      }),
+    );
+    await panel("Authority");
+    return screen.queryByRole("region", { name: "Pack bindings" });
+  };
+
+  it("names each bound value no source is the authority for, but never an identifying one", async () => {
+    const section = (await show([]))!;
+    expect(
+      within(section).getByText(
+        "No source is the authority for pk:colour, pk:size on pk:Thing, so these values stay unresolved and the run cannot read them.",
+      ),
+    ).toBeTruthy();
+    expect(within(section).queryByText(/pk:ref/)).toBeNull();
+  });
+
+  it("flags two current authorities, an authority without the binding, and an end date", async () => {
+    const section = (await show([
+      asserted("pk:size"),
+      asserted("pk:size", { source_id: "s-2" }),
+      asserted("pk:colour", { valid_to: "2026-12-12T13:14:00+00:00" }),
+    ]))!;
+    expect(
+      within(section).getByText(
+        "More than one source is the authority for pk:size on pk:Thing, so its value is in conflict.",
+      ),
+    ).toBeTruthy();
+    expect(within(section).getByText(/authority for pk:colour on pk:Thing ends 2026-12-12/)).toBeTruthy();
+  });
+
+  it("flags an authority whose source does not bind the value", async () => {
+    const section = (await show([asserted("pk:size", { source_id: "s-2" }), asserted("pk:colour")]))!;
+    expect(
+      within(section).getByText(
+        "The authority for pk:size on pk:Thing is a source with no binding for it, so it stays unresolved.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("ignores an assertion that has expired or not yet begun", async () => {
+    const section = (await show([
+      asserted("pk:size", { valid_to: "2026-01-02T00:00:00+00:00" }),
+      asserted("pk:colour", { valid_from: "2999-01-01T00:00:00+00:00" }),
+    ]))!;
+    expect(within(section).getByText(/No source is the authority for pk:colour, pk:size on pk:Thing/)).toBeTruthy();
+  });
+
+  it("says nothing when each bound value has one open-ended authority that binds it", async () => {
+    expect(await show([asserted("pk:size"), asserted("pk:colour")])).toBeNull();
   });
 });

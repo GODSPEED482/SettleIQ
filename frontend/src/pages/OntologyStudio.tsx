@@ -382,7 +382,7 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
       {draft && canReadMappings && (
         <PackBindings
           sets={packSets}
-          gaps={packGaps(packs, mappings)}
+          gaps={packGaps(packs, mappings, authority)}
           canEditMappings={canEditMappings}
           canEditAuthority={canEditAuthority}
           busy={busy}
