@@ -153,6 +153,9 @@ export function SourceCard({ source, manifest, permissions, api, busy, run }: Pr
         <WebhookForm
           busy={busy}
           eventTypes={eventTypes}
+          url={source.webhook_url}
+          // PayPal's dashboard needs a working app before it takes a webhook.
+          awaitingCredentials={takesCredential && !source.has_secret_reference}
           current={source.config.webhook}
           onRegister={async (webhookId, types) =>
             (await run(
@@ -458,16 +461,40 @@ function CredentialForm({
 function WebhookForm({
   busy,
   eventTypes,
+  url,
+  awaitingCredentials,
   current,
   onRegister,
 }: {
   busy: boolean;
   eventTypes: string[];
+  url: string | null;
+  awaitingCredentials: boolean;
   current?: { webhook_id: string; event_types: string[] };
   onRegister: (webhookId: string, types: string[]) => Promise<boolean>;
 }) {
   const [webhookId, setWebhookId] = useState(current?.webhook_id ?? "");
   const [checked, setChecked] = useState<string[]>(current?.event_types ?? []);
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  if (awaitingCredentials) {
+    return (
+      <div className="form inline">
+        <h4>Webhook registration</h4>
+        <p className="muted">Connect the app's credentials first. The webhook URL to register appears here.</p>
+      </div>
+    );
+  }
 
   function toggle(value: string) {
     setChecked((list) =>
@@ -487,6 +514,20 @@ function WebhookForm({
   return (
     <form className="form inline" onSubmit={(event) => void submit(event)}>
       <h4>Webhook registration</h4>
+      {url && (
+        <div className="webhook-url">
+          <p>
+            1. In the provider's dashboard, add a webhook with this URL and the event types below.
+          </p>
+          <p>
+            <code aria-label="Webhook URL">{url}</code>{" "}
+            <button type="button" className="secondary" onClick={() => void copy()}>
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </p>
+          <p>2. Enter the webhook ID the provider gives it.</p>
+        </div>
+      )}
       <label>
         Provider webhook ID
         <input

@@ -53,6 +53,8 @@ export type Source = {
   capabilities: DeclaredCapability[];
   status: string;
   has_secret_reference: boolean;
+  // Where the provider delivers this source's events; null when it receives none.
+  webhook_url: string | null;
   created_at: string;
   updated_at: string;
 };
