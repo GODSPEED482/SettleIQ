@@ -46,7 +46,12 @@ One shared tenant, created by real registration at `https://app.settleiq.dpdns.o
    - **`internal-merchant`.** URL `postgresql://settleiq_merchant_writer:<MERCHANT_WRITER_PASSWORD>@<private-ip>:5432/kitebase`, stored as `/settleiq/prod/source/<tenant_id>/KITEBASE_WRITE_URL` and referenced as `managed:KITEBASE_WRITE_URL`, with config `{"merchant_id": "kitebase"}`. It has no discovery or sync: it only carries PB-001's status correction.
    - Redeploy SettleIQ after adding the SSM parameters: `deploy.sh` renders source secrets only at deploy time.
 3. **Activate both packs** in Ontology Studio's **Domain packs** panel: `finops` (Financial Operations) and `saas` (SaaS Subscription Lifecycle). Do this before starting a draft: a draft composes the packs active when it starts, and generation proposes only terms the draft composes. Leave both execution-mode scopes on SHADOW.
-4. **Ontology and mappings.** **Start a draft**, then **Generate proposals** from discovery, then bind:
+4. **Ontology and mappings.** **Start a draft**, then **Generate proposals** from discovery.
+   - Each binding proposal names its class and carries a complete mapping, so **Accept all ready bindings** adds every proposal whose terms the draft holds. A proposal that leans on a proposed `tenant:` term waits until that term is accepted. Check the result against the table below and retire anything that disagrees.
+   - Under **Pack bindings**, **Apply finops bindings** to the PayPal source. This adds the pack's capture and refund bindings and makes PayPal the authority for capture status and amount.
+   - Validate, then publish. A run reads only published bindings: a published version with no bindings yields no cases.
+
+   The Kitebase bindings should be:
 
    | Kitebase column | Class and property | Transform |
    | --- | --- | --- |
@@ -61,7 +66,7 @@ One shared tenant, created by real registration at `https://app.settleiq.dpdns.o
    | `invoices.invoice_id`, `subscription_id` | `saas:Invoice` `saas:invoiceReference`, `saas:subscriptionReference` | identity |
    | `invoices.status`, `period_end` | `saas:status`, `saas:periodEnd` | upper, iso8601 |
 
-   The shop stores statuses in lower case (`active`, `paid`), so the SaaS status bindings must use `upper`. Make the Kitebase database the authority for the SaaS properties. Publish.
+   The shop stores statuses in lower case (`active`, `paid`), so status bindings use `upper`, which generated proposals apply to every status. Then **Sync** each source and press **Run finops** and **Run saas** under Domain Operations.
 5. **Judge accounts.** Invite the Domain Operator (who also holds an Approver grant, for the POL-01 denial) and the Approver. Put their sign-ins and the Sandbox buyer in the submission.
 6. **Rehearse** the Judge guide end to end, then press **Reset discrepancies** and return both scopes to SHADOW.
 

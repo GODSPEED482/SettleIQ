@@ -180,6 +180,18 @@ def test_shipped_packs_start_available_and_are_not_activated_by_default(member):
 
 
 @pytest.mark.db
+def test_pack_listing_carries_each_packs_mapping_hints(member):
+    packs = {pack["namespace"]: pack for pack in member.request("GET", "/api/domain-packs").json()}
+    hints = packs["finops"]["mapping_hints"]
+    assert {"kind": "authority", "connector_id": "paypal", "property_iri": "finops:lifecycleStatus",
+            "entity_type_iri": "finops:Capture"}.items() <= next(
+        hint for hint in hints if hint["kind"] == "authority").items()
+    assert any(hint["external_object"] == "captures.read" for hint in hints
+               if hint["kind"] == "binding")
+    assert packs["saas"]["mapping_hints"] == []
+
+
+@pytest.mark.db
 def test_two_compatible_packs_can_be_active_together(member):
     assert member.activate("finops").status_code == 200
     assert member.activate("saas").status_code == 200

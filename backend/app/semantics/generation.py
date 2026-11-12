@@ -16,6 +16,8 @@ from sqlalchemy import Connection, text
 from app.audit import write_audit
 from app.authz.guard import TenantContext
 from app.db import tenant_tx
+from app.domain.inputs import load_policy
+from app.domain_packs.manifest import load_domain_packs
 from app.errors import conflict, not_found
 from app.semantics.store import active_namespaces
 
@@ -60,11 +62,35 @@ class ProposedTerm(_Strict):
     evidence: list[ProposedEvidence] = Field(min_length=1)
 
 
+ValueKind = Literal["identifier", "status", "money", "timestamp", "code", "text"]
+
+# How each kind of value is read and compared. Bindings to one property must agree on these
+# (comparability_violations), so they are fixed here rather than chosen by the model; they follow
+# the conventions of the packs' own mapping hints.
+_VALUE_KINDS: dict[str, dict[str, str]] = {
+    "identifier": {"datatype": "string", "transform": "identity", "value_basis": "identifier",
+                   "temporal_context": "any"},
+    "status": {"datatype": "string", "transform": "upper", "value_basis": "status",
+               "temporal_context": "current"},
+    "money": {"datatype": "decimal", "transform": "decimal_string", "value_basis": "signed",
+              "temporal_context": "at_event"},
+    "timestamp": {"datatype": "datetime", "transform": "iso8601", "value_basis": "timestamp",
+                  "temporal_context": "at_event"},
+    "code": {"datatype": "string", "transform": "upper", "value_basis": "code",
+             "temporal_context": "any"},
+    "text": {"datatype": "string", "transform": "identity", "value_basis": "text",
+             "temporal_context": "any"},
+}
+
+
 class ProposedBinding(_Strict):
     source_id: str
     object: str
     field: str
     property: str
+    class_iri: str
+    value_kind: ValueKind
+    currency_field: str | None
     confidence: Literal["low", "medium", "high"]
     evidence: list[ProposedEvidence] = Field(min_length=1)
 
@@ -119,13 +145,46 @@ def load_discovered_metadata(conn: Connection) -> list[DiscoveredObject]:
     return [_discovered_object(row) for row in rows]
 
 
-def _composition_terms(conn: Connection, composition: list[dict[str, str]]) -> list[str]:
+_KINDS = {"owl:Class": "class", "owl:DatatypeProperty": "property",
+          "owl:ObjectProperty": "relationship"}
+
+
+def _composition_terms(
+    conn: Connection, composition: list[dict[str, str]]
+) -> list[dict[str, str | None]]:
+    """Each composed term with what a model needs to choose it: kind, label, domain, range."""
     hashes = [reference["content_hash"] for reference in composition]
     rows = conn.execute(
         text("SELECT content FROM ontology_artifacts WHERE content_hash = ANY(:hashes)"),
         {"hashes": hashes},
     ).all()
-    return sorted({node["@id"] for row in rows for node in row.content.get("@graph", [])})
+    nodes = {node["@id"]: node for row in rows for node in row.content.get("@graph", [])}
+    return [
+        {
+            "id": term_id,
+            "kind": _KINDS.get(str(node.get("@type")), "term"),
+            "label": node.get("rdfs:label"),
+            "domain": node.get("rdfs:domain"),
+            "range": node.get("rdfs:range"),
+        }
+        for term_id, node in sorted(nodes.items())
+    ]
+
+
+def _resolution(namespaces: list[str]) -> dict[str, Any]:
+    """The active packs' exact-ID rules (spec 7.2): the properties whose value identifies an
+    entity of each class, and the links made between entities sharing a value. Records from
+    different sources describe one entity only through these, so a binding meant to be compared
+    across sources, or linked to another entity, has to use them."""
+    packs = load_domain_packs()
+    identities: dict[str, list[str]] = {}
+    relationships: list[dict[str, str]] = []
+    for namespace in sorted(namespaces):
+        if namespace in packs:
+            policy = load_policy(packs[namespace])
+            identities |= policy.identities
+            relationships += policy.relationships
+    return {"identities": dict(sorted(identities.items())), "relationships": relationships}
 
 
 def enqueue_generation(ctx: TenantContext) -> dict[str, str]:
@@ -162,9 +221,12 @@ def enqueue_generation(ctx: TenantContext) -> dict[str, str]:
         if in_flight is not None:
             raise conflict("GENERATION_IN_PROGRESS", "A draft is already being generated.")
         job_id = uuid4()
+        details = _composition_terms(conn, draft.composition)
         payload = {
             "metadata": [item.model_dump() for item in metadata],
-            "known_terms": _composition_terms(conn, draft.composition),
+            "known_terms": [term["id"] for term in details],
+            "term_details": details,
+            "resolution": _resolution(active_namespaces(conn)),
         }
         conn.execute(
             text(
@@ -286,14 +348,39 @@ def _ground_binding(
     binding: ProposedBinding, metadata: list[DiscoveredObject], allowed: set[str]
 ) -> dict[str, Any]:
     target = _target(binding, metadata)
+    fields = {item.name: item for item in target.fields}
     field = binding.field.removeprefix(f"{target.object}.")
-    if field not in {item.name for item in target.fields}:
+    if field not in fields:
         raise UngroundedProposal(f"unknown field {binding.object}.{binding.field}")
     if binding.property not in allowed:
         raise UngroundedProposal(f"unknown property {binding.property}")
+    if binding.class_iri not in allowed:
+        raise UngroundedProposal(f"unknown class {binding.class_iri}")
+    currency = None
+    if binding.value_kind == "money":
+        currency = (binding.currency_field or "").removeprefix(f"{target.object}.")
+        if currency not in fields:
+            raise UngroundedProposal(f"no currency field for {binding.object}.{field}")
+    kind = _VALUE_KINDS[binding.value_kind]
+    # A complete mapping, so accepting the proposal is one action. It stays a proposal: the
+    # mapping route validates it again when a person accepts it.
+    mapping = {
+        "class_iri": binding.class_iri,
+        "datatype": kind["datatype"],
+        "transform": {"name": kind["transform"]},
+        "value_basis": kind["value_basis"],
+        "temporal_context": kind["temporal_context"],
+        "currency_field": currency,
+        "unit": None,
+        "nullable": fields[field].nullable,
+        "is_unique": fields[field].unique,
+        "sync_strategy": "batch",
+    }
     return binding.model_dump(exclude={"evidence"}) | {
         "source_id": target.source_id,
         "field": field,
+        "currency_field": currency,
+        "mapping": mapping,
         "type": "binding",
         "status": "PROPOSED",
         "basis": "inferred",

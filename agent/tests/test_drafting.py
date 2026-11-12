@@ -38,6 +38,23 @@ def test_draft_returns_a_structured_proposal():
     assert fake.requests[0].known_terms == []
 
 
+def test_draft_receives_term_details_and_resolution_rules():
+    fake = FakeDrafter()
+    resolution = {"identities": {"finops:Capture": ["finops:providerReference"]},
+                  "relationships": []}
+    body = BODY | {"term_details": [{"id": "finops:Capture", "kind": "class"}],
+                   "resolution": resolution}
+    assert post_with(fake, body).status_code == 200
+    assert fake.requests[0].resolution == resolution
+    assert fake.requests[0].term_details[0]["id"] == "finops:Capture"
+
+
+def test_prompt_asks_for_identity_properties_and_a_class_per_binding():
+    assert "resolution.identities" in SYSTEM_PROMPT
+    assert "class_iri" in SYSTEM_PROMPT
+    assert "value_kind" in SYSTEM_PROMPT
+
+
 def test_draft_refuses_unknown_request_fields():
     assert post_with(FakeDrafter(), BODY | {"tenant_id": "x"}).status_code == 422
 

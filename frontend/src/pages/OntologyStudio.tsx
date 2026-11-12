@@ -8,6 +8,8 @@ import { Authority, type AuthorityDraft } from "./ontology/Authority";
 import { bindingFromProposal, bindingKey, Bindings, type BindingDraft } from "./ontology/Bindings";
 import { Canvas } from "./ontology/Canvas";
 import { DomainPacks } from "./ontology/DomainPacks";
+import { PackBindings } from "./ontology/PackBindings";
+import { packBindingSets, type PackBindingSet } from "./ontology/packHints";
 import {
   collectTerms,
   proposalNode,
@@ -179,6 +181,32 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
     draft
       ? run(() => api.saveMapping({ ...binding, draft_id: draft.id }), "Binding saved.")
       : Promise.resolve(false);
+  const knownTerms = new Set(terms.map((term) => term.id));
+  // A proposal is ready to accept as it stands when it carries a complete mapping and names
+  // terms the draft holds; one leaning on an unaccepted proposed term waits for that term.
+  const ready = (proposal: BindingProposal) =>
+    !!proposal.mapping &&
+    knownTerms.has(proposal.property) &&
+    knownTerms.has(proposal.mapping.class_iri) &&
+    !bound.has(bindingKey(bindingFromProposal(proposal)));
+  const readyBindings = bindingProposals.filter(ready);
+
+  async function saveAll(bindings: BindingDraft[], assertions: AuthorityDraft[]) {
+    if (!draft) return;
+    for (const binding of bindings) await api.saveMapping({ ...binding, draft_id: draft.id });
+    for (const assertion of assertions) await api.saveAuthority({ ...assertion, draft_id: draft.id });
+  }
+
+  const packSets = draft
+    ? packBindingSets(packs, sources, mappings, authority, new Date().toISOString())
+    : [];
+  const applyPackBindings = (set: PackBindingSet) =>
+    void run(
+      () =>
+        saveAll(canEditMappings ? set.mappings : [], canEditAuthority ? set.authority : []),
+      `${set.namespace} bindings applied to ${set.source.display_name}.`,
+    );
+
   const saveAuthority = (assertion: AuthorityDraft) =>
     draft
       ? run(() => api.saveAuthority({ ...assertion, draft_id: draft.id }), "Authority assertion saved.")
@@ -275,6 +303,25 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
           accepted={(id) => inExtension.has(id)}
           canAccept={editable}
           busy={busy}
+          bindingToolbar={
+            canEditMappings &&
+            readyBindings.length > 0 && (
+              <div className="actions">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(
+                      () => saveAll(readyBindings.map(bindingFromProposal), []),
+                      `${readyBindings.length} proposed bindings accepted.`,
+                    )
+                  }
+                >
+                  Accept all {readyBindings.length} ready bindings
+                </button>
+              </div>
+            )
+          }
           bindingAction={(proposal) => {
             const key = bindingKey({
               source_id: proposal.source_id,
@@ -285,14 +332,25 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
             if (bound.has(key)) return <span className="badge">Bound</span>;
             if (!canEditMappings) return null;
             return (
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy}
-                onClick={() => setBindingPrefill(bindingFromProposal(proposal))}
-              >
-                Use as binding
-              </button>
+              <div className="actions">
+                {ready(proposal) && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void saveBinding(bindingFromProposal(proposal))}
+                  >
+                    Accept binding
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => setBindingPrefill(bindingFromProposal(proposal))}
+                >
+                  {ready(proposal) ? "Edit first" : "Use as binding"}
+                </button>
+              </div>
             );
           }}
           onAccept={(proposal) =>
@@ -318,6 +376,16 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
           onRetire={(mapping) =>
             void run(() => api.retireMapping(mapping.id), `${mapping.field_path} binding retired.`)
           }
+        />
+      )}
+
+      {draft && canReadSources && (canEditMappings || canEditAuthority) && (
+        <PackBindings
+          sets={packSets}
+          canEditMappings={canEditMappings}
+          canEditAuthority={canEditAuthority}
+          busy={busy}
+          onApply={applyPackBindings}
         />
       )}
 

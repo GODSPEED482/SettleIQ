@@ -56,12 +56,21 @@ export type TermProposal = {
   evidence: ProposalEvidence[];
 };
 
+// The rest of a mapping, filled by the server from the proposal's class and kind of value and
+// the discovered field. Proposals generated before it existed lack it.
+export type ProposedMapping = Omit<
+  MappingInput,
+  "draft_id" | "source_id" | "external_object" | "field_path" | "property_iri" | "method"
+>;
+
 export type BindingProposal = {
   type: "binding";
   source_id: string;
   object: string;
   field: string;
   property: string;
+  class_iri?: string;
+  mapping?: ProposedMapping;
   confidence: "low" | "medium" | "high";
   status: string;
   basis: Basis;
@@ -81,11 +90,41 @@ export type Draft = {
   proposals: Proposal[];
 };
 
+export type BindingHint = {
+  kind: "binding";
+  connector_id: string;
+  external_object: string;
+  class_iri: string;
+  sync_strategy: MappingInput["sync_strategy"];
+  fields: Pick<
+    MappingInput,
+    | "field_path"
+    | "property_iri"
+    | "datatype"
+    | "transform"
+    | "value_basis"
+    | "temporal_context"
+    | "currency_field"
+    | "unit"
+    | "nullable"
+    | "is_unique"
+  >[];
+};
+
+export type AuthorityHint = {
+  kind: "authority";
+  connector_id: string;
+  property_iri: string;
+  entity_type_iri: string;
+  verification_method: string;
+};
+
 export type DomainPack = {
   namespace: string;
   version: string;
   status: "ACTIVE" | "DISABLED" | "AVAILABLE" | string;
   case_types: string[];
+  mapping_hints?: (BindingHint | AuthorityHint)[];
 };
 
 export type GenerationJob = {

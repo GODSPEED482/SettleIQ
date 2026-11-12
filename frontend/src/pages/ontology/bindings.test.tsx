@@ -236,3 +236,168 @@ describe("authority editor", () => {
     expect(within(authority).queryByRole("form")).toBeNull();
   });
 });
+
+const COMPLETE = {
+  class_iri: "pk:Thing",
+  datatype: "decimal" as const,
+  transform: { name: "decimal_string" as const },
+  value_basis: "signed",
+  temporal_context: "at_event",
+  currency_field: "currency",
+  unit: null,
+  nullable: false,
+  is_unique: false,
+  sync_strategy: "batch" as const,
+};
+const proposed = (field: string, property: string) => ({
+  type: "binding" as const,
+  source_id: "s-1",
+  object: "items",
+  field,
+  property,
+  class_iri: "pk:Thing",
+  mapping: COMPLETE,
+  confidence: "high" as const,
+  status: "PROPOSED",
+  basis: "inferred" as const,
+  evidence: [{ kind: "field_profile" as const, field, detail: `${field} is a field.`, basis: "observed" as const }],
+});
+const withProposals = (proposals: unknown[]) => ({
+  "GET /api/ontology/drafts/open": { status: 200, body: { ...DRAFT, proposals } },
+});
+
+describe("complete binding proposals", () => {
+  it("accepts a complete proposal in one action, with every field the server filled", async () => {
+    const api = renderStudio(
+      EDIT,
+      routes({ ...withProposals([proposed("size", "pk:size")]), "POST /api/mappings": { status: 201, body: {} } }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Accept binding" }));
+    await screen.findByText("Binding saved.");
+    expect(api.sent("POST /api/mappings")).toEqual([
+      {
+        ...COMPLETE,
+        draft_id: "d-1",
+        source_id: "s-1",
+        external_object: "items",
+        field_path: "size",
+        property_iri: "pk:size",
+        method: "accepted_proposal",
+      },
+    ]);
+  });
+
+  it("accepts every ready proposal at once, leaving one that names a term the draft lacks", async () => {
+    const api = renderStudio(
+      EDIT,
+      routes({
+        ...withProposals([proposed("size", "pk:size"), proposed("length", "pk:size"), proposed("hue", "tenant:hue")]),
+        "POST /api/mappings": { status: 201, body: {} },
+      }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Accept all 2 ready bindings" }));
+    await screen.findByText("2 proposed bindings accepted.");
+    expect(api.sent("POST /api/mappings").map((body) => body.field_path)).toEqual(["size", "length"]);
+    const proposals = await panel("Generated proposals");
+    const hue = rowOf(proposals, "items.hue");
+    expect(within(hue).queryByRole("button", { name: "Accept binding" })).toBeNull();
+    expect(within(hue).getByRole("button", { name: "Use as binding" })).toBeTruthy();
+  });
+
+  it("offers only the editor for a proposal generated without a complete mapping", async () => {
+    renderStudio(EDIT, routes());
+    expect(await screen.findByRole("button", { name: "Use as binding" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Accept binding" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Accept all/ })).toBeNull();
+  });
+});
+
+const PACK = {
+  namespace: "pk",
+  version: "1.0.0",
+  status: "ACTIVE",
+  case_types: [],
+  mapping_hints: [
+    {
+      kind: "binding",
+      connector_id: "merchant-postgres",
+      external_object: "items",
+      class_iri: "pk:Thing",
+      sync_strategy: "batch",
+      fields: [
+        // Already on the draft as MAPPING, so not offered again.
+        { ...MAPPING, id: undefined, version: undefined, source_id: undefined },
+        {
+          field_path: "$.size",
+          property_iri: "pk:size",
+          datatype: "decimal",
+          transform: { name: "decimal_string" },
+          value_basis: "measured",
+          temporal_context: "as_of_read",
+          currency_field: null,
+          unit: "kg",
+          nullable: true,
+          is_unique: false,
+        },
+      ],
+    },
+    {
+      kind: "authority",
+      connector_id: "merchant-postgres",
+      property_iri: "pk:size",
+      entity_type_iri: "pk:Thing",
+      verification_method: "shop database row",
+    },
+  ],
+};
+
+describe("pack bindings", () => {
+  const packRoutes = (extra = {}) =>
+    routes({ "GET /api/domain-packs": { status: 200, body: [PACK] }, ...extra });
+
+  it("applies an active pack's bindings and authority to the source on its connector only", async () => {
+    const api = renderStudio(
+      [...EDIT, "domain_pack.read"],
+      packRoutes({
+        "POST /api/mappings": { status: 201, body: {} },
+        "POST /api/authority": { status: 201, body: {} },
+      }),
+    );
+    const section = await panel("Pack bindings");
+    expect(within(section).getByText(/pk for Shop DB: 1 bindings, 1 authority assertions/)).toBeTruthy();
+    expect(within(section).queryByText(/Bank files/)).toBeNull();
+    fireEvent.click(within(section).getByRole("button", { name: "Apply pk bindings to Shop DB" }));
+    await screen.findByText("pk bindings applied to Shop DB.");
+    expect(api.sent("POST /api/mappings")).toEqual([
+      expect.objectContaining({
+        draft_id: "d-1",
+        source_id: "s-1",
+        external_object: "items",
+        field_path: "$.size",
+        property_iri: "pk:size",
+        class_iri: "pk:Thing",
+        unit: "kg",
+        method: "accepted_proposal",
+      }),
+    ]);
+    expect(api.sent("POST /api/authority")).toEqual([
+      expect.objectContaining({
+        draft_id: "d-1",
+        source_id: "s-1",
+        property_iri: "pk:size",
+        entity_type_iri: "pk:Thing",
+        valid_to: null,
+        verification_method: "shop database row",
+      }),
+    ]);
+  });
+
+  it("offers nothing for a pack that is not active", async () => {
+    renderStudio(
+      [...EDIT, "domain_pack.read"],
+      routes({ "GET /api/domain-packs": { status: 200, body: [{ ...PACK, status: "AVAILABLE" }] } }),
+    );
+    await panel("Bindings");
+    expect(screen.queryByRole("region", { name: "Pack bindings" })).toBeNull();
+  });
+});

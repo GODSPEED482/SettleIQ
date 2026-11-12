@@ -10,6 +10,7 @@ export function Proposals({
   bindings,
   accepted,
   bindingAction,
+  bindingToolbar,
   canAccept,
   busy,
   onAccept,
@@ -18,6 +19,7 @@ export function Proposals({
   bindings: BindingProposal[];
   accepted: (id: string) => boolean;
   bindingAction?: (proposal: BindingProposal) => ReactNode;
+  bindingToolbar?: ReactNode;
   canAccept: boolean;
   busy: boolean;
   onAccept: (proposal: TermProposal) => void;
@@ -75,6 +77,7 @@ export function Proposals({
           </table>
         </div>
       )}
+      {bindings.length > 0 && bindingToolbar}
       {bindings.length > 0 && (
         <div className="table-wrap">
           <table>
@@ -95,6 +98,12 @@ export function Proposals({
                   </td>
                   <td>
                     <code>{proposal.property}</code>
+                    {proposal.class_iri && (
+                      <>
+                        {" "}
+                        on <code>{proposal.class_iri}</code>
+                      </>
+                    )}
                   </td>
                   <td>
                     <Evidence items={proposal.evidence} />

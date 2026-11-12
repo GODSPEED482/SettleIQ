@@ -38,6 +38,7 @@ const EMPTY: BindingDraft = {
 export function bindingFromProposal(proposal: BindingProposal): BindingDraft {
   return {
     ...EMPTY,
+    ...proposal.mapping,
     source_id: proposal.source_id,
     external_object: proposal.object,
     field_path: proposal.field,
