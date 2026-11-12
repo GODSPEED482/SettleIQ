@@ -120,6 +120,28 @@ def test_every_case_carries_what_ac_rec_08_requires(reconciled):
 
 
 @pytest.mark.db
+def test_a_corrected_row_is_read_as_its_source_last_reported_it():
+    """A re-synced row supersedes the source's earlier report of it, so once the merchant says
+    COMPLETED the PENDING it said before is history, not a mismatch (spec 5.5)."""
+    member = FinanceTenant()
+    member.ingest("merchant", "orders", {"order_id": "ORD-9"}, external_id="ORD-9")
+    member.ingest("paypal", "captures", capture("CAP-9", "ORD-9", "29.00"), external_id="CAP-9")
+    payment = {"paypal_capture_id": "CAP-9", "order_id": "ORD-9", "state": "pending",
+               "amount": "29.00", "currency": "USD"}
+    member.ingest("merchant", "payments", payment, external_id="PAY-9")
+    assert [f["case_type"] for f in member.run()["findings"]] == ["STATUS_MISMATCH"]
+
+    member.ingest("merchant", "payments", {**payment, "state": "completed"},
+                  external_id="PAY-9")
+    assert member.run()["findings"] == []
+    with scoped_tx(member.tenant) as conn:
+        kept = conn.execute(
+            text("SELECT count(*) FROM source_records WHERE external_id = 'PAY-9'")
+        ).scalar_one()
+    assert kept == 2  # the earlier report stays as history
+
+
+@pytest.mark.db
 def test_a_pending_capture_is_not_a_duplicate():
     member = FinanceTenant()
     member.ingest("merchant", "orders", {"order_id": "ORD-9"})

@@ -1,8 +1,8 @@
 """The version-pinned inputs of one domain run (spec 6.3: every run pins its versions).
 
 A run reads only what is pinned here: the latest published ontology, that version's mappings
-and authority assertions, the pack's identity policies and engine, and the source records
-ingested up to the cut. The same pins give the same inputs hash.
+and authority assertions, the pack's identity policies and engine, and the latest version of
+each source record ingested up to the cut. The same pins give the same inputs hash.
 """
 
 import re
@@ -155,16 +155,32 @@ def _published(conn: Connection, namespace: str) -> Any:
 
 
 def _records(conn: Connection, cut: datetime) -> list[Record]:
+    """Each source row as its source last reported it by the cut (spec 5.5).
+
+    A re-read row whose body changed is stored as a new record beside the old one, so history
+    is never rewritten. Only the latest of them is eligible: the source's earlier report of the
+    same row is superseded, not a second opinion to reconcile against. Records without an
+    external ID name no row, so each stands alone.
+    """
     rows = conn.execute(
         text(
             """
-            SELECT r.id, r.source_id, o.object_name, r.record_type, r.attributes,
-                r.raw_evidence_id,
-                r.payload_hash, r.occurred_at, r.observed_at
-            FROM source_records r
-            JOIN source_objects o ON o.tenant_id = r.tenant_id AND o.id = r.source_object_id
-            WHERE r.ingested_at <= :cut
-            ORDER BY r.ingested_at, r.id
+            SELECT id, source_id, object_name, record_type, attributes, raw_evidence_id,
+                payload_hash, occurred_at, observed_at
+            FROM (
+                SELECT DISTINCT ON (r.source_id, r.source_object_id,
+                        coalesce(r.external_id, r.id::text))
+                    r.id, r.source_id, o.object_name, r.record_type, r.attributes,
+                    r.raw_evidence_id, r.payload_hash, r.occurred_at, r.observed_at,
+                    r.ingested_at
+                FROM source_records r
+                JOIN source_objects o
+                    ON o.tenant_id = r.tenant_id AND o.id = r.source_object_id
+                WHERE r.ingested_at <= :cut
+                ORDER BY r.source_id, r.source_object_id, coalesce(r.external_id, r.id::text),
+                    r.observed_at DESC, r.ingested_at DESC, r.id DESC
+            ) latest
+            ORDER BY ingested_at, id
             """
         ),
         {"cut": cut},

@@ -71,10 +71,16 @@ export function packBindingSets(
 
 export type PackGap = { namespace: string; message: string };
 
-// What an active pack's run will skip given the draft's bindings: a bound class the pack does
-// not resolve, one nothing identifies, a property its shapes require, a link with its shared
-// value unbound on one side. Each still publishes; the run just finds nothing there.
-export function packGaps(packs: DomainPack[], mappings: Mapping[]): PackGap[] {
+// What an active pack's run will skip given the draft's bindings and authority: a bound class
+// the pack does not resolve, one nothing identifies, a property its shapes require, a link with
+// its shared value unbound on one side, and a bound value no single source is the authority for
+// (spec 5.6), which stays unresolved. Each still publishes; the run just finds nothing there.
+export function packGaps(
+  packs: DomainPack[],
+  mappings: Mapping[],
+  authority: Authority[] = [],
+  now: Date = new Date(),
+): PackGap[] {
   const has = (cls: string, property: string) =>
     mappings.some((row) => row.class_iri === cls && row.property_iri === property);
   const gaps: PackGap[] = [];
@@ -107,6 +113,48 @@ export function packGaps(packs: DomainPack[], mappings: Mapping[]): PackGap[] {
       if (!has(rule.subject, rule.via) || !has(rule.object, rule.via)) {
         add(`${rule.subject} links to ${rule.object} only through ${rule.via}, bound on both.`);
       }
+    }
+    // Identifying and linking values match records; they are never read as resolved values.
+    const matching = new Set([
+      ...Object.values(identities).flat(),
+      ...(pack.relationships ?? []).map((rule) => rule.via),
+    ]);
+    const read = new Map<string, Set<string>>();
+    for (const row of mappings) {
+      if (!identities[row.class_iri] || !row.property_iri.startsWith(`${pack.namespace}:`)) continue;
+      if (matching.has(row.property_iri)) continue;
+      const sources = read.get(`${row.class_iri}|${row.property_iri}`) ?? new Set<string>();
+      read.set(`${row.class_iri}|${row.property_iri}`, sources.add(row.source_id));
+    }
+    const unasserted = new Map<string, string[]>();
+    for (const [key, sources] of [...read].sort(([a], [b]) => a.localeCompare(b))) {
+      const [cls, property] = key.split("|");
+      const current = authority.filter(
+        (row) =>
+          row.entity_type_iri === cls &&
+          row.property_iri === property &&
+          new Date(row.valid_from) <= now &&
+          (row.valid_to === null || now < new Date(row.valid_to)),
+      );
+      if (current.length === 0) {
+        unasserted.set(cls, [...(unasserted.get(cls) ?? []), property]);
+      } else if (current.length > 1) {
+        add(`More than one source is the authority for ${property} on ${cls}, so its value is in conflict.`);
+      } else if (!sources.has(current[0].source_id)) {
+        add(`The authority for ${property} on ${cls} is a source with no binding for it, so it stays unresolved.`);
+      } else if (current[0].valid_to) {
+        add(
+          `The authority for ${property} on ${cls} ends ${current[0].valid_to.slice(0, 10)}; ` +
+            "after that its value is unresolved.",
+        );
+      }
+    }
+    for (const [cls, properties] of unasserted) {
+      add(
+        `No source is the authority for ${properties.join(", ")} on ${cls}, so ` +
+          `${properties.length > 1 ? "these values stay" : "its value stays"} unresolved and the run cannot read ` +
+          `${properties.length > 1 ? "them" : "it"}.`,
+      );
     }
   }
   return gaps;
