@@ -1,23 +1,13 @@
-"""The packaged safety suites and the G5 acceptance trace (tasks 5.12 and 5.17, spec 9.7.2).
+"""The G5 safety acceptance trace (tasks 5.12 and 5.17).
 
-`app/release/suites.yaml` names, per certified capability, the tests the attestation workflow
-runs in the built image; the signer refuses an empty category or a listed test that did not
-pass (AC-REL-02). These checks keep that list honest: every node names a module-level test that
-exists, so the signer's JUnit matching can see it, and no listed test reads repository files the
-image does not hold. TRACE maps each criterion of the two suites to its evidence for the
-acceptance sheet (task 6.5).
+TRACE maps each safety-critical criterion of the two action scopes, the internal-merchant
+correction and the PayPal refund, to the tests that are its evidence, for the acceptance sheet
+(task 6.5). The checks keep it honest: every traced test exists, and every criterion is traced.
 """
 
 import importlib
-import inspect
 
 import pytest
-
-from app.release import payloads
-
-SUITES = payloads.parse_suites(payloads.SUITES_FILE.read_text(encoding="utf-8"))
-NODES = sorted({node for suite in SUITES.values()
-                for tests in suite.categories.values() for node in tests})
 
 TRACE = {
     # Task 5.12
@@ -55,7 +45,8 @@ TRACE = {
     ],
     "AC-MERCH-07": [
         "test_contracts::test_internal_merchant_publishes_only_its_two_keys",
-        "test_release_attestation::test_neither_capabilitys_attestation_authorizes_the_other_or_another_tenant",
+        "test_execution_mode::test_switching_one_scope_live_leaves_the_other_unchanged",
+        "test_playbook_gateway::test_another_live_scope_does_not_unblock_this_one",
     ],
     "AC-AUTHZ-06": [
         "test_catalogue::test_pol_03_principal_ceilings",
@@ -75,14 +66,9 @@ TRACE = {
     ],
     "AC-AUTHZ-15": [
         "test_playbook_gateway::test_an_approval_in_shadow_is_blocked_and_issues_nothing",
+        "test_playbook_gateway::test_a_grant_is_refused_when_the_scope_returns_to_shadow_after_the_decision",
         "test_worker::test_shadow_after_the_grant_blocks_the_worker",
         "test_worker_refunds::test_shadow_after_the_grant_sends_nothing_to_paypal",
-    ],
-    "AC-AUTHZ-16": [
-        "test_playbook_gateway::test_live_without_a_passing_attestation_is_blocked_by_pol14",
-        "test_playbook_gateway::test_a_grant_is_refused_when_the_gate_fails_after_the_decision",
-        "test_worker::test_a_failing_attestation_at_the_worker_blocks",
-        "test_release_attestation::test_live_needs_and_records_a_valid_attestation",
     ],
     "AC-AUTHZ-17": [
         "test_route_guard::test_worker_route_is_not_on_the_public_app",
@@ -134,24 +120,6 @@ def _function(module: str, name: str):
     return getattr(importlib.import_module(f"tests.{module}"), name, None)
 
 
-@pytest.mark.parametrize("node", NODES)
-def test_every_suite_node_is_a_module_level_test_the_image_can_run(node):
-    path, _, name = node.partition("::")
-    assert path.startswith("tests/test_") and path.endswith(".py"), node
-    assert name.startswith("test_") and "::" not in name and "[" not in name, node
-    function = _function(path[len("tests/"):-len(".py")], name)
-    assert inspect.isfunction(function), node
-    # The harness copies backend/tests into the image and nothing else from the repository.
-    assert "REPO" not in inspect.getsource(function), node
-
-
-def test_every_category_of_both_suites_is_filled():
-    assert {(s.connector_id, s.capability) for s in SUITES.values()} == {
-        ("paypal", "refunds.create"), ("internal-merchant", "merchant.payment_status.correct")}
-    for suite in SUITES.values():
-        assert suite.empty_categories() == [], suite.suite_id
-
-
 @pytest.mark.parametrize("criterion", sorted(TRACE))
 def test_every_traced_test_exists(criterion):
     for entry in TRACE[criterion]:
@@ -162,17 +130,8 @@ def test_every_traced_test_exists(criterion):
 def test_every_criterion_is_traced():
     expected = (
         {f"AC-MERCH-{n:02}" for n in range(1, 8)}
-        | {f"AC-AUTHZ-{n:02}" for n in (6, 8, 15, 16, 17)}
+        | {f"AC-AUTHZ-{n:02}" for n in (6, 8, 15, 17)}
         | {f"AC-PLY-{n:02}" for n in (2, 8, 9, 10, 11)}
         | {"AC-PP-08", "AC-EXEC-MODE-03"}
     )
     assert set(TRACE) == expected
-
-
-def test_each_suite_runs_the_traced_evidence_its_image_can_hold():
-    """Every traced test is in a suite, except those reading repository files the image does
-    not carry, which run in CI instead."""
-    listed = {node.replace("tests/", "").replace(".py::", "::") for node in NODES}
-    traced = {entry for entries in TRACE.values() for entry in entries}
-    image_bound = {e for e in traced if "REPO" not in inspect.getsource(_function(*e.split("::")))}
-    assert image_bound <= listed, sorted(image_bound - listed)

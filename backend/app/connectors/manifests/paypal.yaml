@@ -47,7 +47,6 @@ capabilities:
       required: [refund_id]
       properties:
         refund_id: {type: string}
-  # Safety suite: paypal-refunds-create in app/release/suites.yaml (task 5.17).
   - key: refunds.create
     version: 1.0.0
     parameters:

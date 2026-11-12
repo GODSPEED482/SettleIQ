@@ -102,10 +102,10 @@ def insert_grant(conn, tenant: UUID, chain: dict, *, target: str = TARGET,
             INSERT INTO execution_grants (id, tenant_id, execution_id, request_id,
                 request_policy_decision_id, execution_policy_decision_id, approval_id,
                 playbook_version, connector_id, action_capability, target, idempotency_key,
-                permission_keys, token_hash, attestation_id, expires_at)
+                permission_keys, token_hash, expires_at)
             VALUES (:id, :t, :execution, :request, :req_decision, :exe_decision, :approval,
                 '1.0.0', 'internal-merchant', 'merchant.payment_status.correct', :target, :key,
-                ARRAY['playbook.execute'], :hash, 'att-1', now() + :expires_in)
+                ARRAY['playbook.execute'], :hash, now() + :expires_in)
             """
         ),
         {"id": grant_id, "t": tenant, "execution": chain["execution"],

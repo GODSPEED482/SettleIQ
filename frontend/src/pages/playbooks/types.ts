@@ -31,7 +31,6 @@ export type PolicyDecision = {
   decision: string;
   conditions: { proof?: Record<string, unknown> } & Record<string, unknown>;
   reason: string | null;
-  attestation_id: string | null;
   created_at: string;
 };
 
@@ -101,7 +100,6 @@ export type Readiness = {
   connector_id: string;
   action_capability: string;
   mode: "SHADOW" | "LIVE";
-  release_gate: { passes: boolean; failing_check: string | null };
 };
 
 export type AuditRecord = {

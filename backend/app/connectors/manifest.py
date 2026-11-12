@@ -7,7 +7,7 @@ need; packs reference keys without versions, so negotiation is by presence.
 Lifecycle: a source is pinned to the manifest version it was registered with and is never
 silently upgraded. Minor and patch versions are additive only; a different major version, or
 a manifest older than the source, fails closed. This build has no upgrade route: disable the
-source and register it again. Any manifest change also voids the POL-14 attestation (9.7).
+source and register it again.
 """
 
 from collections.abc import Iterable

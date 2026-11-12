@@ -47,7 +47,6 @@ const REQUEST: PlaybookRequest = {
       decision: "NEEDS_APPROVAL",
       conditions: { proof: PROOF },
       reason: "PB-002 always requires approval.",
-      attestation_id: null,
       created_at: "2026-11-11T10:00:00Z",
     },
   ],
@@ -75,8 +74,7 @@ const APPROVED: PlaybookRequest = {
       parent_decision_id: "pd-1",
       decision: "ALLOW",
       conditions: {},
-      reason: "Preconditions, target, connector action, mode and release gate hold.",
-      attestation_id: "at-1",
+      reason: "Preconditions, target, connector action and mode hold.",
     },
   ],
   approval: {
@@ -140,7 +138,6 @@ const SHADOW: Readiness = {
   connector_id: "paypal",
   action_capability: "refunds.create",
   mode: "SHADOW",
-  release_gate: { passes: false, failing_check: "mode" },
 };
 
 type Grant = string | { key: string; scopes?: string[]; denied?: string[] };
@@ -332,7 +329,7 @@ describe("PlaybookRequests", () => {
           execution: null,
           decisions: [
             APPROVED.decisions[0],
-            { ...APPROVED.decisions[1], decision: "POLICY_BLOCKED", attestation_id: null },
+            { ...APPROVED.decisions[1], decision: "POLICY_BLOCKED" },
           ],
         },
       },

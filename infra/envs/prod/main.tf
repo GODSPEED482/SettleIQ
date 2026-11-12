@@ -121,41 +121,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "releases" {
   }
 }
 
-# ---------- release attestations (spec 9.7.5): write-once, no principal can delete ----------
-# COMPLIANCE mode cannot be shortened or removed by any account principal, root included, for
-# the lock period. Envelopes are stored by content hash; revocation/latest.json gets a new
-# version per run, and every version stays locked.
-resource "aws_s3_bucket" "attestations" {
-  bucket              = "${local.name}-attestations-${local.account_id}"
-  object_lock_enabled = true
-}
-
-resource "aws_s3_bucket_versioning" "attestations" {
-  bucket = aws_s3_bucket.attestations.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_object_lock_configuration" "attestations" {
-  bucket = aws_s3_bucket.attestations.id
-  rule {
-    default_retention {
-      mode = "COMPLIANCE"
-      days = 30
-    }
-  }
-  depends_on = [aws_s3_bucket_versioning.attestations]
-}
-
-resource "aws_s3_bucket_public_access_block" "attestations" {
-  bucket                  = aws_s3_bucket.attestations.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
 # ---------- runtime config: placeholders only, values set out-of-band ----------
 resource "aws_ssm_parameter" "secret" {
   for_each = toset(var.secret_names)
@@ -203,11 +168,6 @@ data "aws_iam_policy_document" "host_inline" {
     sid       = "WriteBackups"
     actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.releases.arn}/backups/*"]
-  }
-  statement {
-    sid       = "ReadAttestations"
-    actions   = ["s3:GetObject", "s3:GetObjectVersion", "s3:ListBucket"]
-    resources = [aws_s3_bucket.attestations.arn, "${aws_s3_bucket.attestations.arn}/*"]
   }
   statement {
     sid     = "ReadRuntimeConfig"
@@ -412,56 +372,4 @@ data "aws_iam_policy_document" "deploy" {
 resource "aws_iam_role_policy" "gha_deploy" {
   role   = aws_iam_role.gha_deploy.id
   policy = data.aws_iam_policy_document.deploy.json
-}
-
-# ---------- attestation role for GitHub Actions (spec 9.7.4) ----------
-# Trusted only for jobs in the `release-publish` environment, which allows only the prod
-# branch: attest.yml's prepare and publish jobs. The signing job uses `release-attestation`,
-# which this trust refuses, so the job holding the key can reach no cloud role.
-data "aws_iam_policy_document" "attest_trust" {
-  statement {
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-    principals {
-      type        = "Federated"
-      identifiers = [data.aws_iam_openid_connect_provider.github.arn]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${var.github_oidc_sub_prefix}:environment:release-publish"]
-    }
-  }
-}
-
-resource "aws_iam_role" "gha_attest" {
-  name               = "${local.name}-gha-attest"
-  assume_role_policy = data.aws_iam_policy_document.attest_trust.json
-}
-
-data "aws_iam_policy_document" "attest" {
-  statement {
-    sid       = "EcrAuth"
-    actions   = ["ecr:GetAuthorizationToken"]
-    resources = ["*"]
-  }
-  statement {
-    sid       = "PullApiImage"
-    actions   = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability"]
-    resources = [aws_ecr_repository.svc["api"].arn]
-  }
-  statement {
-    sid       = "WriteOnceEnvelopes"
-    actions   = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"]
-    resources = [aws_s3_bucket.attestations.arn, "${aws_s3_bucket.attestations.arn}/*"]
-  }
-}
-
-resource "aws_iam_role_policy" "gha_attest" {
-  role   = aws_iam_role.gha_attest.id
-  policy = data.aws_iam_policy_document.attest.json
 }

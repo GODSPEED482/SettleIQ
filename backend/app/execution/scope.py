@@ -60,7 +60,7 @@ def exact_scope(conn: Connection, tenant_id: UUID, body: ScopeBody) -> ExactScop
 
 def playbook_scope(conn: Connection, tenant_id: UUID, playbook: Playbook) -> ExactScope:
     """The one exact scope a playbook's action runs under. Each playbook names its own connector
-    and capability, so PB-001 and PB-002 never share a mode or an attestation."""
+    and capability, so PB-001 and PB-002 never share a mode."""
     action = playbook.definition.action
     return exact_scope(conn, tenant_id, ScopeBody(
         domain_pack_id=playbook.pack.namespace, connector_id=action.connector_id,

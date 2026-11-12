@@ -18,11 +18,3 @@ output "release_bucket" {
 output "deploy_role_arn" {
   value = aws_iam_role.gha_deploy.arn
 }
-
-output "attest_bucket" {
-  value = aws_s3_bucket.attestations.bucket
-}
-
-output "attest_role_arn" {
-  value = aws_iam_role.gha_attest.arn
-}

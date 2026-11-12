@@ -1,21 +1,20 @@
-"""Exact-scope execution mode (task 5.3; spec 9.5, AC-EXEC-MODE-01, 02, AC-AUTHZ-16).
+"""Exact-scope execution mode (task 5.3; spec 9.5, AC-EXEC-MODE-01, 02, 03).
 
-An absent scope is SHADOW, with no inheritance. The API accepts only an exact, declared scope.
-LIVE needs a POL-14 verdict for that exact scope; SHADOW never does. Every switch is audited.
+An absent scope is SHADOW, with no inheritance. The API accepts only an exact, declared scope,
+and a holder of `execution_mode.manage` switches it in either direction. Every switch is
+audited.
 """
 
 from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import DBAPIError
 
 from app.db import scoped_tx
 from app.domain_packs.playbooks import get_playbooks
 from app.execution.mode import resolve_mode
 from app.execution.scope import ExactScope, playbook_scope
-from app.release import verifier
-from app.release.verifier import Verdict
 from tests.support import add_member, grant_set, make_user
 from tests.test_semantics_store import Member
 
@@ -49,21 +48,6 @@ def put(member: Member, body: dict, mode: str):
     return member.request("PUT", path, json={**body, "mode": mode})
 
 
-@pytest.fixture
-def attested(monkeypatch):
-    """A verifier that accepts exactly one scope, as a real attestation would."""
-    attestation = uuid4()
-
-    def verify(conn, scope):
-        if (scope.connector_id, scope.action_capability) == (MERCHANT["connector_id"],
-                                                             MERCHANT["action_capability"]):
-            return Verdict(True, None, attestation)
-        return Verdict(False, "CAPABILITY_MEMBERSHIP")
-
-    monkeypatch.setattr(verifier, "verify", verify)
-    return attestation
-
-
 def audits(tenant: UUID, action: str) -> list[dict]:
     with scoped_tx(tenant) as conn:
         return list(conn.execute(
@@ -86,13 +70,12 @@ def test_no_broader_or_sibling_row_is_inherited(owner):
             text(
                 """
                 INSERT INTO execution_mode_settings (id, tenant_id, domain_pack_id,
-                    domain_pack_version, connector_id, action_capability, mode, attestation_id,
-                    changed_by)
+                    domain_pack_version, connector_id, action_capability, mode, changed_by)
                 VALUES (:id, :t, 'finops', '0.2.0', 'internal-merchant', 'merchant.payment.read',
-                    'LIVE', :a, :u)
+                    'LIVE', :u)
                 """
             ),
-            {"id": uuid4(), "t": owner.tenant, "a": uuid4(), "u": owner.principal.id},
+            {"id": uuid4(), "t": owner.tenant, "u": owner.principal.id},
         )
     assert mode_of(owner.tenant, MERCHANT) == "SHADOW"
 
@@ -128,33 +111,19 @@ def test_an_unknown_mode_is_rejected(owner):
 # Switching
 
 
-def test_shadow_needs_no_attestation_and_is_audited(owner):
+def test_shadow_is_audited(owner):
     response = put(owner, MERCHANT, "SHADOW")
     assert response.status_code == 200, response.text
-    assert response.json()["attestation_id"] is None
     [detail] = audits(owner.tenant, "execution_mode.changed")
     assert (detail["from"], detail["to"], detail["connector_id"]) == ("SHADOW", "SHADOW",
                                                                       "internal-merchant")
 
 
-def test_live_without_an_attestation_is_denied_and_audited(owner):
-    response = put(owner, MERCHANT, "LIVE")
-    assert response.status_code == 403
-    error = response.json()["error"]
-    assert (error["code"], error["policy"], error["check"]) == ("POLICY_DENIED", "POL-14",
-                                                                "SIGNATURE")
-    assert mode_of(owner.tenant, MERCHANT) == "SHADOW"
-    [denied] = audits(owner.tenant, "execution_mode.live_denied")
-    assert (denied["policy"], denied["action_capability"]) == ("POL-14",
-                                                               "merchant.payment_status.correct")
-
-
-def test_live_records_the_attestation_and_shadow_clears_it(owner, attested):
+def test_the_tenant_switches_live_and_back_without_any_release_attestation(owner):
     response = put(owner, MERCHANT, "LIVE")
     assert response.status_code == 200, response.text
-    assert response.json()["attestation_id"] == str(attested)
-    with scoped_tx(owner.tenant) as conn:
-        assert resolve_mode(conn, scope_of(owner.tenant, MERCHANT)).attestation_id == attested
+    assert response.json()["previous_mode"] == "SHADOW"
+    assert mode_of(owner.tenant, MERCHANT) == "LIVE"
     back = put(owner, MERCHANT, "SHADOW")
     assert back.json()["previous_mode"] == "LIVE"
     assert mode_of(owner.tenant, MERCHANT) == "SHADOW"
@@ -162,25 +131,7 @@ def test_live_records_the_attestation_and_shadow_clears_it(owner, attested):
                                                                                  "SHADOW"]
 
 
-def test_an_attestation_for_one_scope_does_not_switch_another(owner, attested):
-    response = put(owner, REFUND, "LIVE")
-    assert response.status_code == 403
-    assert response.json()["error"]["check"] == "CAPABILITY_MEMBERSHIP"
-
-
 # AC-EXEC-MODE-03: PB-001's merchant correction and PB-002's refund are independent (task 5.14)
-
-
-@pytest.fixture
-def both_attested(monkeypatch) -> dict[str, UUID]:
-    """A verifier with a separate attestation per capability, as POL-14 issues them."""
-    attestations = {MERCHANT["action_capability"]: uuid4(), REFUND["action_capability"]: uuid4()}
-
-    def verify(conn, scope):
-        return Verdict(True, None, attestations[scope.action_capability])
-
-    monkeypatch.setattr(verifier, "verify", verify)
-    return attestations
 
 
 def test_each_playbook_runs_under_its_own_scope(owner):
@@ -193,26 +144,20 @@ def test_each_playbook_runs_under_its_own_scope(owner):
 
 
 @pytest.mark.parametrize(("switched", "other"), [(MERCHANT, REFUND), (REFUND, MERCHANT)])
-def test_switching_one_scope_live_leaves_the_other_unchanged(owner, both_attested, switched,
-                                                             other):
+def test_switching_one_scope_live_leaves_the_other_unchanged(owner, switched, other):
     response = put(owner, switched, "LIVE")
     assert response.status_code == 200, response.text
-    assert response.json()["attestation_id"] == str(
-        both_attested[switched["action_capability"]])
     assert mode_of(owner.tenant, switched) == "LIVE"
     assert mode_of(owner.tenant, other) == "SHADOW"
 
 
 @pytest.mark.parametrize(("returned", "other"), [(MERCHANT, REFUND), (REFUND, MERCHANT)])
-def test_returning_one_scope_to_shadow_leaves_the_other_live(owner, both_attested, returned,
-                                                             other):
+def test_returning_one_scope_to_shadow_leaves_the_other_live(owner, returned, other):
     assert put(owner, MERCHANT, "LIVE").status_code == 200
     assert put(owner, REFUND, "LIVE").status_code == 200
     assert put(owner, returned, "SHADOW").status_code == 200
     assert mode_of(owner.tenant, returned) == "SHADOW"
-    with scoped_tx(owner.tenant) as conn:
-        kept = resolve_mode(conn, scope_of(owner.tenant, other))
-    assert (kept.mode, kept.attestation_id) == ("LIVE", both_attested[other["action_capability"]])
+    assert mode_of(owner.tenant, other) == "LIVE"
 
 
 def test_only_execution_mode_manage_may_switch(owner):
@@ -227,7 +172,7 @@ def test_only_execution_mode_manage_may_switch(owner):
     assert response.json()["error"]["code"] == "MISSING_PERMISSION"
 
 
-def test_another_tenants_live_row_is_invisible(owner, attested):
+def test_another_tenants_live_row_is_invisible(owner):
     assert put(owner, MERCHANT, "LIVE").status_code == 200
     other = Member()
     other.activate("finops")
@@ -237,18 +182,20 @@ def test_another_tenants_live_row_is_invisible(owner, attested):
 # The table itself
 
 
-def test_live_needs_an_attestation_id_in_the_database(owner):
-    with pytest.raises(IntegrityError), scoped_tx(owner.tenant) as conn:
-        conn.execute(
+def test_no_release_attestation_remains_in_the_schema(owner):
+    """Spec v1.8 (CHG-1.8-01) removed POL-14: no release table or attestation column is left
+    for the execution path to depend on."""
+    with scoped_tx(owner.tenant) as conn:
+        left = conn.execute(
             text(
+                r"""
+                SELECT table_name, column_name FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND (table_name LIKE 'release\_%' OR column_name LIKE '%attestation%')
                 """
-                INSERT INTO execution_mode_settings (id, tenant_id, domain_pack_id,
-                    domain_pack_version, connector_id, action_capability, mode, changed_by)
-                VALUES (:id, :t, 'finops', '0.2.0', 'paypal', 'refunds.create', 'LIVE', :u)
-                """
-            ),
-            {"id": uuid4(), "t": owner.tenant, "u": owner.principal.id},
-        )
+            )
+        ).all()
+    assert left == []
 
 
 def test_a_row_keeps_its_exact_scope(owner):

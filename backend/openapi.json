@@ -879,7 +879,7 @@
           "tenants"
         ],
         "summary": "Set Execution Mode",
-        "description": "Set one exact scope to SHADOW or LIVE. LIVE needs a POL-14 attestation for that scope.\nAfter a LIVE switch, requests that scope blocked are evaluated again (spec 18 steps 12-15).",
+        "description": "Set one exact scope to SHADOW or LIVE. After a LIVE switch, requests that scope blocked\nare evaluated again (spec 18 steps 12-15).",
         "operationId": "set_execution_mode_api_tenants__tenant_id__execution_mode_put",
         "requestBody": {
           "content": {
@@ -923,7 +923,7 @@
           "tenants"
         ],
         "summary": "Execution Readiness",
-        "description": "Each exact scope's mode, and whether a stored attestation passes the ten POL-14 checks,\nnaming the failing one. The image digest comes from the runtime-identity service only.",
+        "description": "Each exact scope the tenant's active packs declare, and its mode.",
         "operationId": "execution_readiness_api_tenants__tenant_id__execution_readiness_get",
         "responses": {
           "200": {

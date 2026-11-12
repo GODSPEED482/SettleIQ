@@ -1,8 +1,7 @@
 """The two-stage policy gateway through its routes (task 5.2).
 
 AC-PLY-01, 04, 08, 09; AC-AUTHZ-04 (POL-01), 08 (grant binding), 14 (audit with policy IDs),
-15 (SHADOW); AC-EXEC-MODE-04; AC-REL-11. The release verifier is replaced per test, as in
-test_execution_mode.py; test_release_attestation.py covers the verifier itself.
+15 (SHADOW); AC-EXEC-MODE-04.
 """
 
 import hashlib
@@ -15,8 +14,6 @@ from sqlalchemy import text
 from app.authz.access import Principal, PrincipalKind
 from app.db import scoped_tx
 from app.playbooks import gateway
-from app.release import verifier
-from app.release.verifier import Verdict
 from tests.support import add_member, grant_set, make_user
 from tests.test_paypal_mappings import PayPalTenant, paypal_capture, pending
 from tests.test_semantics_store import Member
@@ -58,24 +55,6 @@ def granted(monkeypatch) -> list[gateway.ExecutionDispatch]:
     sent: list[gateway.ExecutionDispatch] = []
     monkeypatch.setattr(gateway, "dispatch", sent.append)
     return sent
-
-
-@pytest.fixture
-def attest(monkeypatch):
-    """Make `verify` pass for the named capabilities only, each with its own attestation."""
-
-    def install(*capabilities: str) -> dict[str, UUID]:
-        ids = {capability: uuid4() for capability in capabilities}
-
-        def verify(conn, scope):
-            if scope.action_capability in ids:
-                return Verdict(True, None, ids[scope.action_capability])
-            return Verdict(False, "SIGNATURE")
-
-        monkeypatch.setattr(verifier, "verify", verify)
-        return ids
-
-    return install
 
 
 def status_case(tenant: PayPalTenant) -> UUID:
@@ -291,12 +270,10 @@ def test_an_approval_in_shadow_is_blocked_and_issues_nothing(shadow, approver, g
     assert granted == []
 
 
-def test_live_reevaluates_the_approved_request_and_binds_one_grant(shadow, approver, attest,
-                                                                     granted):
+def test_live_reevaluates_the_approved_request_and_binds_one_grant(shadow, approver, granted):
     """AC-PLY-08, AC-PLY-09, AC-AUTHZ-08, demo steps 12-13."""
     request = create(shadow, status_case(shadow)).json()
     approve(approver, request["id"])
-    attestation = attest(MERCHANT["action_capability"])[MERCHANT["action_capability"]]
     switched = put_mode(shadow, MERCHANT, "LIVE")
     assert switched.status_code == 200, switched.text
     assert request["id"] in switched.json()["reevaluated_requests"]
@@ -306,7 +283,6 @@ def test_live_reevaluates_the_approved_request_and_binds_one_grant(shadow, appro
     request_decision, blocked, allowed = body["decisions"]
     assert (blocked["decision"], allowed["decision"]) == ("POLICY_BLOCKED", "ALLOW")
     assert allowed["parent_decision_id"] == request_decision["id"]
-    assert allowed["attestation_id"] == str(attestation)
     execution = body["execution"]
     assert execution["execution_policy_decision_id"] == allowed["id"]
     assert execution["request_policy_decision_id"] == request_decision["id"]
@@ -326,47 +302,30 @@ def test_live_reevaluates_the_approved_request_and_binds_one_grant(shadow, appro
     assert str(grant.approval_id) == body["approval"]["id"]
     assert grant.target == body["target"]
     assert grant.idempotency_key == execution["idempotency_key"]
-    assert grant.attestation_id == str(attestation)
     assert grant.consumed_at is None and grant.expires_at > grant.issued_at
     assert list(grant.permission_keys) == gateway.GRANT_PERMISSIONS
 
 
-def test_another_live_scope_does_not_unblock_this_one(shadow, approver, attest, granted):
+def test_another_live_scope_does_not_unblock_this_one(shadow, approver, granted):
     """AC-EXEC-MODE-04: refunds.create LIVE leaves PB-001's merchant scope SHADOW."""
-    attest(REFUND["action_capability"])
     assert put_mode(shadow, REFUND, "LIVE").status_code == 200
     body = approve(approver, create(shadow, status_case(shadow)).json()["id"]).json()
     assert body["decisions"][-1]["conditions"]["policy"] == "POL-06"
     assert body["execution"] is None and granted == []
 
 
-def test_live_without_a_passing_attestation_is_blocked_by_pol14(shadow, approver, attest,
-                                                               granted):
-    attest(MERCHANT["action_capability"])
+def test_a_grant_is_refused_when_the_scope_returns_to_shadow_after_the_decision(
+        shadow, approver, granted, monkeypatch):
+    """Spec 9.5: the mode is checked again at grant issue."""
     assert put_mode(shadow, MERCHANT, "LIVE").status_code == 200
     granted.clear()  # Grants for requests earlier tests left blocked.
-    attest()  # The attestation stops verifying, e.g. it expired or was revoked.
-    body = approve(approver, create(shadow, status_case(shadow)).json()["id"]).json()
-    blocked = body["decisions"][-1]
-    assert blocked["decision"] == "POLICY_BLOCKED"
-    assert (blocked["conditions"]["policy"], blocked["conditions"]["check"]) == ("POL-14",
-                                                                                 "SIGNATURE")
-    assert granted == []
-
-
-def test_a_grant_is_refused_when_the_gate_fails_after_the_decision(shadow, approver, attest,
-                                                                   granted, monkeypatch):
-    """Spec 9.5: the mode and POL-14 are checked again at grant issue."""
-    attest(MERCHANT["action_capability"])
-    assert put_mode(shadow, MERCHANT, "LIVE").status_code == 200
-    granted.clear()  # Grants for requests earlier tests left blocked.
-    real = gateway._release_gate
+    real = gateway.in_shadow
     calls = count()
 
     def gate(conn, scope):
-        return real(conn, scope) if next(calls) == 0 else ("POL-14", "REVOCATION", None)
+        return real(conn, scope) if next(calls) == 0 else True
 
-    monkeypatch.setattr(gateway, "_release_gate", gate)
+    monkeypatch.setattr(gateway, "in_shadow", gate)
     body = approve(approver, create(shadow, status_case(shadow)).json()["id"]).json()
     assert body["execution"]["status"] == "POLICY_BLOCKED"
     assert count_rows(shadow, "execution_grants", body["id"]) == 0
@@ -375,10 +334,9 @@ def test_a_grant_is_refused_when_the_gate_fails_after_the_decision(shadow, appro
 
 @pytest.mark.parametrize("change", ["ineligible", "target"])
 def test_a_changed_precondition_or_target_denies_and_returns_the_case(shadow, approver,
-                                                                      attest, granted,
-                                                                      monkeypatch, change):
-    """AC-REL-11: a valid attestation does not survive a changed intent."""
-    attest(MERCHANT["action_capability"])
+                                                                      granted, monkeypatch,
+                                                                      change):
+    """AC-EXEC-MODE-04: LIVE does not survive a changed intent."""
     assert put_mode(shadow, MERCHANT, "LIVE").status_code == 200
     granted.clear()  # Grants for requests earlier tests left blocked.
     case_id = status_case(shadow)
@@ -400,8 +358,7 @@ def test_a_changed_precondition_or_target_denies_and_returns_the_case(shadow, ap
     assert granted == []
 
 
-def test_without_required_approval_the_request_goes_straight_to_execution(shadow, attest,
-                                                                          granted):
+def test_without_required_approval_the_request_goes_straight_to_execution(shadow, granted):
     """AC-PLY-08: NOT_REQUIRED comes only from recorded tenant policy, and then approval_id
     is NULL on the execution and its grant."""
     with scoped_tx(shadow.tenant) as conn:
@@ -420,7 +377,6 @@ def test_without_required_approval_the_request_goes_straight_to_execution(shadow
             {"id": uuid4(), "t": shadow.tenant, "v": version, "u": shadow.principal.id},
         )
     try:
-        attest(MERCHANT["action_capability"])
         assert put_mode(shadow, MERCHANT, "LIVE").status_code == 200
         body = create(shadow, status_case(shadow)).json()
         request_decision, allowed = body["decisions"]

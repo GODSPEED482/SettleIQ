@@ -23,8 +23,6 @@ from app.connectors.paypal.refunds import RefundOutcomeUnknown, create_refund
 from app.execution import refunds
 from app.execution.executors import Refused
 from app.playbooks import gateway
-from app.release import verifier
-from app.release.verifier import Verdict
 from app.worker_api import create_worker_app
 from tests.test_pb002 import PayPalFinanceTenant
 from tests.test_playbook_gateway import REFUND, Person, approve, case_status, create, put_mode
@@ -121,16 +119,8 @@ def granted(monkeypatch) -> list[gateway.ExecutionDispatch]:
 
 
 @pytest.fixture
-def live(tenant, monkeypatch):
-    """The refunds.create scope LIVE under an attestation for it alone."""
-    attestation = uuid4()
-
-    def verify(conn, scope):
-        if scope.action_capability == REFUND["action_capability"]:
-            return Verdict(True, None, attestation)
-        return Verdict(False, "SIGNATURE")
-
-    monkeypatch.setattr(verifier, "verify", verify)
+def live(tenant):
+    """The refunds.create scope LIVE, switched by the tenant."""
     assert put_mode(tenant, REFUND, "LIVE").status_code == 200
     yield tenant
     assert put_mode(tenant, REFUND, "SHADOW").status_code == 200

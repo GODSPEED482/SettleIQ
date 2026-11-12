@@ -248,11 +248,11 @@ def test_a_grant_is_issued_unconsumed(tenant, chain):
         INSERT INTO execution_grants (id, tenant_id, execution_id, request_id,
             request_policy_decision_id, execution_policy_decision_id, approval_id,
             playbook_version, connector_id, action_capability, target, idempotency_key,
-            permission_keys, token_hash, attestation_id, expires_at, consumed_at)
+            permission_keys, token_hash, expires_at, consumed_at)
         SELECT gen_random_uuid(), tenant_id, execution_id, request_id,
             request_policy_decision_id, execution_policy_decision_id, approval_id,
             playbook_version, connector_id, action_capability, target, idempotency_key,
-            permission_keys, repeat('c', 64), attestation_id, expires_at, now()
+            permission_keys, repeat('c', 64), expires_at, now()
         FROM execution_grants WHERE id = :id
         """), {"id": chain["grant"]}))
 

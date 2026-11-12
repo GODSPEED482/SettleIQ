@@ -99,17 +99,6 @@ services:
         condition: service_completed_successfully
     networks: [backend]
 
-  # Answers the running image digest for POL-14 (spec 9.7.6). Locally built images have no
-  # registry digest, so every scope stays SHADOW on this stack.
-  runtime-identity:
-    image: python:3.12-alpine
-    command: python /srv/server.py
-    read_only: true
-    volumes:
-      - ./deploy/runtime-identity/server.py:/srv/server.py:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks: [backend]
-
   agent-tools:
     profiles: [agent]
     build: ./backend

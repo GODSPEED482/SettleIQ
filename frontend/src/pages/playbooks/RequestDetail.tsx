@@ -125,7 +125,6 @@ function Decisions({ request }: { request: PlaybookRequest }) {
               <th>Approval required</th>
               <th>Reason</th>
               <th>Policy</th>
-              <th>Attestation</th>
               <th>Time</th>
             </tr>
           </thead>
@@ -139,7 +138,6 @@ function Decisions({ request }: { request: PlaybookRequest }) {
                 <td>{decision.approval_required ? "Yes" : "No"}</td>
                 <td>{decision.reason ?? "—"}</td>
                 <td>{decision.policy_version}</td>
-                <td>{decision.attestation_id ? shortId(decision.attestation_id) : "—"}</td>
                 <td>{when(decision.created_at)}</td>
               </tr>
             ))}
@@ -148,9 +146,8 @@ function Decisions({ request }: { request: PlaybookRequest }) {
       </div>
       {blocked && (
         <p className="muted">
-          Blocked at the execution stage: the exact scope is in SHADOW or has no valid release
-          attestation, so nothing was sent. Switching the scope to LIVE evaluates this request
-          again.
+          Blocked at the execution stage: the exact scope is in SHADOW, so nothing was sent.
+          Switching the scope to LIVE evaluates this request again.
         </p>
       )}
     </section>

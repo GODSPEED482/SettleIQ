@@ -92,8 +92,8 @@ def transfer_ownership(
 def set_execution_mode(
     body: mode.ModeBody, ctx: TenantContext = require("execution_mode.manage")
 ) -> dict:
-    """Set one exact scope to SHADOW or LIVE. LIVE needs a POL-14 attestation for that scope.
-    After a LIVE switch, requests that scope blocked are evaluated again (spec 18 steps 12-15)."""
+    """Set one exact scope to SHADOW or LIVE. After a LIVE switch, requests that scope blocked
+    are evaluated again (spec 18 steps 12-15)."""
     result = mode.set_mode(ctx, body)
     if body.mode == "LIVE":
         result["reevaluated_requests"] = gateway.reevaluate_scope(
@@ -103,6 +103,5 @@ def set_execution_mode(
 
 @router.get("/execution-readiness")
 def execution_readiness(ctx: TenantContext = require("execution.read")) -> list[dict]:
-    """Each exact scope's mode, and whether a stored attestation passes the ten POL-14 checks,
-    naming the failing one. The image digest comes from the runtime-identity service only."""
+    """Each exact scope the tenant's active packs declare, and its mode."""
     return readiness.readiness(ctx)

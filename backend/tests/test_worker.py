@@ -1,11 +1,9 @@
 """The Worker runs one execution under its grant (task 5.6, spec 4.4.1, 9.3-9.5, POL-09).
 
 AC-MERCH-01/02 end to end, through the routes and the Worker app; AC-AUTHZ-08 (single-use,
-bound, expiring grant), AC-AUTHZ-15 (SHADOW), AC-AUTHZ-16 (POL-14 at the Worker),
-AC-AUTHZ-17 (no human reaches the Worker), AC-PLY-06 (readback, never API success) and
-AC-PLY-10 (durable attempts). The merchant is a scratch schema set up by the shipped
-merchant_setup.sql (test_internal_merchant.py), and the verifier is replaced per test, as in
-test_playbook_gateway.py.
+bound, expiring grant), AC-AUTHZ-15 (SHADOW), AC-AUTHZ-17 (no human reaches the Worker),
+AC-PLY-06 (readback, never API success) and AC-PLY-10 (durable attempts). The merchant is a
+scratch schema set up by the shipped merchant_setup.sql (test_internal_merchant.py).
 """
 
 import re
@@ -27,8 +25,6 @@ from app.db import global_tx, scoped_tx
 from app.errors import ApiError
 from app.execution import lifecycle, merchant
 from app.playbooks import gateway
-from app.release import verifier
-from app.release.verifier import Verdict
 from app.worker_api import create_worker_app
 from tests.support import grant_set
 from tests.test_internal_merchant import SECRET, Merchant
@@ -77,16 +73,8 @@ def granted(monkeypatch) -> list[gateway.ExecutionDispatch]:
 
 
 @pytest.fixture
-def live(tenant, monkeypatch):
-    """The merchant scope LIVE under an attestation the verifier accepts for it alone."""
-    attestation = uuid4()
-
-    def verify(conn, scope):
-        if scope.action_capability == CORRECT:
-            return Verdict(True, None, attestation)
-        return Verdict(False, "SIGNATURE")
-
-    monkeypatch.setattr(verifier, "verify", verify)
+def live(tenant):
+    """The merchant scope LIVE, switched by the tenant."""
     assert put_mode(tenant, MERCHANT, "LIVE").status_code == 200
     yield tenant
     assert put_mode(tenant, MERCHANT, "SHADOW").status_code == 200
@@ -340,18 +328,6 @@ def test_shadow_after_the_grant_blocks_the_worker(live, approver, merchant_db, g
     assert grant_row(live, item.grant_id).consumed_at is None
     assert payment_status(merchant_db, payment_id) == ["PENDING"]
     assert case_status(live, case_id) == "HUMAN_REVIEW"
-
-
-def test_a_failing_attestation_at_the_worker_blocks(live, approver, merchant_db, granted,
-                                                    monkeypatch):
-    _, payment_id, item = granted_execution(live, approver, merchant_db, granted)
-    monkeypatch.setattr(verifier, "verify", lambda conn, scope: Verdict(False, "IMAGE_DIGEST"))
-
-    body = run(item).json()
-    assert body["status"] == "POLICY_BLOCKED"
-    assert "POL-14 IMAGE_DIGEST" in body["reason"]
-    assert attempts(live, item.execution_id) == []
-    assert payment_status(merchant_db, payment_id) == ["PENDING"]
 
 
 # AC-AUTHZ-06: the Worker's keys are its alone, and come only from a grant

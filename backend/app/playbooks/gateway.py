@@ -1,4 +1,4 @@
-"""The two-stage policy gateway (spec 6.3, 9.3-9.5; POL-01, POL-06, POL-09, POL-11, POL-14).
+"""The two-stage policy gateway (spec 6.3, 9.3-9.5; POL-01, POL-06, POL-09, POL-11).
 Owner: Rishav, task 5.2.
 
 A request is created with its immutable REQUEST-stage decision, taken from the definition and
@@ -6,16 +6,15 @@ the tenant's recorded policy and never from request input, and moves its case to
 ACTION_PENDING in the same transaction. An approval answers that decision and is never given
 by the requester. The execution stage then revalidates everything the approval relied on
 (the playbook and pack versions, the connector action, the case, preconditions and the exact
-target), checks the exact scope's mode and POL-14, and writes a separate immutable
-EXECUTION-stage decision:
+target), checks the exact scope's mode, and writes a separate immutable EXECUTION-stage
+decision:
 
 - DENY when revalidation fails: the request is DENIED and the case returns to HUMAN_REVIEW.
-- POLICY_BLOCKED in SHADOW (POL-06) or without a passing attestation (POL-14): the request stays
-  PRECONDITIONS_VALIDATED and is evaluated again, with a new decision, when that exact scope is
-  switched to LIVE.
+- POLICY_BLOCKED in SHADOW (POL-06): the request stays PRECONDITIONS_VALIDATED and is evaluated
+  again, with a new decision, when that exact scope is switched to LIVE.
 - ALLOW: the execution row is created in the same transaction. After commit the grant is
-  issued in its own transaction, which checks the mode and POL-14 again (spec 9.5), stores only
-  the token's hash and hands the token to the Worker dispatch hook.
+  issued in its own transaction, which checks the mode again (spec 9.5), stores only the
+  token's hash and hands the token to the Worker dispatch hook.
 
 Each decision is audited as critical with the permission and policy IDs it applied.
 """
@@ -46,7 +45,6 @@ from app.execution.mode import resolve_mode
 from app.execution.scope import ExactScope, playbook_scope
 from app.playbooks.lifecycle import advance
 from app.playbooks.policy import active_playbooks, approval_policy, evaluate
-from app.release import verifier
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +141,7 @@ def _view(conn: Connection, request_id: UUID) -> dict[str, Any] | None:
         text(
             """
             SELECT id, stage, parent_decision_id, policy_version, approval_required, decision,
-                conditions, reason, attestation_id, created_at
+                conditions, reason, created_at
             FROM policy_decisions WHERE request_id = :id
             ORDER BY stage = 'EXECUTION', created_at, id
             """
@@ -194,7 +192,6 @@ def _view(conn: Connection, request_id: UUID) -> dict[str, Any] | None:
                 "decision": d.decision,
                 "conditions": d.conditions,
                 "reason": d.reason,
-                "attestation_id": d.attestation_id,
                 "created_at": _iso(d.created_at),
             }
             for d in decisions
@@ -586,34 +583,26 @@ def _revalidate(conn: Connection, tenant_id: UUID,
     return failures, scope, playbook
 
 
-def _release_gate(conn: Connection, scope: ExactScope) -> tuple[str | None, str | None, Any]:
-    """(policy, check, attestation_id): POL-06 for SHADOW, POL-14 for a failing check, or
-    (None, None, attestation) when the exact scope may act."""
-    if resolve_mode(conn, scope).mode != "LIVE":
-        return "POL-06", "SHADOW", None
-    verdict = verifier.verify(conn, scope)
-    if not verdict.allowed:
-        return "POL-14", verdict.check, None
-    return None, None, verdict.attestation_id
+def in_shadow(conn: Connection, scope: ExactScope) -> bool:
+    """True when the exact scope is SHADOW (POL-06) and so may not act."""
+    return resolve_mode(conn, scope).mode != "LIVE"
 
 
 def _write_decision(conn: Connection, ctx: TenantContext, request_id: UUID, parent: Any,
-                    outcome: str, reason: str, conditions: dict[str, Any],
-                    attestation_id: Any = None) -> UUID:
+                    outcome: str, reason: str, conditions: dict[str, Any]) -> UUID:
     decision_id = uuid4()
     conn.execute(
         text(
             """
             INSERT INTO policy_decisions (id, tenant_id, request_id, parent_decision_id, stage,
-                policy_version, approval_required, decision, conditions, reason, attestation_id)
+                policy_version, approval_required, decision, conditions, reason)
             VALUES (:id, :tenant, :request, :parent, 'EXECUTION', :version, :required,
-                :decision, CAST(:conditions AS jsonb), :reason, :attestation)
+                :decision, CAST(:conditions AS jsonb), :reason)
             """
         ),
         {"id": decision_id, "tenant": ctx.tenant_id, "request": request_id, "parent": parent.id,
          "version": GATEWAY_VERSION, "required": parent.approval_required, "decision": outcome,
-         "conditions": json.dumps(conditions), "reason": reason,
-         "attestation": str(attestation_id) if attestation_id else None},
+         "conditions": json.dumps(conditions), "reason": reason},
     )
     return decision_id
 
@@ -664,24 +653,20 @@ def _execution_stage(ctx: TenantContext, request_id: UUID) -> UUID | None:
             return None
         if request.status != "PRECONDITIONS_VALIDATED":
             advance(conn, request_id, "PRECONDITIONS_VALIDATED")
-        policy, check, attestation_id = _release_gate(conn, scope)
-        if policy is not None:
-            reason = ("The exact scope is SHADOW." if policy == "POL-06"
-                      else f"No release attestation passes POL-14 ({check}).")
+        if in_shadow(conn, scope):
             decision_id = _write_decision(
-                conn, ctx, request_id, parent, "POLICY_BLOCKED", reason,
-                {"policy": policy, "check": check, **_scope_detail(scope)})
+                conn, ctx, request_id, parent, "POLICY_BLOCKED", "The exact scope is SHADOW.",
+                {"policy": "POL-06", "check": "SHADOW", **_scope_detail(scope)})
             write_audit(conn, ctx.tenant_id, ctx.principal, "playbook.execution_blocked",
                         "playbook_request",
                         {**base, "execution_policy_decision_id": str(decision_id),
-                         "policy": policy, "check": check},
-                        decision="POLICY_BLOCKED", policy_rules=[policy])
+                         "policy": "POL-06", "check": "SHADOW"},
+                        decision="POLICY_BLOCKED", policy_rules=["POL-06"])
             return None
         decision_id = _write_decision(
             conn, ctx, request_id, parent, "ALLOW",
-            "Preconditions, target, connector action, mode and release gate hold.",
-            {"preconditions": {"eligible": True, "failures": []}, **_scope_detail(scope)},
-            attestation_id)
+            "Preconditions, target, connector action and mode hold.",
+            {"preconditions": {"eligible": True, "failures": []}, **_scope_detail(scope)})
         advance(conn, request_id, "EXECUTION_POLICY_ALLOWED", "EXECUTION_CREATED")
         execution_id = uuid4()
         conn.execute(
@@ -707,14 +692,14 @@ def _execution_stage(ctx: TenantContext, request_id: UUID) -> UUID | None:
         write_audit(conn, ctx.tenant_id, ctx.principal, "playbook.execution_allowed",
                     "execution",
                     {**base, "execution_policy_decision_id": str(decision_id),
-                     "execution_id": str(execution_id), "attestation_id": str(attestation_id)},
-                    decision="ALLOW", policy_rules=["POL-06", "POL-09", "POL-14"])
+                     "execution_id": str(execution_id)},
+                    decision="ALLOW", policy_rules=["POL-06", "POL-09"])
     return execution_id
 
 
 def issue_grant(ctx: TenantContext, execution_id: UUID) -> UUID | None:
-    """The single-use grant for one CREATED execution (POL-09). The exact scope's mode and
-    POL-14 are checked again here; a failure blocks the execution and issues nothing."""
+    """The single-use grant for one CREATED execution (POL-09). The exact scope's mode is
+    checked again here; SHADOW blocks the execution and issues nothing."""
     token = secrets.token_urlsafe(32)
     grant_id = uuid4()
     expires_at = datetime.now(UTC) + GRANT_TTL
@@ -727,19 +712,19 @@ def issue_grant(ctx: TenantContext, execution_id: UUID) -> UUID | None:
             return None
         scope = ExactScope(ctx.tenant_id, execution.pack_namespace, execution.pack_version,
                            execution.connector_id, execution.action_capability)
-        policy, check, attestation_id = _release_gate(conn, scope)
-        if policy is not None:
+        if in_shadow(conn, scope):
             conn.execute(
                 text(
                     "UPDATE executions SET status = 'POLICY_BLOCKED', reason = :reason, "
                     "updated_at = now() WHERE id = :id"
                 ),
-                {"id": execution_id, "reason": f"{policy} {check} at grant issue"},
+                {"id": execution_id, "reason": "POL-06 SHADOW at grant issue"},
             )
             write_audit(conn, ctx.tenant_id, ctx.principal, "execution.grant_blocked",
                         "execution",
-                        {"execution_id": str(execution_id), "policy": policy, "check": check},
-                        decision="POLICY_BLOCKED", policy_rules=[policy])
+                        {"execution_id": str(execution_id), "policy": "POL-06",
+                         "check": "SHADOW"},
+                        decision="POLICY_BLOCKED", policy_rules=["POL-06"])
             return None
         conn.execute(
             text(
@@ -747,17 +732,15 @@ def issue_grant(ctx: TenantContext, execution_id: UUID) -> UUID | None:
                 INSERT INTO execution_grants (id, tenant_id, execution_id, request_id,
                     request_policy_decision_id, execution_policy_decision_id, approval_id,
                     playbook_version, connector_id, action_capability, target, idempotency_key,
-                    permission_keys, token_hash, attestation_id, expires_at)
+                    permission_keys, token_hash, expires_at)
                 SELECT :id, tenant_id, id, request_id, request_policy_decision_id,
                     execution_policy_decision_id, approval_id, playbook_version, connector_id,
-                    action_capability, target, idempotency_key, :permissions, :hash,
-                    :attestation, :expires
+                    action_capability, target, idempotency_key, :permissions, :hash, :expires
                 FROM executions WHERE id = :execution
                 """
             ),
             {"id": grant_id, "execution": execution_id, "permissions": GRANT_PERMISSIONS,
-             "hash": hashlib.sha256(token.encode()).hexdigest(),
-             "attestation": str(attestation_id), "expires": expires_at},
+             "hash": hashlib.sha256(token.encode()).hexdigest(), "expires": expires_at},
         )
         conn.execute(
             text(
@@ -768,9 +751,9 @@ def issue_grant(ctx: TenantContext, execution_id: UUID) -> UUID | None:
         )
         write_audit(conn, ctx.tenant_id, ctx.principal, "execution.grant_issued", "execution",
                     {"execution_id": str(execution_id), "grant_id": str(grant_id),
-                     "attestation_id": str(attestation_id), "expires_at": expires_at.isoformat(),
+                     "expires_at": expires_at.isoformat(),
                      "idempotency_key": execution.idempotency_key},
-                    decision="ALLOW", policy_rules=["POL-06", "POL-09", "POL-14"])
+                    decision="ALLOW", policy_rules=["POL-06", "POL-09"])
     dispatch(ExecutionDispatch(ctx.tenant_id, execution_id, grant_id, token, expires_at))
     return grant_id
 

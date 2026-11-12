@@ -9,8 +9,6 @@ on:
 permissions:
   contents: read
 
-# POL-14 issuance is .github/workflows/attest.yml, never this workflow (spec 9.7.4).
-
 jobs:
   backend:
     runs-on: ubuntu-latest

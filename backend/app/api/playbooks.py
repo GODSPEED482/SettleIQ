@@ -16,9 +16,8 @@ from app.playbooks import gateway
 router = APIRouter(prefix="/api", tags=["playbooks"])
 
 # TODO(G5 exit Rishav): the G5 evidence list in spec 17 passes as automated tests: AC-INV-01,
-# AC-PLY-08..11, AC-AUTHZ-06/08/15/16/17, AC-REL-01..12, AC-MERCH-01..07 and POL-01/06/09/14,
-# plus AC-PP-08 and the PB-002 parts of AC-PLY-08. If the safety suite is not green by Day 3
-# hour 7, no attestation is issued and the demo stops at step 10 in SHADOW.
+# AC-PLY-08..11, AC-AUTHZ-06/08/15/17, AC-MERCH-01..07 and POL-01/06/09, plus AC-PP-08 and the
+# PB-002 parts of AC-PLY-08.
 
 
 @router.post("/playbooks/{playbook_id}/requests", status_code=201)

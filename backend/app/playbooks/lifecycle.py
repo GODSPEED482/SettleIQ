@@ -6,7 +6,7 @@ approval the request goes straight from REQUEST_POLICY_EVALUATED to PRECONDITION
 DENIED, REJECTED, EXPIRED and CANCELLED are terminal, and a terminal request returns its case
 from ACTION_PENDING to HUMAN_REVIEW, since no side effect has started.
 
-An EXECUTION-stage POLICY_BLOCKED (SHADOW, or no valid POL-14 attestation) is not terminal: the
+An EXECUTION-stage POLICY_BLOCKED (SHADOW) is not terminal: the
 request stays PRECONDITIONS_VALIDATED, so the same approved request is evaluated again, with a
 new decision, once its exact scope is LIVE (spec 9.5, demo steps 10-13).
 

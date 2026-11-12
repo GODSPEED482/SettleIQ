@@ -21,9 +21,6 @@ export function ModeLabel({ request, readiness }: Props) {
         <span className="muted">Mode not visible</span>
       )}{" "}
       <span>{environmentOf(request.connector_id)}</span>
-      {scope && !scope.release_gate.passes && (
-        <span className="muted"> · release gate fails at {scope.release_gate.failing_check}</span>
-      )}
     </p>
   );
 }

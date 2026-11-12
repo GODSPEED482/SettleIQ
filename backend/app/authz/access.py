@@ -25,7 +25,6 @@ class PrincipalKind(StrEnum):
     AGENT = "agent"
     WORKER = "worker"
     PLATFORM_HUMAN = "platform_human"
-    CI = "ci"
 
 
 @dataclass(frozen=True)

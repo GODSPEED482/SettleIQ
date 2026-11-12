@@ -97,4 +97,3 @@ platform:
   platform.support.request: [[platform_human], [], critical, Request break-glass access]
   platform.support.approve: [[platform_human], [], critical, Approve break-glass access]
   platform.support.access: [[platform_human], [], critical, Use approved break-glass access]
-  platform.release.attest: [[ci], [], critical, Issue or revoke release attestations]

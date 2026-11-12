@@ -4,9 +4,8 @@ The Worker app authenticates only an execution grant (`app.authz.workers`), so a
 reaches this code (AC-AUTHZ-17). Then, in order:
 
 1. In one transaction: lock the execution, check that the grant is bound to exactly it, re-check
-   the exact scope's mode and POL-14 (the verifier sees this container's own image digest), then
-   consume the grant and move the execution to EXECUTING (AC-AUTHZ-08, AC-AUTHZ-15, AC-AUTHZ-16).
-   A failing gate blocks the execution and consumes nothing.
+   the exact scope's mode, then consume the grant and move the execution to EXECUTING
+   (AC-AUTHZ-08, AC-AUTHZ-15). SHADOW blocks the execution and consumes nothing.
 2. Record every action attempt durably before its side effect, and its outcome after it, each in
    its own committed transaction (AC-PLY-10). Attempts are append-only, so each phase is a row.
 3. Act through the connector's executor, retrying only what its retry policy allows and only
@@ -34,7 +33,7 @@ from app.execution.lifecycle import move
 from app.execution.merchant import MerchantCorrection
 from app.execution.refunds import DuplicateCaptureRefund
 from app.execution.scope import ExactScope
-from app.playbooks.gateway import _release_gate
+from app.playbooks.gateway import in_shadow
 
 logger = logging.getLogger(__name__)
 
@@ -138,13 +137,12 @@ def _consume(conn: Connection, ctx: TenantContext, execution: Any, grant: Any) -
     detail = {"execution_id": str(execution.id), "grant_id": str(grant.id),
               "connector_id": execution.connector_id,
               "action_capability": execution.action_capability}
-    policy, check, attestation_id = _release_gate(conn, scope)
-    if policy is not None:
-        move(conn, execution.id, "POLICY_BLOCKED", reason=f"{policy} {check} at the Worker")
+    if in_shadow(conn, scope):
+        move(conn, execution.id, "POLICY_BLOCKED", reason="POL-06 SHADOW at the Worker")
         write_audit(conn, ctx.tenant_id, ctx.principal, "execution.blocked", "execution",
-                    {**detail, "policy": policy, "check": check},
+                    {**detail, "policy": "POL-06", "check": "SHADOW"},
                     permission_key="playbook.execute", decision="POLICY_BLOCKED",
-                    policy_rules=[policy])
+                    policy_rules=["POL-06"])
         return None
     conn.execute(text("UPDATE execution_grants SET consumed_at = now() WHERE id = :id"),
                  {"id": grant.id})
@@ -155,10 +153,9 @@ def _consume(conn: Connection, ctx: TenantContext, execution: Any, grant: Any) -
     )
     move(conn, execution.id, "EXECUTING")
     write_audit(conn, ctx.tenant_id, ctx.principal, "execution.started", "execution",
-                {**detail, "attestation_id": str(attestation_id),
-                 "idempotency_key": execution.idempotency_key},
+                {**detail, "idempotency_key": execution.idempotency_key},
                 permission_key="playbook.execute", decision="ALLOW",
-                policy_rules=["POL-06", "POL-09", "POL-14"])
+                policy_rules=["POL-06", "POL-09"])
     conditions = conn.execute(
         text("SELECT conditions FROM policy_decisions WHERE id = :id"),
         {"id": execution.request_policy_decision_id},

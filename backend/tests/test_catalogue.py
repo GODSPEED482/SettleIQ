@@ -12,7 +12,7 @@ from app.authz.catalogue import (
 APPENDIX_A = """
 platform.tenant.read platform.tenant.manage platform.connector.register
 platform.domain_pack.register platform.ops.read platform.support.request
-platform.support.approve platform.support.access platform.release.attest
+platform.support.approve platform.support.access
 tenant.read tenant.update tenant.delete tenant.ownership.transfer
 member.read member.invite member.invitation.manage member.role.assign member.remove
 role.read role.manage audit.read
@@ -51,7 +51,6 @@ def test_pol_03_principal_ceilings():
     assert catalogue.get("platform.support.approve").principal_types == ("platform_human",)
     assert catalogue.get("playbook.execute").principal_types == ("worker",)
     assert catalogue.get("connector.action.invoke").principal_types == ("worker",)
-    assert catalogue.get("platform.release.attest").principal_types == ("ci",)
 
 
 def test_ceiling_violation_fails_load(tmp_path):
@@ -64,7 +63,6 @@ def test_ceiling_violation_fails_load(tmp_path):
         },
         "platform": {
             "platform.support.approve": [["platform_human"], [], "critical", "d"],
-            "platform.release.attest": [["ci"], [], "critical", "d"],
         },
     }
     path = tmp_path / "permissions.yaml"
