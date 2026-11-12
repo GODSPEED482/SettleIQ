@@ -158,3 +158,58 @@ describe("OntologyStudio proposals", () => {
     }
   });
 });
+
+describe("OntologyStudio domain packs", () => {
+  const PACKS = [
+    { namespace: "pk", version: "1.0.0", status: "ACTIVE", case_types: ["THING_MISMATCH"] },
+    { namespace: "other", version: "0.1.0", status: "AVAILABLE", case_types: [] },
+  ];
+
+  it("lists packs read-only to a holder of domain_pack.read alone", async () => {
+    const api = renderStudio(["domain_pack.read"], {
+      "GET /api/domain-packs": { status: 200, body: PACKS },
+    });
+    const panel = await screen.findByRole("region", { name: "Domain packs" });
+    expect(await within(panel).findByText("THING_MISMATCH")).toBeTruthy();
+    expect(within(panel).getByText("Available")).toBeTruthy();
+    expect(within(panel).queryByRole("button")).toBeNull();
+    expect(api.calls.every((call) => call.key.startsWith("GET "))).toBe(true);
+  });
+
+  it("activates and disables a pack under domain_pack.manage, sending only the namespace and action", async () => {
+    const api = renderStudio(["domain_pack.read", "domain_pack.manage"], {
+      "GET /api/domain-packs": { status: 200, body: PACKS },
+      "POST /api/domain-packs": { status: 200, body: { namespace: "other", status: "ACTIVE" } },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Activate other" }));
+    expect(await screen.findByText("other activated.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Disable pk" }));
+    expect(await screen.findByText("pk disabled.")).toBeTruthy();
+    expect(api.sent("POST /api/domain-packs")).toEqual([
+      { namespace: "other", action: "ACTIVATE" },
+      { namespace: "pk", action: "DISABLE" },
+    ]);
+  });
+
+  it("warns when the open draft was started without an active pack", async () => {
+    renderStudio(["domain_pack.read"], {
+      "GET /api/domain-packs": {
+        status: 200,
+        body: PACKS.map((pack) => ({ ...pack, status: "ACTIVE" })),
+      },
+    });
+    const panel = await screen.findByRole("region", { name: "Domain packs" });
+    expect(
+      await within(panel).findByText(/does not include other\. Abandon it and start a new draft/),
+    ).toBeTruthy();
+  });
+
+  it("does not warn when the draft composes exactly the active packs", async () => {
+    renderStudio(["domain_pack.read"], {
+      "GET /api/domain-packs": { status: 200, body: PACKS },
+    });
+    const panel = await screen.findByRole("region", { name: "Domain packs" });
+    await within(panel).findByText("THING_MISMATCH");
+    expect(within(panel).queryByText(/start a new draft/)).toBeNull();
+  });
+});
