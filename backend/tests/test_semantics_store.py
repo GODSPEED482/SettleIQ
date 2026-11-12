@@ -251,7 +251,7 @@ def test_composition_keeps_core_pack_and_extension_separate(member):
 def test_draft_for_a_tenant_without_finance_has_no_finance_terms(member):
     member.activate("saas")
     draft = member.create_draft().json()
-    assert [a["namespace"] for a in draft["artifacts"]] == ["core"]
+    assert [a["namespace"] for a in draft["artifacts"]] == ["core", "saas"]
     assert "finops" not in draft["tenant_extension"]["@context"]
 
 

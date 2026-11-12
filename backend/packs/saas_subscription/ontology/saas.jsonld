@@ -1,0 +1,35 @@
+{
+  "@context": {
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "core": "urn:settleiq:core#",
+    "saas": "urn:settleiq:pack:saas#",
+    "rdfs:subClassOf": {"@type": "@id"},
+    "rdfs:domain": {"@type": "@id"},
+    "rdfs:range": {"@type": "@id"}
+  },
+  "@graph": [
+    {"@id": "saas:Account", "@type": "owl:Class", "rdfs:label": "Account", "rdfs:subClassOf": "core:DomainEntity"},
+    {"@id": "saas:Plan", "@type": "owl:Class", "rdfs:label": "Plan", "rdfs:subClassOf": "core:DomainEntity"},
+    {"@id": "saas:Subscription", "@type": "owl:Class", "rdfs:label": "Subscription", "rdfs:subClassOf": "core:DomainEntity"},
+    {"@id": "saas:Invoice", "@type": "owl:Class", "rdfs:label": "Invoice", "rdfs:subClassOf": "core:DomainEntity"},
+    {"@id": "saas:Entitlement", "@type": "owl:Class", "rdfs:label": "Entitlement", "rdfs:subClassOf": "core:DomainEntity"},
+    {"@id": "saas:RenewalCase", "@type": "owl:Class", "rdfs:label": "Renewal case", "rdfs:subClassOf": "core:WorkflowCase"},
+
+    {"@id": "saas:accountReference", "@type": "owl:DatatypeProperty", "rdfs:label": "account reference", "rdfs:domain": "core:DomainEntity"},
+    {"@id": "saas:planReference", "@type": "owl:DatatypeProperty", "rdfs:label": "plan reference", "rdfs:domain": "core:DomainEntity"},
+    {"@id": "saas:subscriptionReference", "@type": "owl:DatatypeProperty", "rdfs:label": "subscription reference", "rdfs:domain": "core:DomainEntity"},
+    {"@id": "saas:invoiceReference", "@type": "owl:DatatypeProperty", "rdfs:label": "invoice reference", "rdfs:domain": "saas:Invoice"},
+    {"@id": "saas:status", "@type": "owl:DatatypeProperty", "rdfs:label": "status", "rdfs:domain": "core:DomainEntity"},
+    {"@id": "saas:currentPeriodEnd", "@type": "owl:DatatypeProperty", "rdfs:label": "current period end", "rdfs:domain": "saas:Subscription"},
+    {"@id": "saas:periodEnd", "@type": "owl:DatatypeProperty", "rdfs:label": "period end", "rdfs:domain": "saas:Invoice"},
+    {"@id": "saas:amount", "@type": "owl:DatatypeProperty", "rdfs:label": "amount", "rdfs:domain": "saas:Invoice"},
+    {"@id": "saas:currency", "@type": "owl:DatatypeProperty", "rdfs:label": "currency", "rdfs:domain": "saas:Invoice"},
+
+    {"@id": "saas:holdsSubscription", "@type": "owl:ObjectProperty", "rdfs:label": "holds subscription", "rdfs:domain": "saas:Account", "rdfs:range": "saas:Subscription"},
+    {"@id": "saas:onPlan", "@type": "owl:ObjectProperty", "rdfs:label": "on plan", "rdfs:domain": "saas:Subscription", "rdfs:range": "saas:Plan"},
+    {"@id": "saas:invoiceFor", "@type": "owl:ObjectProperty", "rdfs:label": "invoice for", "rdfs:domain": "saas:Invoice", "rdfs:range": "saas:Subscription"},
+    {"@id": "saas:grants", "@type": "owl:ObjectProperty", "rdfs:label": "grants", "rdfs:domain": "saas:Subscription", "rdfs:range": "saas:Entitlement"},
+    {"@id": "saas:hasDiscrepancy", "@type": "owl:ObjectProperty", "rdfs:label": "has discrepancy", "rdfs:domain": "saas:Subscription", "rdfs:range": "saas:RenewalCase"}
+  ]
+}

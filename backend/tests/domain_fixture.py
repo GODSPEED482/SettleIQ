@@ -87,17 +87,28 @@ OBJECT_TYPES = {"captures": "API", "payments": "TABLE", "orders": "TABLE", "brr"
 
 
 class FinanceTenant(Member):
-    """A member whose tenant has finops active and a published Finance ontology."""
+    """A member whose tenant has finops active and a published Finance ontology. Another pack's
+    tests pass their own packs, sources, bindings and authority to get the same tenant."""
+
+    packs: tuple[str, ...] = ("finops",)
 
     def __init__(self, authority: list[tuple] | None = None,
-                 extra_bindings: list | None = None) -> None:
+                 extra_bindings: list | None = None, *, packs: tuple[str, ...] = ("finops",),
+                 sources: tuple[str, ...] = ("paypal", "merchant", "report", "bank"),
+                 bindings: list | None = None,
+                 object_types: dict[str, str] | None = None) -> None:
         super().__init__()
         grant_set(self.tenant, self.principal.id, "domain_operator")
-        assert self.activate("finops").status_code == 200
-        self.sources = {name: uuid4() for name in ("paypal", "merchant", "report", "bank")}
+        self.packs = packs
+        for namespace in packs:
+            assert self.activate(namespace).status_code == 200
+        self.object_types = OBJECT_TYPES | (object_types or {})
+        self.sources = {name: uuid4() for name in sources}
         self._register_sources()
         draft = self.create_draft().json()
-        for source, obj, class_iri, fields in BINDINGS + (extra_bindings or []):
+        for source, obj, class_iri, fields in (BINDINGS if bindings is None else bindings) + (
+            extra_bindings or []
+        ):
             for field_path, property_iri, kind in fields:
                 self._ok(self.request("POST", "/api/mappings", json={
                     "draft_id": draft["id"], "source_id": str(self.sources[source]),
@@ -155,12 +166,12 @@ class FinanceTenant(Member):
                 root=EVIDENCE_ROOT,
             )
             name = obj
-            if OBJECT_TYPES[obj] == "CSV":
+            if self.object_types[obj] == "CSV":
                 first = conventions.file_object_name(obj, ref.content_hash)
                 name = self.files.setdefault(obj, first)
             object_id = conventions.ensure_object(
                 conn, tenant_id=self.tenant, source_id=source_id, object_name=name,
-                object_type=OBJECT_TYPES[obj],
+                object_type=self.object_types[obj],
             )
             return records.persist_record(conn, SourceRecordEnvelope(
                 id=uuid4(), tenant_id=self.tenant, source_id=source_id,
@@ -199,6 +210,8 @@ class FinanceTenant(Member):
             ))
 
     def run(self, **body):
+        if not body and len(self.packs) > 1:
+            body = {"namespace": self.packs[0]}  # several active packs: a run names one
         response = self.request("POST", "/api/domain-runs", json=body or None)
         assert response.status_code == 201, response.text
         return response.json()

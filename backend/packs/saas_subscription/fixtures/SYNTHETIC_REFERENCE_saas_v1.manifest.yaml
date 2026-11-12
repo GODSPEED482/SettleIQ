@@ -1,0 +1,20 @@
+# SYNTHETIC/REFERENCE subscription and invoice fixture (spec 14.4, task 6.1, AC-OPEN-07).
+#
+# Reference data for the SaaS pack's engine and its tests only. Every identifier is invented and
+# the files hold no personal or payment data. tests/test_saas_pack.py fails when a file, its
+# checksum or the expected findings below disagree with what the pack produces.
+
+provenance: synthetic_reference
+version: "1"
+files:
+  subscriptions:
+    file: SYNTHETIC_REFERENCE_subscriptions_v1.csv
+    sha256: 25df9d7acd9869767ffe78e00c408e3dc696e02ff52b6236bc3422747be4d280
+  invoices:
+    file: SYNTHETIC_REFERENCE_invoices_v1.csv
+    sha256: 0a07ba06dce36b37b8b252c7d4925ae823c2c58825f4fc60296a40a1170b3c07
+
+# SYN-SUB-1 renewed and paid; SYN-SUB-4 was canceled after its last paid period. Neither raises.
+expected_findings:
+  - {subscription: SYN-SUB-2, rule: RENEWED_WITHOUT_PAID_INVOICE}
+  - {subscription: SYN-SUB-3, rule: PAID_WITHOUT_RENEWAL}

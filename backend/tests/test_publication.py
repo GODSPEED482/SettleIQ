@@ -350,10 +350,10 @@ def test_a_validators_only_pack_activated_after_validation_invalidates_the_run(
     run = validate(member, draft)
     member.activate("saas")
     shipped = load_domain_packs()
-    assert shipped["saas"].ontology_definitions == []
+    # Only a validator: no ontology or shapes, so nothing but the validator set changes.
     with_validator = DomainPackManifest(
         **shipped["saas"].model_dump()
-        | {"validators": [
+        | {"ontology_definitions": [], "shacl_shapes": [], "validators": [
             {"id": "saas.check", "entrypoint": "packs.saas_subscription.validators:check"}
         ]}
     )

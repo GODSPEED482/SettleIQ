@@ -397,8 +397,12 @@ def test_certified_playbooks_declare_their_readbacks():
 
 
 def write_pack(root, directory: str, **overrides) -> None:
+    """A pack with no code or files of its own, so only the override decides the outcome."""
     (root / directory).mkdir()
-    data = pack_data(package=directory) | overrides
+    data = pack_data(
+        package=directory, ontology_definitions=[], shacl_shapes=[], validators=[],
+        entity_resolution_policies=[], domain_engine=None, test_fixtures=[],
+    ) | overrides
     (root / directory / "manifest.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
 
 

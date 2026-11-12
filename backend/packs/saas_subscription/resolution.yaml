@@ -1,0 +1,13 @@
+# SaaS Subscription Lifecycle exact-ID identity policy (spec 7.2). Same shape as the Finance
+# policy: identities name the properties whose exact value identifies an entity of each class,
+# and relationships link entities whose observed values of `via` are equal.
+
+id: saas.exact_id
+version: "1"
+identities:
+  saas:Account: [saas:accountReference]
+  saas:Subscription: [saas:subscriptionReference]
+  saas:Invoice: [saas:invoiceReference]
+relationships:
+  - {subject: saas:Invoice, predicate: saas:invoiceFor, object: saas:Subscription, via: saas:subscriptionReference}
+  - {subject: saas:Account, predicate: saas:holdsSubscription, object: saas:Subscription, via: saas:accountReference}
