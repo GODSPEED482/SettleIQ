@@ -48,7 +48,6 @@ Every choice below is picked to make a specific spec requirement easy to prove, 
 | JSON-LD + publish hash | `jsonld.js` + `rdf-canonize` in Node | Canonicalize before hashing so key order can't change the hash; Node owns the hash POL-12 binds to |
 | Evidence | S3 (MinIO locally), key = SHA-256 of content, never overwritten | Immutable raw evidence |
 | Secrets | AWS Secrets Manager or Docker secrets; DB stores only the reference | Satisfies spec §11.3 |
-| Attestation | Ed25519: GitHub Actions signs, Node verifies with `node:crypto` | Simplest workable POL-14; key custody is decided in spec v1.6 §9.7 |
 | Logging | `pino` with redact paths + OpenTelemetry | Feeds Elastic (see Sponsor tools) |
 
 ## Frontend stack
@@ -98,7 +97,7 @@ Use four sponsor tools, keep three optional, and skip three; none of them sits i
 | [Elastic](https://www.elastic.co) | Use, observability only | OTel traces and logs to an Elastic Cloud trial. Not a data or search store (spec §2.2, ADR-006). Don't self-host Elasticsearch on the demo box |
 | [KERNEL](https://www.kernel.sh) | Optional, test harness only | Cloud browsers for Playwright, to drive the PayPal Sandbox buyer approval so the $100 payment and duplicate-capture fixtures are repeatable. Never in the product path |
 | [Bryntum](https://bryntum.com) | Optional, Day 3 slack only | Task Board or a timeline for the audit lineage in demo step 16; a plain list works fine |
-| [Zapier](https://zapier.com) | Optional, team notifications only | CI result or "attestation issued" to team chat. Never invitation email or anything correctness-critical (NFR-023) |
+| [Zapier](https://zapier.com) | Optional, team notifications only | CI result to team chat. Never invitation email or anything correctness-critical (NFR-023) |
 | [Astropods](https://pypi.org/project/astropods-adapter-core/) | Skip | Bridges agents to a chat messaging runtime; SettleIQ's agent is case-scoped and API-triggered, and chat would add a second authorization path |
 | [Channel3](https://docs.trychannel3.com) | Skip | Product-catalog API for AI shopping agents; no fit |
 | Render | Excluded | Team preference |
@@ -120,7 +119,7 @@ Host on one AWS EC2 instance running Docker Compose behind Caddy; Caddy's automa
 | End-to-end | Playwright | Optionally on KERNEL cloud browsers |
 | API role matrix | Postman CLI | |
 
-**CI order:** lint → typecheck → unit → integration → route-map check → safety suite → build image (record the digest) → sign the attestation only if the safety suite is green.
+**CI order:** lint → typecheck → unit → integration → route-map check → safety suite → build image.
 
 ## Day-1 checks
 

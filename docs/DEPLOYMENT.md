@@ -37,10 +37,9 @@ flowchart LR
 | agent-tools | `backend`, `app.agent_tools_api` | Python, FastAPI | 8002, private | same image as api | TCP | yes, `settleiq_app` | plus `AGENT_TOKEN_SECRET` |
 | dispatcher | `backend`, `app.investigation.dispatcher` | Python | none | same image as api | none | yes, `settleiq_dispatcher` | `AGENT_TOKEN_SECRET`, `AGENT_URL` |
 | agent | `agent` | Python, FastAPI | 8100, private | `Dockerfile` | TCP | **never** | `LLM_API_KEY`, `AGENT_TOOLS_URL` |
-| runtime-identity | `backend`, `runtime-identity/server.py` | Python, standard library | 8010, private | `python:3.12-alpine` | none | **never** | none; Docker socket read-only |
 | db | upstream image | PostgreSQL 16 | 5432, private | upstream image | `pg_isready` | n/a | `POSTGRES_*` |
 
-agent-tools, dispatcher and agent sit behind the `agent` Compose profile, as they do locally. runtime-identity is the only container with the Docker socket: it answers api and worker with the registry digest of their own container, for POL-14 check 5 (spec 9.7.6).
+agent-tools, dispatcher and agent sit behind the `agent` Compose profile, as they do locally.
 
 Isolation matches the local stack: `edge` holds proxy, web and api; `backend` holds the database and its clients; `agent` holds the agent and its two peers. Secrets are passed per service rather than with one shared `env_file`, because spec section 8 forbids the agent from holding database credentials.
 
@@ -78,7 +77,7 @@ The stack is sized for AWS accounts created on or after 15 July 2025. These get 
 | `t3.small` | 2 GB | about $23 | about 4.3 months | Default |
 | `m7i-flex.large` | 8 GB | about $80 | about 5 weeks | Only if rehearsal shows `t3.small` is too small; matches the tech-stack doc's suggested 8 GB |
 
-`t3.medium` and `t3.large` are not on the eligible list. Changing `instance_type` is an in-place stop and start. It does not change the images, so it does not void a POL-14 attestation.
+`t3.medium` and `t3.large` are not on the eligible list. Changing `instance_type` is an in-place stop and start. It does not change the images.
 
 `t3.small` starts with no CPU credits (separate from billing credits) and earns 24 an hour. With `cpu_credits = "standard"` it slows to its baseline, 20% per vCPU, when they run out, instead of billing the excess. Check the balance before the demo; section 10 has the command.
 
@@ -167,8 +166,6 @@ sudo bash /opt/settleiq/releases/<last-good-sha>/deploy.sh <last-good-sha> --rol
 
 There is deliberately no "Run workflow" rollback button, since `workflow_dispatch` can be started from any branch.
 
-**POL-14 interaction.** An attestation binds to the exact build. After task 6.3 attests, any deploy or rollback that changes the images makes the attestation mismatch, and LIVE fails closed to SHADOW. Freeze `prod` before 6.3. Docs-only merges do not deploy.
-
 A single host restarts containers in place, so expect a few seconds of downtime per deploy.
 
 ## 9. Observability
@@ -195,7 +192,6 @@ Once live, the PayPal webhook target is the public `/api/webhooks/...` route in 
 
 ## 11. Demo-day checklist
 
-- [ ] Merge freeze on `prod` before task 6.3; any later image change voids the attestation
 - [ ] Last deploy at least an hour before the slot
 - [ ] Certificate issued and `/healthz` green on the public URL
 - [ ] CPU credit balance checked (command in section 10) and memory measured with the demo's profiles on

@@ -16,13 +16,13 @@ SettleIQ spec v1.7 is a pre-development baseline written for a ten-day MVP. The 
 | Design | Largely done (26 frozen ADRs), but 26 OPEN items remain | Close the 9 that block the slice in the first hours; 17 stay open |
 | Implementation | Spec defines G1-G6, with no frontend gate | Each gate includes its own UI work |
 | Testing | Six layers in §16.7 | Built inside each gate; safety-critical tests automated |
-| Release | Signed POL-14 attestation, SHADOW by default | Build freeze and attestation on Day 3 |
+| Release | SHADOW by default; POL-14 attestation removed in spec v1.8 | The tenant switches each exact scope to LIVE once its safety-critical tests are green |
 | Demo | 17-step script in §18 | All 17 steps |
 | Maintenance | P1/P2 roadmap | Out of scope |
 
 ## Scope for 3 days
 
-**Never cut (§16.7 release blockers):** tenant isolation/RLS, decimal money, evidence preservation, permission-key authorization, owner invariant, publication hash, idempotency, post-action verification, SHADOW and POL-14.
+**Never cut (§16.7 release blockers):** tenant isolation/RLS, decimal money, evidence preservation, permission-key authorization, owner invariant, publication hash, idempotency, post-action verification and SHADOW.
 
 **Built thin:**
 - UI covers demo-path screens only.
@@ -40,9 +40,9 @@ SettleIQ spec v1.7 is a pre-development baseline written for a ten-day MVP. The 
 - Redis and pgvector (a PostgreSQL job table replaces Redis, which §6.2 allows)
 - PayPal partner onboarding (OPEN-PP-02)
 
-**Fallback rule (Day 3, hour 7).** If the safety suite is not fully green, CI issues no attestation and the demo stops at step 10 in SHADOW, as §16.7 permits. Nobody bypasses the gate to save the demo.
+**Fallback rule (Day 3, hour 7).** If the safety-critical tests are not fully green, nobody switches a scope to LIVE and the demo stops at step 10 in SHADOW, as §16.7 permits. Nobody bypasses the gate to save the demo.
 
-PB-002 has its own attestation and safety suite. If only that scope is not green, no refund attestation is issued and the demo skips steps 14-15. PB-001 is unaffected unless a shared safety-critical test failed.
+PB-002 has its own exact scope and safety trace. If only its tests are not green, the refund scope stays SHADOW and the demo skips steps 14-15. PB-001 is unaffected unless a shared safety-critical test failed.
 
 ## Team tracks and load
 
@@ -55,13 +55,13 @@ PB-002 has its own attestation and safety suite. If only that scope is not green
 
 | Hours | G1 | G2 | G3 | G4 | G5 | G6 | Total |
 |---|---|---|---|---|---|---|---|
-| Rishav | 9 | 2 | 2 | 2 | 8 | 2.5 | **25.5** |
+| Rishav | 9 | 2 | 2 | 2 | 6 | 0.5 | **21.5** |
 | Rahul | 4 | 3 | 3 | 11 | 6.5 | 1 | **28.5** |
 | Swapnaneel | 3 | 7 | 7.5 | 1 | 8 | 2 | **28.5** |
-| Suprava | 5 | 5 | 3 | 2 | 7.5 | 4.5 | **27** |
-| **Total** | **21** | **17** | **15.5** | **16** | **30** | **10** | **109.5** |
+| Suprava | 5 | 5 | 3 | 2 | 7.5 | 3.5 | **26** |
+| **Total** | **21** | **17** | **15.5** | **16** | **28** | **7** | **104.5** |
 
-**Over capacity.** PB-002 was added on 2026-11-09, taking planned work to 107.5 hours against 96 available. Its task hours are estimates. Task 5.4 is also about 8 hours over budget under the OPEN-REL-01 decision record, which makes roughly 115.5. On 2026-11-12 task 5.7 grew from 3 to 5 hours to cover all 11 registry tools, taking the table to 109.5 and the estimate to roughly 117.5. The team must add time or move work before Day 1.
+**Over capacity.** PB-002 was added on 2026-11-09, taking planned work to 107.5 hours against 96 available. Its task hours are estimates. Task 5.4 is also about 8 hours over budget under the OPEN-REL-01 decision record, which makes roughly 115.5. On 2026-11-12 task 5.7 grew from 3 to 5 hours to cover all 11 registry tools, taking the table to 109.5 and the estimate to roughly 117.5. On 2026-11-12 spec v1.8 (CHG-1.8-01) removed POL-14, so task 5.4 (already spent) and tasks 6.3 and 6.8 left the plan, and so did the Tenant B isolation test (6.4); the table is now 104.5. The team must add time or move work before Day 1.
 
 ## Timeline
 
@@ -150,14 +150,13 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 **Exit:** AC-WEBHOOK-01 and AC-PP-03/04/05/06/10/13 pass, using a real Sandbox `PAYMENT.CAPTURE.COMPLETED` event.
 
-### G5: Safe investigation and action (lead: Rishav, 30h)
+### G5: Safe investigation and action (lead: Rishav, 28h)
 
 | ID | Task | Owner | Hours |
 |---|---|---|---|
 | 5.1 | Request, decision, approval, execution, grant and attempt tables with the full FK chain | Rishav | 2 |
 | 5.2 | Two-stage policy gateway, POL-01, single-use grant issuance | Rishav | 2 |
 | 5.3 | Exact-scope execution mode, SHADOW by default | Rishav | 1 |
-| 5.4 | Signed POL-14 attestation job, checked at LIVE switch and at grant issue | Rishav | 2 |
 | 5.5 | Internal-merchant adapter: conditional update, idempotency, restricted DB role | Rahul | 2.5 |
 | 5.6 | Worker: atomic grant consumption, durable attempts, independent readback | Rahul | 2.5 |
 | 5.7 | AI orchestrator: all 11 registry tools (spec 8.2), POL-08 permission intersection, durable tool trace | Swapnaneel | 5 |
@@ -165,36 +164,33 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 | 5.9 | PB-001 definition and the request-lifecycle state machine | Swapnaneel | 1 |
 | 5.10 | Investigation screens | Suprava | 1.5 |
 | 5.11 | Playbook Requests screens | Suprava | 1.5 |
-| 5.12 | Safety suite: AC-MERCH-01..07, AC-AUTHZ-06/08/15/16/17, AC-PLY-08..11 | Suprava | 2 |
+| 5.12 | Safety suite: AC-MERCH-01..07, AC-AUTHZ-06/08/15/17, AC-PLY-08..11 | Suprava | 2 |
 | 5.13 | PB-002 definition and agent recommendation: duplicate proof, currency and amount, no prior refund or hold, always-required independent approval | Swapnaneel | 1 |
-| 5.14 | Gateway and execution mode for `refunds.create`: PayPal scope independent of PB-001 (AC-EXEC-MODE-03), POL-14 checked per capability | Rishav | 1 |
+| 5.14 | Gateway and execution mode for `refunds.create`: PayPal scope independent of PB-001 (AC-EXEC-MODE-03) | Rishav | 1 |
 | 5.15 | Worker refund execution: grant-bound, durable attempts, no blind retry on an ambiguous outcome, verified completion by readback | Rahul | 1.5 |
 | 5.16 | PB-002 request and approval screens showing the duplicate proof | Suprava | 1 |
-| 5.17 | Refund safety suite: AC-PP-08, AC-PLY-02, PB-002 parts of AC-PLY-08, AC-EXEC-MODE-03, and all required capability categories | Suprava | 1.5 |
+| 5.17 | Refund safety suite: AC-PP-08, AC-PLY-02, PB-002 parts of AC-PLY-08, AC-EXEC-MODE-03 | Suprava | 1.5 |
 
 **Exit:** the G5 evidence list in §17 is green, including AC-PP-08 and the PB-002 parts of AC-PLY-08.
 
-### G6: Extensibility proof and demo (lead: Suprava, 10h)
+### G6: Extensibility proof and demo (lead: Suprava, 7h)
 
 | ID | Task | Owner | Hours |
 |---|---|---|---|
 | 6.1 | SaaS pack: manifest, one validator, renewal/invoice fixture | Swapnaneel | 1.5 |
 | 6.2 | Non-financial source through the generic pipeline (AC-OPEN-01/02/06) | Rahul | 0.5 |
-| 6.3 | Build freeze, create Tenant A, issue exact-scope attestation, check audit lineage | Rishav | 1.5 |
-| 6.4 | Tenant B isolation test | Suprava | 1 |
 | 6.5 | Acceptance-criteria status sheet with owners and evidence (§22.3) | Suprava | 0.5 |
-| 6.6 | Demo script with SYNTHETIC disclosure and the list of what was not built | Suprava | 2 |
+| 6.6 | Demo script with SYNTHETIC disclosure, Tenant A created by real registration, and the list of what was not built | Suprava | 2 |
 | 6.7 | Full team rehearsal | All four | 0.5 each |
-| 6.8 | Issue the separate `refunds.create` exact-scope attestation for the PayPal Sandbox adapter; check audit lineage | Rishav | 0.5 |
 | 6.9 | Extend the demo script and rehearsal to steps 14-15 | Suprava | 0.5 |
 
-**Exit:** demo runs on real identities; Tenant B cannot reach Tenant A; every criterion has an honest status.
+**Exit:** demo runs on real identities; every criterion has an honest status.
 
 ## Open decisions to close first
 
 | Owner | Items | By |
 |---|---|---|
-| Rishav | OPEN-21-19 (no permission cache in this build). OPEN-REL-01 is closed by spec v1.6 §9.7. OPEN-PP-03 is decided for this build (a sealed store under an api-only key) and stays open for production. | G1, Day 1 |
+| Rishav | OPEN-21-19 (no permission cache in this build). OPEN-REL-01 was closed by spec v1.6 §9.7 and is superseded by v1.8, which removed POL-14. OPEN-PP-03 is decided for this build (a sealed store under an api-only key) and stays open for production. | G1, Day 1 |
 | Rahul | OPEN-01, OPEN-04, OPEN-CAP-01, OPEN-PP-01 | Day 1, first hours |
 | Swapnaneel | OPEN-03, OPEN-10 (included-in-net semantics for the fixture) | OPEN-03 Day 1; OPEN-10 before 3.3 |
 | Suprava | OPEN-14 (API conventions, auth transport, error envelope) | Day 1, first hours |
@@ -203,13 +199,13 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 - Evidence storage: local volume behind a storage interface
 - Secrets: Docker secrets, kept out of the repo and database
 - Email: a real SMTP relay
-- CI and signing: GitHub Actions with the key in CI secrets
+- CI: GitHub Actions
 - LLM: choose per §6.2
 - Auth: a maintained library, per §11.2
 
 ## Spec issues that affect this plan
 
-1. **Attestation timing.** POL-14 binds to the exact build and tenant, but Tenant A must come from real registration. Order on Day 3 has to be: freeze build, create tenant, then attest. Any later code change voids it, for both attested scopes.
+1. **Attestation timing.** Resolved by spec v1.8, which removed POL-14. Tenant A still comes from real registration, as part of the demo script (6.6).
 2. **Missing routes.** §12.2 has no sign-in, suspend-member, or mapping, authority and entity read routes, though other sections require them. Task 1.10 adds them.
 3. **PB-001 wording conflict.** §9.2 and §18 say "replay the event"; §4.4.1 specifies a conditional status update. This plan follows §4.4.1, the more specific contract.
 4. **Break-glass has no gate.** It is required by DoD item 27 but listed in none of G1-G6. It is deferred here and needs a home in any later plan.
@@ -220,4 +216,4 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 - Each gate closes only when its exit evidence exists as an automated test or run artifact. A manual happy-path run doesn't count as `VERIFIED` (§22.3).
 - CI must fail on a missing route permission, a role-name check in authorization code, or any safety-critical test failure.
-- Final check is the rehearsal of demo steps 1-17 on the frozen build, with no successful mutation while SHADOW is active or the attestation is missing.
+- Final check is the rehearsal of demo steps 1-17, with no successful mutation while SHADOW is active.
