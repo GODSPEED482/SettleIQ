@@ -30,8 +30,7 @@ from app.investigation.tools import build_tool_registry
 from app.semantics.generation import (
     DiscoveredObject,
     OntologyProposal,
-    UngroundedProposal,
-    ground_proposal,
+    ground_items,
 )
 
 logger = logging.getLogger("settleiq.dispatcher")
@@ -101,21 +100,26 @@ def _call_agent(path: str, body: dict[str, Any]) -> Any:
         raise JobFailed("AGENT_UNAVAILABLE") from None
 
 
-def _proposals_for(job: ClaimedJob) -> list[dict[str, Any]]:
+def _proposals_for(job: ClaimedJob) -> tuple[list[dict[str, Any]], int]:
+    """The grounded proposals, and how many items were refused as ungrounded."""
     metadata = [DiscoveredObject(**item) for item in job.payload["metadata"]]
     output = _call_agent("/draft-ontology", job.payload)
     try:
-        return ground_proposal(
-            OntologyProposal.model_validate(output), metadata, job.payload["known_terms"]
-        )
+        proposal = OntologyProposal.model_validate(output)
     except ValidationError as error:
         # Where the output failed, so a refusal can be diagnosed; never the output itself.
         logger.warning("agent proposal refused: %s",
                        [(".".join(map(str, e["loc"])), e["msg"]) for e in error.errors()][:10])
         raise JobFailed("INVALID_AGENT_OUTPUT") from None
-    except UngroundedProposal as error:
-        logger.warning("agent proposal ungrounded: %s", str(error)[:300])
-        raise JobFailed("UNGROUNDED_AGENT_OUTPUT") from None
+    grounded, refused = ground_items(proposal, metadata, job.payload["known_terms"])
+    if refused:
+        # Which items, and why, so a refusal can be diagnosed; never the model's own text.
+        logger.warning("agent proposal: %d grounded, %d refused: %s", len(grounded),
+                       len(refused), [f"{item}: {reason}" for item, reason in refused][:20])
+    # Nothing ungrounded is kept. Only an answer with nothing usable left fails the job.
+    if refused and not grounded:
+        raise JobFailed("UNGROUNDED_AGENT_OUTPUT")
+    return grounded, len(refused)
 
 
 def _still_running(conn: Any, job: ClaimedJob) -> bool:
@@ -145,8 +149,9 @@ def _agent_principal(conn: Any) -> Principal:
     return Principal(agent_id, PrincipalKind.AGENT)
 
 
-def _complete_draft(job: ClaimedJob, proposals: list[dict[str, Any]]) -> None:
+def _complete_draft(job: ClaimedJob, result: tuple[list[dict[str, Any]], int]) -> None:
     """Attach proposals and finish the job together. The draft content itself is not changed."""
+    proposals, refused = result
     with scoped_tx(job.tenant_id) as conn:
         if not _still_running(conn, job):
             return
@@ -166,7 +171,10 @@ def _complete_draft(job: ClaimedJob, proposals: list[dict[str, Any]]) -> None:
         write_audit(
             conn, job.tenant_id, _agent_principal(conn), "ontology.generation.completed",
             "ontology",
-            {"draft_id": str(job.subject_id), "job_id": str(job.id), "proposals": len(proposals)},
+            {
+                "draft_id": str(job.subject_id), "job_id": str(job.id),
+                "proposals": len(proposals), "refused_as_ungrounded": refused,
+            },
             invoker_user_id=job.requested_by,
         )
         _finish(conn, job, "SUCCEEDED", None)
