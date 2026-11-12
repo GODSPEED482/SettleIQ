@@ -213,7 +213,7 @@ There is no slack. Any slip triggers the fallback rule.
 4. **Break-glass has no gate.** It is required by DoD item 27 but listed in none of G1-G6. It is deferred here and needs a home in any later plan.
 5. **Webhooks need a public HTTPS endpoint**, which Docker Compose alone doesn't provide. Task 4.1 covers it.
 6. **Git isn't installed on this machine** and no repository exists yet. It's needed before task 1.1.
-7. **The demo business departs from the spec.** §18 scripts a 17-step demo, §14.4 runs the SaaS pack in Tenant B without Financial Operations, and §22.3 expects a status for every criterion. The demo business (6.11 to 6.16) runs both packs in one tenant, and no task owns the status sheet any more. This needs an integrated spec revision (§22.2).
+7. **The demo business departs from the spec.** §18 scripts a 17-step demo, §14.4 runs the SaaS pack in Tenant B without Financial Operations, and §22.3 expects a status for every criterion. The demo business (6.11 to 6.16) runs both packs in one tenant, and no task owns the status sheet any more. Spec v1.9 (CHG-1.9-01) is drafted for this and awaits an approver.
 
 ## Verification
 

@@ -6,7 +6,7 @@ SettleIQ is a multi-tenant, ontology-driven business operations platform; Financ
 
 ## Source documents
 
-- `SettleIQ_Authoritative_Specification_v1.8.md` is the sole normative reference. It is 1,544 lines, so grep for the ID you need (`POL-09`, `AC-MERCH-05`, `§9.3`). Requirement changes need a new integrated revision (§22.2), not a sidecar note.
+- `SettleIQ_Authoritative_Specification_v1.8.md` is the sole normative reference. It is 1,544 lines, so grep for the ID you need (`POL-09`, `AC-MERCH-05`, `§9.3`). Requirement changes need a new integrated revision (§22.2), not a sidecar note. `SettleIQ_Authoritative_Specification_v1.9.md` (CHG-1.9-01: the deployed demo business, both packs in one tenant) is a draft awaiting an approver; v1.8 stays normative until it is approved.
 - `.claude/SettleIQ_3-Day_Delivery_Plan.md` is the delivery plan. It scopes a 3-day vertical slice, not the MVP. Task numbers such as `1.9` in code and stubs refer to it.
 - `.claude/SettleIQ_Tech_Stack.md` is the earlier stack and tooling proposal. Its Node/TypeScript backend is superseded; see below.
 
