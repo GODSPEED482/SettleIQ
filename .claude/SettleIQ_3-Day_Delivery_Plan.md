@@ -55,13 +55,13 @@ PB-002 has its own exact scope and safety trace. If only its tests are not green
 
 | Hours | G1 | G2 | G3 | G4 | G5 | G6 | Total |
 |---|---|---|---|---|---|---|---|
-| Rishav | 9 | 2 | 2 | 2 | 6 | 0.5 | **21.5** |
-| Rahul | 4 | 3 | 3 | 11 | 6.5 | 0.5 | **28** |
-| Swapnaneel | 3 | 7 | 7.5 | 1 | 8 | 3 | **29.5** |
-| Suprava | 5 | 5 | 3 | 2 | 7.5 | 3.5 | **26** |
-| **Total** | **21** | **17** | **15.5** | **16** | **28** | **7.5** | **105** |
+| Rishav | 9 | 2 | 2 | 2 | 6 | 3 | **24** |
+| Rahul | 4 | 3 | 3 | 11 | 6.5 | 3 | **30.5** |
+| Swapnaneel | 3 | 7 | 7.5 | 1 | 8 | 4.5 | **31** |
+| Suprava | 5 | 5 | 3 | 2 | 7.5 | 4.5 | **27** |
+| **Total** | **21** | **17** | **15.5** | **16** | **28** | **15** | **112.5** |
 
-**Over capacity.** PB-002 was added on 2026-11-09, taking planned work to 107.5 hours against 96 available. Its task hours are estimates. Task 5.4 is also about 8 hours over budget under the OPEN-REL-01 decision record, which makes roughly 115.5. On 2026-11-12 task 5.7 grew from 3 to 5 hours to cover all 11 registry tools, taking the table to 109.5 and the estimate to roughly 117.5. On 2026-11-12 spec v1.8 (CHG-1.8-01) removed POL-14, so task 5.4 (already spent) and tasks 6.3 and 6.8 left the plan, and so did the Tenant B isolation test (6.4); the table is now 104.5. Task 6.10 (the execution-mode switch screen, 1h) followed the same day, taking it to 105.5. Task 6.2 was dropped the same day because it only re-tested the generic pipeline: AC-OPEN-01, 02 and 06 are traced to existing tests (`test_sources.py`, `test_ingestion.py`, `test_contracts.py`) in the 6.5 sheet. The table is now 105. The team must add time or move work before Day 1.
+**Over capacity.** PB-002 was added on 2026-11-09, taking planned work to 107.5 hours against 96 available. Its task hours are estimates. Task 5.4 is also about 8 hours over budget under the OPEN-REL-01 decision record, which makes roughly 115.5. On 2026-11-12 task 5.7 grew from 3 to 5 hours to cover all 11 registry tools, taking the table to 109.5 and the estimate to roughly 117.5. On 2026-11-12 spec v1.8 (CHG-1.8-01) removed POL-14, so task 5.4 (already spent) and tasks 6.3 and 6.8 left the plan, and so did the Tenant B isolation test (6.4); the table is now 104.5. Task 6.10 (the execution-mode switch screen, 1h) followed the same day, taking it to 105.5. Task 6.2 was dropped the same day because it only re-tested the generic pipeline: AC-OPEN-01, 02 and 06 are traced to existing tests (`test_sources.py`, `test_ingestion.py`, `test_contracts.py`). The table is now 105. Also on 2026-11-12 the demo script, status sheet and rehearsals (6.5, 6.6, 6.7, 6.9) gave way to a deployed demo business that judges run themselves (6.11 to 6.16), taking the table to 112.5. The demo business does not depend on G5 until the refund step, so it can start before Day 3. The team must add time or move work before Day 1.
 
 ## Timeline
 
@@ -74,7 +74,7 @@ PB-002 has its own exact scope and safety trace. If only its tests are not green
 | G5 Safe investigation and action | Day 2 (late), Day 3 | Day 3, hour 7 (build freeze) |
 | G6 Extensibility proof and demo | Day 3 | End of Day 3 |
 
-There is no slack. Any slip comes out of the final rehearsal first, then triggers the fallback rule.
+There is no slack. Any slip triggers the fallback rule.
 
 ## Gates and tasks
 
@@ -173,18 +173,20 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 **Exit:** the G5 evidence list in §17 is green, including AC-PP-08 and the PB-002 parts of AC-PLY-08.
 
-### G6: Extensibility proof and demo (lead: Suprava, 7.5h)
+### G6: Extensibility proof and demo (lead: Suprava, 15h)
 
 | ID | Task | Owner | Hours |
 |---|---|---|---|
 | 6.1 | SaaS pack: manifest, one validator, renewal/invoice fixture | Swapnaneel | 1.5 |
-| 6.5 | Acceptance-criteria status sheet with owners and evidence (§22.3) | Suprava | 0.5 |
-| 6.6 | Demo script with SYNTHETIC disclosure, Tenant A created by real registration, and the list of what was not built | Suprava | 2 |
-| 6.7 | Full team rehearsal | All four | 0.5 each |
-| 6.9 | Extend the demo script and rehearsal to steps 14-15 | Suprava | 0.5 |
 | 6.10 | Execution-mode switch panel: list exact scopes with mode and provider environment; Tenant Owner switches one scope at a time (demo steps 12, 14) | Swapnaneel | 1 |
+| 6.11 | Demo business website (`demo-business/`, its own service and PostgreSQL, no SettleIQ code): a SaaS company selling subscription plans and one-off add-ons, with customer accounts, orders, payments, subscriptions and invoices. Its payments table is what `merchant-postgres` discovers and `merchant_setup.sql` expects: PENDING/COMPLETED status, amount, currency and order reference | Suprava | 3 |
+| 6.12 | Realistic PayPal Sandbox checkout on the demo website (PayPal buttons, Orders v2, `invoice_id` set to the order reference), with two faulty procedures a judge can switch on: a lost capture confirmation (PayPal COMPLETED, shop payment left PENDING, so STATUS_MISMATCH and PB-001) and a retry that charges twice (two captures for one order, so DUPLICATE_CAPTURE and the PB-002 refund). The business's Sandbox app sends its webhooks to SettleIQ | Rahul | 3 |
+| 6.13 | Source view, on the demo website only: for each order and subscription, what each source says side by side (the shop database, PayPal read live from Sandbox, subscription and invoice records), so a judge sees the discrepancy and then SettleIQ's correction or refund arrive | Suprava | 1.5 |
+| 6.14 | **Reset discrepancies** button, on the demo website only: puts the shop's sources back into the problematic state (payments left PENDING, a subscription renewed without its invoice for the 6.1 pack, faulty procedures re-armed) under fresh order and payment IDs, because SettleIQ keeps every case and each action is idempotent per target. PayPal captures and refunds cannot be undone, so PayPal-side problems return through a new checkout | Swapnaneel | 2 |
+| 6.15 | Deploy the demo website on its own subdomain through the prod pipeline; its database stays private to the server and reachable only by SettleIQ's merchant connectors; its Sandbox app secrets live in SSM | Rishav | 1.5 |
+| 6.16 | Demo tenant created by real registration, with the business's sources connected, ontology and mappings published and both packs active; judge sign-ins for Tenant Owner, Domain Operator and Approver (POL-01 needs two people); a short judge guide on the website, including returning a scope to SHADOW with the 6.10 panel before a rerun | Rishav | 1.5 |
 
-**Exit:** demo runs on real identities; every criterion has an honest status.
+**Exit:** on the deployed demo website, a judge with the judge sign-ins can cause each discrepancy, watch SettleIQ resolve it under the tenant's controls, see the correction on the website and reset to run it again, with no successful mutation while a scope is SHADOW.
 
 ## Open decisions to close first
 
@@ -205,15 +207,16 @@ There is no slack. Any slip comes out of the final rehearsal first, then trigger
 
 ## Spec issues that affect this plan
 
-1. **Attestation timing.** Resolved by spec v1.8, which removed POL-14. Tenant A still comes from real registration, as part of the demo script (6.6).
+1. **Attestation timing.** Resolved by spec v1.8, which removed POL-14. Tenant A, the demo tenant, still comes from real registration (6.16).
 2. **Missing routes.** §12.2 has no sign-in, suspend-member, or mapping, authority and entity read routes, though other sections require them. Task 1.10 adds them.
 3. **PB-001 wording conflict.** §9.2 and §18 say "replay the event"; §4.4.1 specifies a conditional status update. This plan follows §4.4.1, the more specific contract.
 4. **Break-glass has no gate.** It is required by DoD item 27 but listed in none of G1-G6. It is deferred here and needs a home in any later plan.
 5. **Webhooks need a public HTTPS endpoint**, which Docker Compose alone doesn't provide. Task 4.1 covers it.
 6. **Git isn't installed on this machine** and no repository exists yet. It's needed before task 1.1.
+7. **The demo business departs from the spec.** §18 scripts a 17-step demo, §14.4 runs the SaaS pack in Tenant B without Financial Operations, and §22.3 expects a status for every criterion. The demo business (6.11 to 6.16) runs both packs in one tenant, and no task owns the status sheet any more. This needs an integrated spec revision (§22.2).
 
 ## Verification
 
 - Each gate closes only when its exit evidence exists as an automated test or run artifact. A manual happy-path run doesn't count as `VERIFIED` (§22.3).
 - CI must fail on a missing route permission, a role-name check in authorization code, or any safety-critical test failure.
-- Final check is the rehearsal of demo steps 1-17, with no successful mutation while SHADOW is active.
+- Final check is a judge's run of the deployed demo website, including a reset and a second run, with no successful mutation while SHADOW is active.
