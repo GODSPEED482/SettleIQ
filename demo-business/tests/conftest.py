@@ -101,7 +101,7 @@ def settings(database_url: str) -> Settings:
         database_url=database_url, merchant_id="kitebase", paypal_client_id="test-client",
         paypal_client_secret="test-secret", paypal_api_base=SANDBOX_API,
         reader_password=READER_PASSWORD, writer_password=WRITER_PASSWORD,
-        settleiq_url="https://settleiq.example", reset_cooldown_seconds=0,
+        settleiq_url="https://settleiq.example",
     )
 
 

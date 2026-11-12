@@ -3,7 +3,7 @@
 {% block content %}
 {% if not order %}
 <h1>Order not found</h1>
-<p class="muted">{{ order_ref }} does not exist, perhaps because the demo was reset.</p>
+<p class="muted">{{ order_ref }} does not exist.</p>
 {% else %}
 <h1>Order {{ order.order_ref }}</h1>
 <div class="card">
