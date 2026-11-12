@@ -209,6 +209,8 @@ def _label_evidence(
     fields: set[str],
     foreign_keys: set[str],
 ) -> list[dict[str, str]]:
+    """`fields` and `foreign_keys` hold each name both bare and as `object.field`, so a model
+    may cite either form; a qualified name matches only the object it names."""
     labelled = []
     for item in evidence:
         if item.kind == "foreign_key" and item.field not in foreign_keys:
@@ -232,46 +234,107 @@ def _label_evidence(
     return labelled
 
 
+def _names(item: DiscoveredObject, names: list[str]) -> set[str]:
+    return {*names, *(f"{item.object}.{name}" for name in names)}
+
+
+def _field_names(item: DiscoveredObject) -> set[str]:
+    return _names(item, [field.name for field in item.fields])
+
+
+def _foreign_key_names(item: DiscoveredObject) -> set[str]:
+    return _names(item, [key.field for key in item.foreign_keys])
+
+
+def _target(binding: ProposedBinding, metadata: list[DiscoveredObject]) -> DiscoveredObject:
+    """The discovered object a binding names. A wrong source ID is tolerated only when the
+    object name identifies exactly one discovered object; anything else is refused."""
+    exact = [i for i in metadata if (i.source_id, i.object) == (binding.source_id, binding.object)]
+    named = exact or [item for item in metadata if item.object == binding.object]
+    if len(named) != 1:
+        raise UngroundedProposal(f"unknown field {binding.object}.{binding.field}")
+    return named[0]
+
+
+def _ground_term(
+    term: ProposedTerm, allowed: set[str], fields: set[str], foreign_keys: set[str]
+) -> dict[str, Any]:
+    for reference in (term.subclass_of, term.domain, term.range):
+        if reference is not None and reference not in allowed:
+            raise UngroundedProposal(f"unknown term {reference}")
+    return term.model_dump(exclude={"evidence"}) | {
+        "type": "term",
+        "status": "PROPOSED",
+        "basis": "inferred",
+        "evidence": _label_evidence(term.evidence, fields, foreign_keys),
+    }
+
+
+def _ground_binding(
+    binding: ProposedBinding, metadata: list[DiscoveredObject], allowed: set[str]
+) -> dict[str, Any]:
+    target = _target(binding, metadata)
+    field = binding.field.removeprefix(f"{target.object}.")
+    if field not in {item.name for item in target.fields}:
+        raise UngroundedProposal(f"unknown field {binding.object}.{binding.field}")
+    if binding.property not in allowed:
+        raise UngroundedProposal(f"unknown property {binding.property}")
+    return binding.model_dump(exclude={"evidence"}) | {
+        "source_id": target.source_id,
+        "field": field,
+        "type": "binding",
+        "status": "PROPOSED",
+        "basis": "inferred",
+        "evidence": _label_evidence(
+            binding.evidence, _field_names(target), _foreign_key_names(target)
+        ),
+    }
+
+
+def ground_items(
+    proposal: OntologyProposal, metadata: list[DiscoveredObject], known_terms: list[str]
+) -> tuple[list[dict[str, Any]], list[tuple[str, str]]]:
+    """Each proposed item the input supports, and (item, reason) for each one refused.
+
+    Items are judged one at a time, so one slip in a long answer does not discard the rest;
+    nothing ungrounded is ever kept. A term or binding that leans on a refused term is refused
+    with it.
+    """
+    all_fields = set().union(*(_field_names(item) for item in metadata))
+    all_foreign_keys = set().union(*(_foreign_key_names(item) for item in metadata))
+
+    refused: list[tuple[str, str]] = []
+    candidates = list(proposal.terms)
+    while True:
+        allowed = set(known_terms) | {term.id for term in candidates}
+        terms: list[dict[str, Any]] = []
+        failed: set[str] = set()
+        for term in candidates:
+            try:
+                terms.append(_ground_term(term, allowed, all_fields, all_foreign_keys))
+            except UngroundedProposal as error:
+                refused.append((term.id, str(error)))
+                failed.add(term.id)
+        if not failed:
+            break
+        # Judge the rest again without the refused terms, which some may have named.
+        candidates = [term for term in candidates if term.id not in failed]
+
+    allowed = set(known_terms) | {term["id"] for term in terms}
+    grounded = terms
+    for binding in proposal.bindings:
+        try:
+            grounded.append(_ground_binding(binding, metadata, allowed))
+        except UngroundedProposal as error:
+            refused.append((f"{binding.object}.{binding.field}", str(error)))
+    return grounded, refused
+
+
 def ground_proposal(
     proposal: OntologyProposal, metadata: list[DiscoveredObject], known_terms: list[str]
 ) -> list[dict[str, Any]]:
-    """Turn model output into reviewable proposals, or refuse anything the input cannot support."""
-    objects = {(item.source_id, item.object): item for item in metadata}
-    all_fields = {field.name for item in metadata for field in item.fields}
-    all_foreign_keys = {key.field for item in metadata for key in item.foreign_keys}
-    allowed = set(known_terms) | {term.id for term in proposal.terms}
-
-    grounded: list[dict[str, Any]] = []
-    for term in proposal.terms:
-        for reference in (term.subclass_of, term.domain, term.range):
-            if reference is not None and reference not in allowed:
-                raise UngroundedProposal(f"unknown term {reference}")
-        grounded.append(
-            term.model_dump(exclude={"evidence"})
-            | {
-                "type": "term",
-                "status": "PROPOSED",
-                "basis": "inferred",
-                "evidence": _label_evidence(term.evidence, all_fields, all_foreign_keys),
-            }
-        )
-    for binding in proposal.bindings:
-        target = objects.get((binding.source_id, binding.object))
-        if target is None or binding.field not in {field.name for field in target.fields}:
-            raise UngroundedProposal(f"unknown field {binding.object}.{binding.field}")
-        if binding.property not in allowed:
-            raise UngroundedProposal(f"unknown property {binding.property}")
-        grounded.append(
-            binding.model_dump(exclude={"evidence"})
-            | {
-                "type": "binding",
-                "status": "PROPOSED",
-                "basis": "inferred",
-                "evidence": _label_evidence(
-                    binding.evidence,
-                    {field.name for field in target.fields},
-                    {key.field for key in target.foreign_keys},
-                ),
-            }
-        )
+    """Every item grounded, or a refusal naming the first that is not."""
+    grounded, refused = ground_items(proposal, metadata, known_terms)
+    if refused:
+        raise UngroundedProposal(refused[0][1])
     return grounded
