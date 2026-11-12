@@ -322,6 +322,38 @@ describe("SourceManagement", () => {
     expect(within(csv).queryByLabelText("Client secret")).toBeNull();
   });
 
+  it("asks a database source for a managed reference, never a typed credential", async () => {
+    const merchant: ConnectorManifest = {
+      ...CSV,
+      connector_id: "merchant-postgres",
+      protocols: ["postgresql"],
+      source_types: ["merchant_database"],
+      auth_mode: "database_role",
+      secret_reference_required: true,
+    };
+    const database = sourceOf({
+      id: "s0000000-0000-4000-8000-000000000003",
+      connector_id: "merchant-postgres",
+      connector_version: "1.0.0",
+      source_type: "merchant_database",
+      protocol: "postgresql",
+      display_name: "Merchant database",
+      capabilities: [],
+    });
+    renderSources([...READ, "source.credential.manage"], {
+      "GET /api/connectors": { status: 200, body: [PAYPAL, CSV, merchant] },
+      "GET /api/sources": { status: 200, body: [PAYPAL_SOURCE, CSV_SOURCE, database] },
+    });
+    const db = await card("Merchant database");
+    expect(within(db).queryByText("Connect your PayPal app")).toBeNull();
+    expect(within(db).queryByLabelText("Client secret")).toBeNull();
+    expect(within(db).getByText("Platform-managed reference")).toBeTruthy();
+    expect(within(db).getByLabelText("Secret reference")).toBeTruthy();
+    const paypal = await card("PayPal Sandbox");
+    expect(within(paypal).getByText("Connect your PayPal app")).toBeTruthy();
+    expect(within(paypal).getByText("Or use a platform-managed reference")).toBeTruthy();
+  });
+
   it("registers a webhook with the checked event types only", async () => {
     const api = renderSources([...READ, "source.webhook.manage"], {
       [`PUT /api/sources/${PAYPAL_SOURCE.id}/webhooks`]: { status: 200, body: PAYPAL_SOURCE },

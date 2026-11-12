@@ -7,6 +7,7 @@ import { ontologyApi } from "./ontology/api";
 import { Authority, type AuthorityDraft } from "./ontology/Authority";
 import { bindingFromProposal, bindingKey, Bindings, type BindingDraft } from "./ontology/Bindings";
 import { Canvas } from "./ontology/Canvas";
+import { DomainPacks } from "./ontology/DomainPacks";
 import {
   collectTerms,
   proposalNode,
@@ -21,6 +22,7 @@ import { Relationships } from "./ontology/Relationships";
 import type {
   Authority as AuthorityRow,
   BindingProposal,
+  DomainPack,
   Draft,
   GenerationJob,
   JsonLdNode,
@@ -50,8 +52,11 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
   const canReadAuthority = can(permissions, "authority.read");
   const canEditAuthority = can(permissions, "authority.edit");
   const canReadSources = can(permissions, "source.read");
+  const canReadPacks = can(permissions, "domain_pack.read");
+  const canManagePacks = can(permissions, "domain_pack.manage");
 
   const [published, setPublished] = useState<PublishedOntology | null>(null);
+  const [packs, setPacks] = useState<DomainPack[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [job, setJob] = useState<GenerationJob | null>(null);
   const [mappings, setMappings] = useState<Mapping[]>([]);
@@ -69,7 +74,11 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
     if (!tenantId) return;
     let current = true;
     const load = async () => {
-      const [ontology, open] = await Promise.all([api.published(), api.openDraft()]);
+      const [ontology, open, packRows] = await Promise.all([
+        api.published(),
+        api.openDraft(),
+        canReadPacks ? api.packs() : [],
+      ]);
       const [mappingRows, authorityRows, sourceRows] = await Promise.all([
         open && canReadMappings ? api.mappings(open.id) : [],
         open && canReadAuthority ? api.authority(open.id) : [],
@@ -77,6 +86,7 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
       ]);
       if (!current) return;
       setPublished(ontology);
+      setPacks(packRows);
       setDraft(open);
       setMappings(mappingRows);
       setAuthority(authorityRows);
@@ -86,7 +96,7 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
     return () => {
       current = false;
     };
-  }, [tenantId, api, version, canReadMappings, canReadAuthority, canReadSources]);
+  }, [tenantId, api, version, canReadPacks, canReadMappings, canReadAuthority, canReadSources]);
 
   // Follows a generation job until the dispatcher finishes it, then reloads the draft.
   useEffect(() => {
@@ -180,6 +190,23 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
       <p className="muted">{workspace.summary}</p>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
+
+      {canReadPacks && (
+        <DomainPacks
+          packs={packs}
+          draftPacks={
+            draft ? draft.artifacts.filter((item) => item.layer === "PACK").map((item) => item.namespace) : null
+          }
+          canManage={canManagePacks}
+          busy={busy}
+          onActivate={(namespace) =>
+            void run(() => api.managePack(namespace, "ACTIVATE"), `${namespace} activated.`)
+          }
+          onDisable={(namespace) =>
+            void run(() => api.managePack(namespace, "DISABLE"), `${namespace} disabled.`)
+          }
+        />
+      )}
 
       <section className="panel">
         <h2>Versions</h2>

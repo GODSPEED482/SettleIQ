@@ -44,9 +44,11 @@ echo "==> rendering source secrets from SSM ${PARAM_PATH}/source"
 # One file per parameter, source-secrets/<tenant_id>/<NAME>, read by a `managed:<NAME>` reference
 # on that tenant's sources only (backend/app/sources/secrets.py). Containers cannot reach the
 # instance role, so the host renders them, readable only by the app user. Values are never printed.
-# Rendered afresh each run, so a deleted parameter does not linger.
-rm -rf source-secrets
+# Rendered afresh each run, so a deleted parameter does not linger. The directory is emptied, not
+# replaced: a redeploy of the same release leaves api and worker running, and their bind mount
+# would otherwise keep pointing at the deleted directory and see no secrets at all.
 install -d -o 10001 -g 10001 -m 500 source-secrets
+find source-secrets -mindepth 1 -delete
 uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 aws ssm get-parameters-by-path --region "$REGION" --path "${PARAM_PATH%/}/source" --recursive \
   --with-decryption --query 'Parameters[].[Name,Value]' --output text \

@@ -81,6 +81,13 @@ export type Draft = {
   proposals: Proposal[];
 };
 
+export type DomainPack = {
+  namespace: string;
+  version: string;
+  status: "ACTIVE" | "DISABLED" | "AVAILABLE" | string;
+  case_types: string[];
+};
+
 export type GenerationJob = {
   job_id: string;
   status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | string;

@@ -2,6 +2,7 @@ import { ApiError, apiFetch } from "../../api/client";
 import type {
   Authority,
   AuthorityInput,
+  DomainPack,
   Draft,
   GenerationJob,
   JsonLdNode,
@@ -19,6 +20,9 @@ export function ontologyApi(tenantId: string) {
     apiFetch<T>(path, { ...init, tenantId });
   return {
     published: () => call<PublishedOntology>("/api/ontology"),
+    packs: () => call<DomainPack[]>("/api/domain-packs"),
+    managePack: (namespace: string, action: "ACTIVATE" | "DISABLE") =>
+      call("/api/domain-packs", { method: "POST", json: { namespace, action } }),
     // No open draft is a 404, which here only means there is nothing to edit.
     openDraft: () =>
       call<Draft>("/api/ontology/drafts/open").catch((caught: unknown) => {
