@@ -238,16 +238,29 @@ def _profile_table(conn: Connection, schema: str, name: str, snapshot: dict[str,
 
 
 def discover_postgres(secret: str, config: dict[str, Any]) -> list[DiscoveredObject]:
-    """Tables and views of one schema, read in a read-only transaction."""
+    """Tables and views of one schema that the source's role may read, in a read-only
+    transaction. A merchant's read role is often granted only some of a schema's relations;
+    the rest are not part of the source, so they are skipped rather than failing discovery."""
     schema = config.get("schema") or "public"
     engine = read_only_engine(secret)
     try:
         with engine.connect() as conn:
             inspector = inspect(conn)
+            readable = set(
+                conn.execute(
+                    text(
+                        "SELECT c.relname FROM pg_class c "
+                        "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                        "WHERE n.nspname = :schema AND has_table_privilege(c.oid, 'SELECT')"
+                    ),
+                    {"schema": schema},
+                ).scalars()
+            )
             relations: list[tuple[str, ObjectType]] = [
                 *((name, "TABLE") for name in inspector.get_table_names(schema)),
                 *((name, "VIEW") for name in inspector.get_view_names(schema)),
             ]
+            relations = [item for item in relations if item[0] in readable]
             discovered = []
             for name, object_type in relations:
                 snapshot = _table_snapshot(conn, schema, name)
