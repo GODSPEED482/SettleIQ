@@ -111,7 +111,9 @@ def _proposals_for(job: ClaimedJob) -> tuple[list[dict[str, Any]], int]:
         logger.warning("agent proposal refused: %s",
                        [(".".join(map(str, e["loc"])), e["msg"]) for e in error.errors()][:10])
         raise JobFailed("INVALID_AGENT_OUTPUT") from None
-    grounded, refused = ground_items(proposal, metadata, job.payload["known_terms"])
+    grounded, refused = ground_items(
+        proposal, metadata, job.payload["known_terms"], job.payload.get("term_details")
+    )
     if refused:
         # Which items, and why, so a refusal can be diagnosed; never the model's own text.
         logger.warning("agent proposal: %d grounded, %d refused: %s", len(grounded),

@@ -125,6 +125,11 @@ export type DomainPack = {
   status: "ACTIVE" | "DISABLED" | "AVAILABLE" | string;
   case_types: string[];
   mapping_hints?: (BindingHint | AuthorityHint)[];
+  // What the pack's run needs from bindings: the classes it resolves and the properties that
+  // identify each, the links it makes, and the properties its shapes require.
+  identities?: Record<string, string[]>;
+  relationships?: { subject: string; predicate: string; object: string; via: string }[];
+  required_properties?: { class_iri: string; property_iri: string; message: string }[];
 };
 
 export type GenerationJob = {

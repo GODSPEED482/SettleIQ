@@ -401,3 +401,68 @@ describe("pack bindings", () => {
     expect(screen.queryByRole("region", { name: "Pack bindings" })).toBeNull();
   });
 });
+
+describe("pack gaps", () => {
+  const REQUIRING = {
+    ...PACK,
+    mapping_hints: [],
+    identities: { "pk:Thing": ["pk:ref"], "pk:Part": ["pk:ref"] },
+    relationships: [{ subject: "pk:Part", predicate: "pk:hasPart", object: "pk:Thing", via: "pk:ref" }],
+    required_properties: [{ class_iri: "pk:Thing", property_iri: "pk:size", message: "A thing needs a size." }],
+  };
+  const bind = (id: string, cls: string, property: string): Mapping => ({
+    ...MAPPING,
+    id,
+    class_iri: cls,
+    property_iri: property,
+    field_path: id,
+  });
+
+  it("names what the pack's run would skip with the draft's bindings", async () => {
+    renderStudio(
+      [...READ, "domain_pack.read"],
+      routes({
+        "GET /api/domain-packs": { status: 200, body: [REQUIRING] },
+        "GET /api/mappings?draft_id=d-1": {
+          status: 200,
+          body: [bind("a", "pk:Thing", "pk:colour"), bind("b", "pk:Part", "pk:ref"), bind("c", "pk:Gizmo", "pk:size")],
+        },
+      }),
+    );
+    const section = await panel("Pack bindings");
+    expect(within(section).getByText(/pk:Gizmo is not a class pk resolves/)).toBeTruthy();
+    expect(within(section).getByText("Nothing identifies a pk:Thing: bind pk:ref on it.")).toBeTruthy();
+    expect(within(section).getByText("A thing needs a size. Bind pk:size on pk:Thing.")).toBeTruthy();
+    expect(within(section).getByText("pk:Part links to pk:Thing only through pk:ref, bound on both.")).toBeTruthy();
+  });
+
+  it("says nothing once the bindings give the run what it needs", async () => {
+    renderStudio(
+      [...READ, "domain_pack.read"],
+      routes({
+        "GET /api/domain-packs": { status: 200, body: [REQUIRING] },
+        "GET /api/mappings?draft_id=d-1": {
+          status: 200,
+          body: [bind("a", "pk:Thing", "pk:ref"), bind("b", "pk:Thing", "pk:size"), bind("c", "pk:Part", "pk:ref")],
+        },
+      }),
+    );
+    await panel("Bindings");
+    expect(screen.queryByRole("region", { name: "Pack bindings" })).toBeNull();
+  });
+
+  it("warns when nothing is bound to an active pack", async () => {
+    renderStudio(
+      [...READ, "domain_pack.read"],
+      routes({
+        "GET /api/domain-packs": { status: 200, body: [REQUIRING] },
+        "GET /api/mappings?draft_id=d-1": { status: 200, body: [] },
+      }),
+    );
+    expect(
+      await within(await panel("Pack bindings")).findByText(
+        "Nothing is bound to a pk class, so its run has nothing to check.",
+      ),
+    ).toBeTruthy();
+  });
+});

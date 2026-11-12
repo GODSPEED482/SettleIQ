@@ -68,3 +68,46 @@ export function packBindingSets(
   }
   return sets;
 }
+
+export type PackGap = { namespace: string; message: string };
+
+// What an active pack's run will skip given the draft's bindings: a bound class the pack does
+// not resolve, one nothing identifies, a property its shapes require, a link with its shared
+// value unbound on one side. Each still publishes; the run just finds nothing there.
+export function packGaps(packs: DomainPack[], mappings: Mapping[]): PackGap[] {
+  const has = (cls: string, property: string) =>
+    mappings.some((row) => row.class_iri === cls && row.property_iri === property);
+  const gaps: PackGap[] = [];
+  for (const pack of packs) {
+    if (pack.status !== "ACTIVE" || !pack.identities) continue;
+    const add = (message: string) => gaps.push({ namespace: pack.namespace, message });
+    const identities = pack.identities;
+    const bound = [
+      ...new Set(mappings.map((row) => row.class_iri).filter((cls) => cls.startsWith(`${pack.namespace}:`))),
+    ].sort();
+    if (bound.length === 0) add(`Nothing is bound to a ${pack.namespace} class, so its run has nothing to check.`);
+    for (const cls of bound) {
+      const keys = identities[cls];
+      if (!keys) {
+        add(
+          `${cls} is not a class ${pack.namespace} resolves, so these bindings create no records. ` +
+            `It resolves ${Object.keys(identities).join(", ")}.`,
+        );
+      } else if (!keys.some((property) => has(cls, property))) {
+        add(`Nothing identifies a ${cls}: bind ${keys.join(" or ")} on it.`);
+      }
+    }
+    for (const row of pack.required_properties ?? []) {
+      if (bound.includes(row.class_iri) && !has(row.class_iri, row.property_iri)) {
+        add(`${row.message} Bind ${row.property_iri} on ${row.class_iri}.`.trim());
+      }
+    }
+    for (const rule of pack.relationships ?? []) {
+      if (!bound.includes(rule.subject) || !bound.includes(rule.object)) continue;
+      if (!has(rule.subject, rule.via) || !has(rule.object, rule.via)) {
+        add(`${rule.subject} links to ${rule.object} only through ${rule.via}, bound on both.`);
+      }
+    }
+  }
+  return gaps;
+}

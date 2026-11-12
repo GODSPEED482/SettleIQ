@@ -9,7 +9,7 @@ import { bindingFromProposal, bindingKey, Bindings, type BindingDraft } from "./
 import { Canvas } from "./ontology/Canvas";
 import { DomainPacks } from "./ontology/DomainPacks";
 import { PackBindings } from "./ontology/PackBindings";
-import { packBindingSets, type PackBindingSet } from "./ontology/packHints";
+import { packBindingSets, packGaps, type PackBindingSet } from "./ontology/packHints";
 import {
   collectTerms,
   proposalNode,
@@ -379,9 +379,10 @@ export function OntologyStudio({ workspace }: { workspace: WorkspaceDefinition }
         />
       )}
 
-      {draft && canReadSources && (canEditMappings || canEditAuthority) && (
+      {draft && canReadMappings && (
         <PackBindings
           sets={packSets}
+          gaps={packGaps(packs, mappings)}
           canEditMappings={canEditMappings}
           canEditAuthority={canEditAuthority}
           busy={busy}
