@@ -9,12 +9,14 @@ type Props = {
   api: OperationsApi;
   version: number;
   canStart: boolean;
+  // The tenant's active packs, or null when they cannot be read.
+  packs: string[] | null;
   busy: boolean;
-  onStart: () => void;
+  onStart: (namespace?: string) => void;
 };
 
 // Each run shows the versions it was pinned to, so its cases can be traced (spec 7, 3.4).
-export function Runs({ api, version, canStart, busy, onStart }: Props) {
+export function Runs({ api, version, canStart, packs, busy, onStart }: Props) {
   const [runs, setRuns] = useState<DomainRun[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,10 +36,18 @@ export function Runs({ api, version, canStart, busy, onStart }: Props) {
       <h2>Runs</h2>
       {error && <p className="error" role="alert">{error}</p>}
       {canStart && (
-        <p>
-          <button type="button" disabled={busy} onClick={onStart}>
-            Start run
-          </button>
+        <p className="actions">
+          {packs && packs.length > 1 ? (
+            packs.map((namespace) => (
+              <button key={namespace} type="button" disabled={busy} onClick={() => onStart(namespace)}>
+                Run {namespace}
+              </button>
+            ))
+          ) : (
+            <button type="button" disabled={busy} onClick={() => onStart(packs?.[0])}>
+              Start run
+            </button>
+          )}
         </p>
       )}
       {runs.length === 0 ? (

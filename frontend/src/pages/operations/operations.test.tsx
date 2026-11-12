@@ -228,6 +228,42 @@ describe("DomainOperations", () => {
     expect(api.calls.map((call) => call.key)).toContain("POST /api/domain-runs");
   });
 
+  it("offers one run per active pack and names the pack it starts", async () => {
+    const api = renderOperations(["domain_run.read", "domain_run.create", "domain_pack.read"], {
+      "GET /api/domain-packs": {
+        status: 200,
+        body: [
+          { namespace: "finops", version: "0.2.0", status: "ACTIVE", case_types: [] },
+          { namespace: "saas", version: "0.1.0", status: "ACTIVE", case_types: [] },
+          { namespace: "other", version: "0.1.0", status: "AVAILABLE", case_types: [] },
+        ],
+      },
+      "POST /api/domain-runs": { status: 201, body: RUN },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Run saas" }));
+    expect(await screen.findByText("saas run finished.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Run finops" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Run other" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start run" })).toBeNull();
+    expect(api.sent("POST /api/domain-runs")).toEqual([{ namespace: "saas" }]);
+  });
+
+  it("starts the only active pack's run under its name", async () => {
+    const api = renderOperations(["domain_run.read", "domain_run.create", "domain_pack.read"], {
+      "GET /api/domain-packs": {
+        status: 200,
+        body: [{ namespace: "finops", version: "0.2.0", status: "ACTIVE", case_types: [] }],
+      },
+      "POST /api/domain-runs": { status: 201, body: RUN },
+    });
+    await waitFor(() =>
+      expect(api.calls.map((call) => call.key)).toContain("GET /api/domain-packs"),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Start run" }));
+    expect(await screen.findByText("finops run finished.")).toBeTruthy();
+    expect(api.sent("POST /api/domain-runs")).toEqual([{ namespace: "finops" }]);
+  });
+
   it("triages a case along the state machine and needs a reason to dismiss", async () => {
     const api = renderOperations([...READ_KEYS, "case.triage"], {
       "PATCH /api/domain-cases/c-1": { status: 200, body: caseOf({ status: "INVESTIGATING" }) },
