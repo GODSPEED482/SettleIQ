@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Kitebase sources{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="15">{% endblock %}
+{% block content %}
+<h1>Sources</h1>
+<p class="muted">What each of Kitebase's sources says, side by side. PayPal is read live from the Sandbox. This page refreshes every 15 seconds. Generation {{ meta.generation }}, reset {{ ago(meta.last_reset_at) }}.</p>
+
+<h2>Orders: Kitebase database and PayPal</h2>
+{% if not orders %}
+<p class="muted">No orders yet. <a href="/">Check out a plan</a> to create one.</p>
+{% endif %}
+{% for order in orders %}
+<section class="card source">
+  <h3>{{ order.order_ref }} <span class="muted">{{ order.plan }}, {{ order.total }} {{ order.currency }}, {{ order.email }}, {{ ago(order.created_at) }}</span></h3>
+  {% for flag in order.flags %}<p class="flag">{{ flag }}</p>{% endfor %}
+  {% for note in order.notes %}<p class="ok">{{ note }}</p>{% endfor %}
+  <div class="columns">
+    <div>
+      <h4>Kitebase database</h4>
+      <dl>
+        <dt>Payment</dt><dd>{{ order.payment_id }}: <span class="status s-{{ order.payment_status|lower }}">{{ order.payment_status }}</span></dd>
+        <dt>Capture recorded</dt><dd>{{ order.paypal_capture_id or "none" }}</dd>
+        <dt>Order</dt><dd>{{ order.order_status }}</dd>
+        <dt>Invoice</dt><dd>{{ order.invoice_status or "none" }}</dd>
+        {% if order.subscription_status %}<dt>Subscription</dt><dd>{{ order.subscription_status }}</dd>{% endif %}
+      </dl>
+    </div>
+    <div>
+      <h4>PayPal Sandbox</h4>
+      {% for attempt in order.paypal %}
+      <p class="muted">Order {{ attempt.paypal_order_id }}{% if attempt.status %}: {{ attempt.status }}{% endif %}</p>
+      {% if attempt.error %}<p class="error">{{ attempt.error }}</p>{% endif %}
+      <ul>
+        {% for c in attempt.captures %}<li>Capture {{ c.id }}: <span class="status s-{{ c.status|lower }}">{{ c.status }}</span> {{ c.amount }} {{ c.currency }}</li>{% endfor %}
+        {% for r in attempt.refunds %}<li>Refund {{ r.id }}: {{ r.status }} {{ r.amount }}</li>{% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No PayPal order.</p>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endfor %}
+
+<h2>Subscriptions and invoices: Kitebase billing</h2>
+{% for sub in subscriptions %}
+<section class="card source">
+  <h3>{{ sub.subscription_id }} <span class="muted">{{ sub.account_name }}, {{ sub.plan }}</span></h3>
+  {% for flag in sub.flags %}<p class="flag">{{ flag }}</p>{% endfor %}
+  <p>Status <span class="status">{{ sub.status }}</span>{% if sub.current_period_end %}, current period ends {{ sub.current_period_end.strftime("%d %b %Y") }}{% endif %}</p>
+  <table>
+    <thead><tr><th>Invoice</th><th>Period ends</th><th>Status</th><th>Amount</th></tr></thead>
+    <tbody>
+    {% for inv in sub.invoices %}
+      <tr><td>{{ inv.invoice_id }}</td><td>{{ inv.period_end.strftime("%d %b %Y") if inv.period_end else "" }}</td><td>{{ inv.status }}</td><td>{{ inv.amount }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+{% endblock %}

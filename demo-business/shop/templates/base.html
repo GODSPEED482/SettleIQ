@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Kitebase{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="banner">Kitebase is a fictional business for the SettleIQ demo. Payments run in PayPal Sandbox only; no real money moves.</div>
+  <header class="top">
+    <a class="brand" href="/">Kitebase</a>
+    <nav>
+      <a href="/">Plans</a>
+      <a href="/sources">Sources</a>
+      <a href="/demo">Demo controls</a>
+      <a href="/guide">Judge guide</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>Reconciled by <a href="{{ settleiq_url }}">SettleIQ</a>.</footer>
+</body>
+</html>
