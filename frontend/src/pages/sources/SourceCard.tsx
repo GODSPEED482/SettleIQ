@@ -123,10 +123,10 @@ export function SourceCard({ source, manifest, permissions, api, busy, run }: Pr
           }}
         />
       )}
-      {canCredential && takesCredential && (
+      {/* Typed credentials only where the server can check them before sealing (PayPal). */}
+      {canCredential && takesCredential && source.connector_id === "paypal" && (
         <ConnectForm
           busy={busy}
-          paypal={source.connector_id === "paypal"}
           replacing={source.has_secret_reference}
           onConnect={async (value) =>
             (await run(
@@ -139,6 +139,7 @@ export function SourceCard({ source, manifest, permissions, api, busy, run }: Pr
       {canCredential && (
         <CredentialForm
           busy={busy}
+          alternative={source.connector_id === "paypal"}
           rotating={source.has_secret_reference}
           onStore={async (reference) =>
             (await run(
@@ -343,25 +344,21 @@ function UploadForm({
 // once, sealed there, and are never shown again. The fields clear once they are accepted.
 function ConnectForm({
   busy,
-  paypal,
   replacing,
   onConnect,
 }: {
   busy: boolean;
-  paypal: boolean;
   replacing: boolean;
   onConnect: (value: string) => Promise<boolean>;
 }) {
   const [clientId, setClientId] = useState("");
   const [secret, setSecret] = useState("");
   const hintId = useId();
-  const ready = secret.trim() !== "" && (!paypal || clientId.trim() !== "");
+  const ready = secret.trim() !== "" && clientId.trim() !== "";
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const value = paypal
-      ? JSON.stringify({ client_id: clientId.trim(), client_secret: secret.trim() })
-      : secret.trim();
+    const value = JSON.stringify({ client_id: clientId.trim(), client_secret: secret.trim() });
     if (await onConnect(value)) {
       setClientId("");
       setSecret("");
@@ -370,21 +367,19 @@ function ConnectForm({
 
   return (
     <form className="form inline" onSubmit={(event) => void submit(event)}>
-      <h4>{paypal ? "Connect your PayPal app" : "Connect credentials"}</h4>
-      {paypal && (
-        <label>
-          Client ID
-          <input
-            value={clientId}
-            autoComplete="off"
-            spellCheck={false}
-            maxLength={500}
-            onChange={(event) => setClientId(event.target.value)}
-          />
-        </label>
-      )}
+      <h4>Connect your PayPal app</h4>
       <label>
-        {paypal ? "Client secret" : "Credential"}
+        Client ID
+        <input
+          value={clientId}
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={500}
+          onChange={(event) => setClientId(event.target.value)}
+        />
+      </label>
+      <label>
+        Client secret
         <input
           type="password"
           value={secret}
@@ -396,10 +391,8 @@ function ConnectForm({
         />
       </label>
       <span id={hintId} className="hint">
-        {paypal
-          ? "From a dedicated REST app in your own PayPal Sandbox account, with Transaction search and Accept payments enabled. "
-          : ""}
-        Sealed on the server and never shown again.
+        From a dedicated REST app in your own PayPal Sandbox account, with Transaction search and
+        Accept payments enabled. Sealed on the server and never shown again.
       </span>
       <div className="actions">
         <button type="submit" disabled={busy || !ready}>
@@ -413,10 +406,12 @@ function ConnectForm({
 // Write-only: the field is empty on every render and cleared once the reference is stored.
 function CredentialForm({
   busy,
+  alternative,
   rotating,
   onStore,
 }: {
   busy: boolean;
+  alternative: boolean;
   rotating: boolean;
   onStore: (reference: string) => Promise<boolean>;
 }) {
@@ -430,7 +425,13 @@ function CredentialForm({
 
   return (
     <form className="form inline" onSubmit={(event) => void submit(event)}>
-      <h4>{rotating ? "Rotate credential reference" : "Or use a platform-managed reference"}</h4>
+      <h4>
+        {rotating
+          ? "Rotate credential reference"
+          : alternative
+            ? "Or use a platform-managed reference"
+            : "Platform-managed reference"}
+      </h4>
       <label>
         Secret reference
         <input

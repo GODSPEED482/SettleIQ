@@ -166,6 +166,23 @@ def test_a_source_that_takes_no_credentials_is_refused(owner, provider_checks):
     assert response.json()["error"]["code"] == "CREDENTIALS_UNSUPPORTED"
 
 
+@pytest.mark.parametrize("connector_id", ["merchant-postgres", "internal-merchant"])
+def test_a_source_the_server_cannot_check_takes_no_typed_credential(
+    owner, provider_checks, connector_id
+):
+    database = create_ok(
+        owner, connector_id=connector_id, display_name="Merchant DB",
+        config={"merchant_id": "M-A"} if connector_id == "internal-merchant" else {},
+    )
+    response = Integrator(owner.tenant).put(intake(database), {"value": VALUE})
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CREDENTIALS_UNSUPPORTED"
+    assert "managed reference" in response.json()["error"]["message"]
+    assert provider_checks == []
+    assert sealed_rows(owner.tenant) == []
+    assert stored_reference(owner.tenant, database["id"]) is None
+
+
 def test_another_tenant_can_neither_write_nor_reach_the_value(owner, source, provider_checks):
     assert Integrator(owner.tenant).put(intake(source), {"value": VALUE}).status_code == 200
     other = Member()

@@ -222,13 +222,11 @@ class CredentialValueBody(_Body):
     value: SecretStr = Field(min_length=1, max_length=4000)
 
 
-def _check_with_provider(connector_id: str, value: str) -> None:
+def _check_with_provider(value: str) -> None:
     """Prove the credential authenticates before it is stored (spec 14.2 step 2).
 
     The provider's reply is never echoed: it can quote what was sent.
     """
-    if connector_id != "paypal":
-        return
     from app.connectors.paypal.client import PayPalClient, PayPalError
     from app.connectors.paypal.sync import _parse_credentials
 
@@ -263,10 +261,19 @@ def put_credential_value(
     manifest = load_connector_manifests().get(source.connector_id)
     if manifest is None or not manifest.secret_reference_required:
         raise conflict("CREDENTIALS_UNSUPPORTED", "This source takes no credentials.")
+    # Only a credential the server can prove before sealing it is taken here. Anything else,
+    # such as a database URL, could be stored unchecked, which once sealed a PayPal app onto a
+    # database source; those sources use a managed reference instead.
+    if source.connector_id != "paypal":
+        raise conflict(
+            "CREDENTIALS_UNSUPPORTED",
+            "Only a PayPal app's credentials can be entered here. "
+            "Give this source a platform-managed reference instead.",
+        )
     value = body.value.get_secret_value().strip()
     if not value:
         raise validation_failed("A credential is required.")
-    _check_with_provider(source.connector_id, value)
+    _check_with_provider(value)
     reference = credential_store.reference_for(source_uuid)
     with tenant_tx(ctx) as conn:
         previous = conn.execute(
